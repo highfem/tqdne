@@ -1,0 +1,16 @@
+**.ipynb_checkpoints
+**.vscode
+**__pycache__
+build
+**.egg-info
+**.npz
+**#
+**~
+.DS_Store
+doc/_build/
+doc/backrefs/
+doc/examples/
+datasets/
+outputs/
+**/wandb/
+.venv

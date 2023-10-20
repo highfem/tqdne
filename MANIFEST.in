@@ -1,0 +1,9 @@
+global-include *.md
+global-include *.txt
+global-include *.py
+global-include *.yaml
+global-include *.yml
+global-include . *.rst
+recursive-include notebooks *.ipynb
+recursive-include doc
+include doc/reference.bib
