@@ -83,6 +83,7 @@ def build_dataset(output_path=DATASETDIR):
         permutation = np.random.permutation(n)
         train_indices = permutation[:n_train]
         test_indices = permutation[n_train:]
+        means, stds = compute_mean_std_features(datapath, features_keys)
 
         processed_path = output_path / Path("data_train.h5")
         with h5py.File(processed_path, "w") as fout:
