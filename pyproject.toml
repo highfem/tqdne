@@ -20,6 +20,10 @@ torch = "*"
 torchvision = "*"
 pytorch-lightning = ">=2.0.0"
 h5py = "*"
+diffusers = {path = "diffusers", extras = ["torch", "training"], develop = true}
+accelerate = "*"
+transformers = "*"
+
 
 
 [tool.poetry.dev-dependencies]

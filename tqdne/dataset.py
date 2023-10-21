@@ -4,6 +4,7 @@ from scipy import signal
 import numpy as np
 from tqdne.conf import DATASETDIR
 import tqdm
+import torch
 
 # Some global variables
 datapath = DATASETDIR / Path("wforms_GAN_input_v20220805.h5")
@@ -114,3 +115,63 @@ def build_dataset(output_path=DATASETDIR):
                 filtereds[i] = datafilt
                 featuress[i] = features
                 scales[i] = scale
+
+class RandomDataset(torch.utils.data.Dataset):
+    def __init__(self, n=1024*8, t=5488):
+        super().__init__()
+        self.n = n
+        self.t = t
+        self.lp = signal.butter(10, 1, 'hp', fs=100, output='sos')
+        self.bp = signal.butter(2, [0.25, 10], 'bp', fs=100, output='sos')
+
+    def __len__(self):
+        return self.n
+    def __getitem__(self, index):
+        noise = np.random.randn(self.t)
+        x = signal.sosfilt(self.bp, noise)
+        lowpass = signal.sosfilt(self.lp, x)
+        return torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32), torch.tensor(x.reshape(1, -1), dtype=torch.float32)
+    
+
+
+class H5Dataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, cut=None, in_memory=False):
+        super(H5Dataset, self).__init__()
+        self.h5_path = h5_path
+        self.in_memory = in_memory
+        if in_memory:
+            with h5py.File(h5_path, 'r') as file:
+                self.features = file["features"][:]
+                self.filtered = file["filtered"][:]
+                self.scale = file["scale"][:]
+                self.waveform = file["waveform"][:]
+                self.time = file["time"][:]
+
+        else:
+            self.file =  h5py.File( h5_path, 'r')
+            self.features = self.file["features"]
+            self.filtered = self.file["filtered"]
+            self.scale = self.file["scale"]
+            self.waveform = self.file["waveform"]
+            self.time = self.file["time"][:]
+        
+        self.n = len(self.features)
+        assert self.n == len(self.waveform)
+        assert self.n == len(self.scale)
+        assert self.n == len(self.filtered)
+        self.cut = cut
+
+    
+    def __del__(self):
+        if not self.in_memory:
+            self.file.close()
+
+    def __len__(self):
+        return self.n
+    
+    def __getitem__(self, index):
+        if self.cut:
+            print(self.cut)
+            return torch.tensor(self.filtered[index,:,:self.cut]), torch.tensor(self.waveform[index,:,:self.cut])
+        else:
+            return torch.tensor(self.filtered[index]), torch.tensor(self.waveform[index])
