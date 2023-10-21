@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
 from diffusers import DDPMScheduler
 from tqdne.diffusers import DDPMPipeline1DCond
-from tqdne.lightning import LightningDDMP
+from tqdne.lightning import LightningDDMP, LogCallback
 
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pathlib import Path
@@ -23,9 +23,9 @@ import logging
 if __name__ == '__main__':
 
     logging.info("Loading data...")
-    t = (5501 // 16) * 16
-    batch_size = 128
-    max_epochs = 50
+    t = (5501 // 32) * 32
+    batch_size = 64
+    max_epochs = 100
     name = '1D-UNET-UPSAMPLE-DDPM'
 
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     channels = train_dataset[0][0].shape[0]
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     logging.info("Set parameters...")
@@ -44,20 +44,20 @@ if __name__ == '__main__':
     # Unet parameters
     unet_params = {
         "sample_size":t,
-        "in_channels":channels, 
+        "in_channels":2*channels, 
         "out_channels":channels,
         "block_out_channels":  (32, 64, 128, 256),
         "down_block_types": ('DownBlock1D', 'DownBlock1D', 'DownBlock1D', 'AttnDownBlock1D'),
         "up_block_types": ('AttnUpBlock1D', 'UpBlock1D', 'UpBlock1D', 'UpBlock1D'),
         "mid_block_type": 'UNetMidBlock1D',
-        "extra_in_channels" : channels 
+        "extra_in_channels" : 0 
     }
 
     scheduler_params = {
         "beta_schedule": "linear",
         "beta_start": 0.0001,
         "beta_end": 0.02,
-        "num_train_timesteps": 100,
+        "num_train_timesteps": 1000,
     }
 
     optimizer_params = {
@@ -106,14 +106,16 @@ if __name__ == '__main__':
     # 2. Learning Rate Logger
     lr_logger = LearningRateMonitor()
     # 3. Set Early Stopping
-    early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
+    # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
     # 4. saves checkpoints to 'model_path' whenever 'val_loss' has a new min
     checkpoint_callback = ModelCheckpoint(dirpath=OUTPUTDIR / Path(name), filename='{name}_{epoch}-{val_loss:.2f}',
                                         monitor='val_loss', mode='min', save_top_k=5)
+    # 5. My custom callback
+    log_callback = LogCallback(wandb_logger, test_dataset)
 
     (OUTPUTDIR/Path(name)).mkdir(parents=True, exist_ok=True)
     # Define Trainer
-    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=[lr_logger, early_stopping, checkpoint_callback], 
+    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=[lr_logger, log_callback, checkpoint_callback], 
                         default_root_dir=OUTPUTDIR/Path(name)) 
     
     logging.info("Start training...")

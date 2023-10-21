@@ -28,7 +28,7 @@ class DDPMPipeline1DCond(DiffusionPipeline):
 
     def __init__(self, unet, scheduler):
         super().__init__()
-        self.num_inference_steps = scheduler.num_train_timesteps
+        self.num_inference_steps = scheduler.config.num_train_timesteps
         self.register_modules(unet=unet, scheduler=scheduler)
 
     @torch.no_grad()

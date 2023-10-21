@@ -9,9 +9,11 @@ from pytorch_lightning.callbacks import Callback
 import time
 from tqdne.diffusers import to_inputs
 from tqdne.utils import fig2PIL
+import matplotlib.pyplot as plt
+import numpy as np
 
 
-class LogPredictionsCallback(Callback):
+class LogCallback(Callback):
     def __init__(self, wandb_logger, dataset, dataset_train=None) -> None:
         super().__init__()
         self.wandb_logger = wandb_logger
@@ -23,8 +25,20 @@ class LogPredictionsCallback(Callback):
 
 
     def log_images(self, low_res, high_res, reconstructed):
-        pass
-    #  self.wandb_logger.log_image(key=f'{"train " if train else "valid "}samples - channel {i}', images=images, caption=captions)
+        b, c, t = reconstructed.shape
+        fs = 100
+        time = np.arange(0, t)/fs
+        for i in range(max(4,b)):
+            for j in range(c):
+                fig = plt.figure(figsize=(6, 3))
+                plt.plot(time ,low_res[i,0].cpu().numpy(), 'b', label="Input")
+                plt.plot(time, high_res[i,0].cpu().numpy(), 'r', label="Target")
+                plt.plot(time, reconstructed[i,0].cpu().numpy(), 'g', alpha=0.5, label="Reconstructed")
+                plt.xlim(1, 5)
+                plt.legend()
+                plt.tight_layout()
+                image = fig2PIL(fig)
+                self.wandb_logger.log_image(key=f'samples {i} - channel {j}', images=image)
 
     def on_validation_epoch_end(self, trainer, pl_module):
         """Called when the validation batch ends."""
@@ -143,7 +157,7 @@ class LightningDDMP(pl.LightningModule):
 
         # Sample a random timestep for each signal
         timesteps = torch.randint(
-            0, self.noise_scheduler.num_train_timesteps, (batch_size,), device=high_res.device
+            0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=high_res.device
         ).long()
 
         # Add noise to the clean high_res according to the noise magnitude at each timestep

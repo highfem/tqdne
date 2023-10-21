@@ -171,7 +171,6 @@ class H5Dataset(torch.utils.data.Dataset):
     
     def __getitem__(self, index):
         if self.cut:
-            print(self.cut)
             return torch.tensor(self.filtered[index,:,:self.cut]), torch.tensor(self.waveform[index,:,:self.cut])
         else:
             return torch.tensor(self.filtered[index]), torch.tensor(self.waveform[index])
