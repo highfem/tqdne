@@ -2,6 +2,7 @@ from typing import Type
 import logging
 from pathlib import Path
 import pytorch_lightning as pl
+import PIL
 
 
 def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
@@ -29,3 +30,19 @@ def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
         return None
     model = type.load_from_checkpoint(path, **kwargs)
     return model
+
+def fig2PIL(fig):
+    """Convert a matplotlib figure to a PIL Image.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure.
+
+    Returns
+    -------
+    PIL.Image
+        The PIL Image.
+
+    """
+    return PIL.Image.frombytes('RGB', fig.canvas.get_width_height(),fig.canvas.tostring_rgb())

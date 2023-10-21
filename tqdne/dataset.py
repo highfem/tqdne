@@ -129,7 +129,7 @@ class RandomDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         noise = np.random.randn(self.t)
         x = signal.sosfilt(self.bp, noise)
-        lowpass = signal.sosfilt(self.lp, x)
+        lowpass = signal.sosfilt(self.lp, x) + 0.1 * x
         return torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32), torch.tensor(x.reshape(1, -1), dtype=torch.float32)
     
 
