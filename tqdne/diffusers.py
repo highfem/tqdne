@@ -62,10 +62,10 @@ class DDPMPipeline1DCond(DiffusionPipeline):
         device = self.unet.device
         low_res = low_res.to(device)
         batch_size, channels, t = low_res.shape
-        assert self.unet.config.in_channels == channels
+        assert self.unet.config.in_channels == 2*channels
         # Sample gaussian noise to begin loop
         sig_shape = low_res.shape
-        assert self.unet.config.extra_in_channels == channels
+        assert self.unet.config.extra_in_channels == 0
 
 
         if self.device.type == "mps":

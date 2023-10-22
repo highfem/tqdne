@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, Mode
 from pathlib import Path
 from pytorch_lightning.loggers import WandbLogger
 
-from tqdne.conf import OUTPUTDIR
+from tqdne.conf import OUTPUTDIR, PROJECT_NAME
 
 import pytorch_lightning as pl
 import logging
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     logging.info("Build Pytorch Lightning Trainer...")
 
     # 1. Wandb Logger
-    wandb_logger = WandbLogger() # add project='projectname' to log to a specific project
+    wandb_logger = WandbLogger(project=PROJECT_NAME) # add project='projectname' to log to a specific project
 
     # 2. Learning Rate Logger
     lr_logger = LearningRateMonitor()

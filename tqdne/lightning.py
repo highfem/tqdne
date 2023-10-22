@@ -14,7 +14,7 @@ import numpy as np
 
 
 class LogCallback(Callback):
-    def __init__(self, wandb_logger, dataset, dataset_train=None) -> None:
+    def __init__(self, wandb_logger, dataset, dataset_train=None, every=5) -> None:
         super().__init__()
         self.wandb_logger = wandb_logger
         self.scores = []
@@ -22,6 +22,7 @@ class LogCallback(Callback):
         self.dataset = dataset
         self.dataset_train = dataset_train
         self.total_time = 0
+        self.every = every
 
 
     def log_images(self, low_res, high_res, reconstructed):
@@ -38,16 +39,17 @@ class LogCallback(Callback):
                 plt.legend()
                 plt.tight_layout()
                 image = fig2PIL(fig)
-                self.wandb_logger.log_image(key=f'samples {i} - channel {j}', images=image)
+                self.wandb_logger.log_image(key=f'samples {i} - channel {j}', images=[image])
 
     def on_validation_epoch_end(self, trainer, pl_module):
         """Called when the validation batch ends."""
-        if pl_module.current_epoch==0 or pl_module.current_epoch % 5 != 0:
+        if pl_module.current_epoch==0 or pl_module.current_epoch % self.every != 0:
             # Computation takes time, let us computed it every 10 epochs
             return
         low_res, high_res = next(iter(self.dataset))
-        reconstructed = trainer.evaluate(low_res)
-        self.log_images(low_res, high_res, reconstructed)
+        n = 4
+        reconstructed = pl_module.evaluate(low_res[:n])
+        self.log_images(low_res[:n], high_res[:n], reconstructed)
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx) -> None:
         self.start_time = time.time()

@@ -63,3 +63,5 @@ OUTPUTDIR = LazyEnv(
     PATH_ROOT / Path("outputs"),
     return_type=Path,
 ).eval()
+
+PROJECT_NAME = "tqdne"
