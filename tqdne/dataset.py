@@ -43,7 +43,13 @@ def compute_mean_std_features(datapath, features_keys):
     return np.array(means), np.array(stds)
 
 def extract_sample_from_h5file(f, idx):
-    """ """
+    """ Extract a sample from a h5 file.
+    
+    Args:
+        f: h5 file
+        idx: index of the sample to extract 
+
+    """
     # time = f["time_vector"][:]
     waveform = f["waveforms"][:, :, idx]
     # replace nan with 0

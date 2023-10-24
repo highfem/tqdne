@@ -147,8 +147,11 @@ class LightningDDMP(pl.LightningModule):
 
         return sig
 
-    def cross_entropy_loss(self, logits: torch.Tensor, labels: torch.Tensor):
-        return F.nll_loss(logits, labels)
+    def log_value(self,  value, name, train=True, prog_bar=True):
+        if train:
+            self.log(f"train_{name}", value, prog_bar=prog_bar)
+        else:
+            self.log(f"val_{name}", value, prog_bar=prog_bar)
 
     def global_step(self, batch: List, batch_idx: int, train: bool = False):
         low_res, high_res = batch
@@ -170,10 +173,8 @@ class LightningDDMP(pl.LightningModule):
         inputs = to_inputs(low_res, noisy_hig_res)
         noise_pred = self.net(inputs, timesteps, return_dict=False)[0]
         loss = F.mse_loss(noise_pred, noise)
-        if train:
-            self.log("train_loss", loss, prog_bar=True)
-        else:
-            self.log("val_loss", loss, prog_bar=True)
+        self.log_value(loss, "loss", train=train, prog_bar=True)
+
         return loss
 
     def training_step(self, train_batch: List, batch_idx: int):
