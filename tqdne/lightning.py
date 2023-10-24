@@ -24,26 +24,33 @@ class LogCallback(Callback):
         self.total_time = 0
         self.every = every
 
-
     def log_images(self, low_res, high_res, reconstructed):
         b, c, t = reconstructed.shape
         fs = 100
-        time = np.arange(0, t)/fs
-        for i in range(max(4,b)):
+        time = np.arange(0, t) / fs
+        for i in range(max(4, b)):
             for j in range(c):
                 fig = plt.figure(figsize=(6, 3))
-                plt.plot(time ,low_res[i,0].cpu().numpy(), 'b', label="Input")
-                plt.plot(time, high_res[i,0].cpu().numpy(), 'r', label="Target")
-                plt.plot(time, reconstructed[i,0].cpu().numpy(), 'g', alpha=0.5, label="Reconstructed")
+                plt.plot(time, low_res[i, 0].cpu().numpy(), "b", label="Input")
+                plt.plot(time, high_res[i, 0].cpu().numpy(), "r", label="Target")
+                plt.plot(
+                    time,
+                    reconstructed[i, 0].cpu().numpy(),
+                    "g",
+                    alpha=0.5,
+                    label="Reconstructed",
+                )
                 plt.xlim(1, 5)
                 plt.legend()
                 plt.tight_layout()
                 image = fig2PIL(fig)
-                self.wandb_logger.log_image(key=f'samples {i} - channel {j}', images=[image])
+                self.wandb_logger.log_image(
+                    key=f"samples {i} - channel {j}", images=[image]
+                )
 
     def on_validation_epoch_end(self, trainer, pl_module):
         """Called when the validation batch ends."""
-        if pl_module.current_epoch==0 or pl_module.current_epoch % self.every != 0:
+        if pl_module.current_epoch == 0 or pl_module.current_epoch % self.every != 0:
             # Computation takes time, let us computed it every 10 epochs
             return
         low_res, high_res = next(iter(self.dataset))
@@ -53,10 +60,11 @@ class LogCallback(Callback):
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx) -> None:
         self.start_time = time.time()
+
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx) -> None:
-        time_for_epoch = time.time()-self.start_time
+        time_for_epoch = time.time() - self.start_time
         self.total_time = self.total_time + time_for_epoch
-        self.log("traintime",  self.total_time, on_step=True, on_epoch=False)
+        self.log("traintime", self.total_time, on_step=True, on_epoch=False)
 
 
 class LightningClassifier(pl.LightningModule):
@@ -107,9 +115,6 @@ class LightningClassifier(pl.LightningModule):
             "name": "expo_lr",
         }
         return [optimizer], [lr_scheduler]
-    
-
-
 
 
 class LightningDDMP(pl.LightningModule):
@@ -126,7 +131,12 @@ class LightningDDMP(pl.LightningModule):
 
     """
 
-    def __init__(self, net: torch.nn.Module, noise_scheduler: DDPMScheduler, optimizer_params:dict):
+    def __init__(
+        self,
+        net: torch.nn.Module,
+        noise_scheduler: DDPMScheduler,
+        optimizer_params: dict,
+    ):
         super().__init__()
 
         self.net = net
@@ -135,19 +145,18 @@ class LightningDDMP(pl.LightningModule):
         self.pipeline = DDPMPipeline1DCond(self.net, self.noise_scheduler)
         self.save_hyperparameters()
 
-
     # def forward(self, x: torch.Tensor):
     #     return self.net(x)
     def evaluate(self, low_res):
         # Sample some signaol from random noise (this is the backward diffusion process).
         sig = self.pipeline(
-            low_res = low_res,
+            low_res=low_res,
             generator=torch.manual_seed(self.optimizer_params["seed"]),
         ).audios
 
         return sig
 
-    def log_value(self,  value, name, train=True, prog_bar=True):
+    def log_value(self, value, name, train=True, prog_bar=True):
         if train:
             self.log(f"train_{name}", value, prog_bar=prog_bar)
         else:
@@ -162,7 +171,10 @@ class LightningDDMP(pl.LightningModule):
 
         # Sample a random timestep for each signal
         timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=high_res.device
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (batch_size,),
+            device=high_res.device,
         ).long()
 
         # Add noise to the clean high_res according to the noise magnitude at each timestep
@@ -184,16 +196,14 @@ class LightningDDMP(pl.LightningModule):
         return self.global_step(val_batch, batch_idx)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.optimizer_params["learning_rate"])
+        optimizer = torch.optim.AdamW(
+            self.net.parameters(), lr=self.optimizer_params["learning_rate"]
+        )
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=self.optimizer_params["lr_warmup_steps"],
-            num_training_steps=(self.optimizer_params["n_train"] * self.optimizer_params["max_epochs"]),
+            num_training_steps=(
+                self.optimizer_params["n_train"] * self.optimizer_params["max_epochs"]
+            ),
         )
         return [optimizer], [lr_scheduler]
-    
-
-
-
-
-

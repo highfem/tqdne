@@ -31,6 +31,7 @@ def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
     model = type.load_from_checkpoint(path, **kwargs)
     return model
 
+
 def fig2PIL(fig):
     """Convert a matplotlib figure to a PIL Image.
 
@@ -45,4 +46,6 @@ def fig2PIL(fig):
         The PIL Image.
 
     """
-    return PIL.Image.frombytes('RGB', fig.canvas.get_width_height(),fig.canvas.tostring_rgb())
+    return PIL.Image.frombytes(
+        "RGB", fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
+    )

@@ -1,4 +1,3 @@
-
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -6,9 +5,11 @@ import torch
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline, AudioPipelineOutput
 
+
 def to_inputs(low_res, high_res):
     """Build Unet inputs from low and high resolution data."""
     return torch.cat((low_res, high_res), dim=1)
+
 
 class DDPMPipeline1DCond(DiffusionPipeline):
     r"""
@@ -62,11 +63,10 @@ class DDPMPipeline1DCond(DiffusionPipeline):
         device = self.unet.device
         low_res = low_res.to(device)
         batch_size, channels, t = low_res.shape
-        assert self.unet.config.in_channels == 2*channels
+        assert self.unet.config.in_channels == 2 * channels
         # Sample gaussian noise to begin loop
         sig_shape = low_res.shape
         assert self.unet.config.extra_in_channels == 0
-
 
         if self.device.type == "mps":
             # randn does not work reproducibly on mps
@@ -81,16 +81,15 @@ class DDPMPipeline1DCond(DiffusionPipeline):
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in self.progress_bar(self.scheduler.timesteps):
-
             inputs = to_inputs(low_res, sig)
 
             # 1. predict noise model_output
             model_output = self.unet(inputs, t).sample
 
             # 2. compute previous image: x_t -> x_t-1
-            sig = self.scheduler.step(model_output, t, sig, generator=generator).prev_sample
-
-
+            sig = self.scheduler.step(
+                model_output, t, sig, generator=generator
+            ).prev_sample
 
         if not return_dict:
             return (sig,)

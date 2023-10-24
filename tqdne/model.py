@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 
+
 class MLP(nn.Module):
     """Multi-layer perceptron model.
 
@@ -53,11 +54,9 @@ class MLP(nn.Module):
         return x
 
 
-
-
 # class CNN1D(nn.Module):
 #     """ Fully convolutional neural network for 1D data.
-    
+
 #     Parameters
 #     ----------
 #     input_channel : int
@@ -83,14 +82,12 @@ class MLP(nn.Module):
 #         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
 #         nconv_old = self.input_channel
 #         for n_conv, kernel_size, stride in zip(self.n_convs, self.kernel_sizes, self.strides):
-#             self.conv.append(nn.Conv1d(in_channels=nconv_old, 
-#                                        out_channels=n_conv, 
-#                                        kernel_size=kernel_size, 
-#                                        stride=stride, 
+#             self.conv.append(nn.Conv1d(in_channels=nconv_old,
+#                                        out_channels=n_conv,
+#                                        kernel_size=kernel_size,
+#                                        stride=stride,
 #                                        padding=kernel_size//2))
 #             nconv_old = n_conv
-
-        
 
 
 #     def forward(self, x):
@@ -112,8 +109,9 @@ class MLP(nn.Module):
 
 #         return x
 
+
 class CNN2D(nn.Module):
-    """ Fully convolutional neural network for 2D data with global average pooling.
+    """Fully convolutional neural network for 2D data with global average pooling.
 
     Parameters
     ----------
@@ -126,9 +124,8 @@ class CNN2D(nn.Module):
     strides : list of int
         Strides per layer.
     """
-    
-    def __init__(self, input_channel, convs, kernel_sizes, strides):
 
+    def __init__(self, input_channel, convs, kernel_sizes, strides):
         super(CNN2D, self).__init__()
         self.input_channel = input_channel
         self.convs = convs
@@ -140,14 +137,19 @@ class CNN2D(nn.Module):
 
         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
         nconv_old = self.input_channel
-        for n_conv, kernel_size, stride in zip(self.convs, self.kernel_sizes, self.strides):
-            self.conv.append(nn.Conv2d(in_channels=nconv_old, 
-                                       out_channels=n_conv, 
-                                       kernel_size=kernel_size, 
-                                       stride=stride, 
-                                       padding=kernel_size//2))
+        for n_conv, kernel_size, stride in zip(
+            self.convs, self.kernel_sizes, self.strides
+        ):
+            self.conv.append(
+                nn.Conv2d(
+                    in_channels=nconv_old,
+                    out_channels=n_conv,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=kernel_size // 2,
+                )
+            )
             nconv_old = n_conv
-
 
     def forward(self, x):
         squeeze = False
@@ -162,7 +164,7 @@ class CNN2D(nn.Module):
             x = module(x)
             if i < n - 1:
                 x = self.activation(x)
-        
+
         # Average pooling over the pixels
         x = x.reshape(x.shape[0], x.shape[1], -1)
         x = torch.mean(x, dim=2)
