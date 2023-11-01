@@ -1,59 +1,52 @@
-from diffusers import DiffusionPipeline
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
-from tqdne.conf import DATASETDIR
-from pathlib import Path
-from tqdne.dataset import H5Dataset
+import os
+# select GPU 1
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
+
+from tqdne.dataset import RandomDataset
 from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
 from diffusers import DDPMScheduler
 from tqdne.diffusers import DDPMPipeline1DCond
-from tqdne.lightning import LightningDDMP, LogCallback
-
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
-from pathlib import Path
-from pytorch_lightning.loggers import WandbLogger
-
-from tqdne.conf import OUTPUTDIR, PROJECT_NAME
-
-import pytorch_lightning as pl
+from tqdne.lightning import LightningDDMP
+from tqdne.training import get_pl_trainer
+from tqdne.utils import get_last_checkpoint
 import logging
+
 
 if __name__ == '__main__':
 
     logging.info("Loading data...")
+    resume = True
     t = (5501 // 32) * 32
     batch_size = 64
-    max_epochs = 100
+    max_epochs = 1000
     prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
-    name = '1D-UNET-UPSAMPLE-DDPM'
+    name = '1D-UNET-TOY-DDPM'
 
 
-    path_train = DATASETDIR / Path("data_train.h5")
-    path_test = DATASETDIR / Path("data_test.h5")
-    train_dataset = H5Dataset(path_train, cut=t)
-    test_dataset = H5Dataset(path_test, cut=t)
+    train_dataset = RandomDataset(1024*8, t=t)
+    test_dataset = RandomDataset(512, t=t)
+
 
     channels = train_dataset[0][0].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     logging.info("Set parameters...")
 
     # Unet parameters
     unet_params = {
         "sample_size":t,
-        "in_channels":2*channels, 
+        "in_channels":channels*2, 
         "out_channels":channels,
-        "block_out_channels":  (32, 64, 128, 256),
-        "down_block_types": ('DownBlock1D', 'DownBlock1D', 'DownBlock1D', 'AttnDownBlock1D'),
-        "up_block_types": ('AttnUpBlock1D', 'UpBlock1D', 'UpBlock1D', 'UpBlock1D'),
+        "block_out_channels":  (32, 64, 128),
+        "down_block_types": ('DownBlock1D', 'DownBlock1D', 'AttnDownBlock1D'),
+        "up_block_types": ('AttnUpBlock1D', 'UpBlock1D', 'UpBlock1D'),
         "mid_block_type": 'UNetMidBlock1D',
         "out_block_type": "OutConv1DBlock",
-        "extra_in_channels" : 0 
+        "extra_in_channels" : 0,
     }
 
     scheduler_params = {
@@ -61,8 +54,8 @@ if __name__ == '__main__':
         "beta_start": 0.0001,
         "beta_end": 0.02,
         "num_train_timesteps": 1000,
-        "prediction_type": prediction_type, 
         "clip_sample": False,
+        "prediction_type": prediction_type, 
     }
 
     optimizer_params = {
@@ -86,6 +79,7 @@ if __name__ == '__main__':
         "accelerator": "auto",
         "devices": "auto",
         "num_nodes": 1}
+
     
     logging.info("Build network...")
     net = UNet1DModel(**unet_params)
@@ -104,25 +98,14 @@ if __name__ == '__main__':
 
     logging.info("Build Pytorch Lightning Trainer...")
 
-    # 1. Wandb Logger
-    wandb_logger = WandbLogger(project=PROJECT_NAME) # add project='projectname' to log to a specific project
-
-    # 2. Learning Rate Logger
-    lr_logger = LearningRateMonitor()
-    # 3. Set Early Stopping
-    # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
-    # 4. saves checkpoints to 'model_path' whenever 'val_loss' has a new min
-    checkpoint_callback = ModelCheckpoint(dirpath=OUTPUTDIR / Path(name), filename='{name}_{epoch}-{val_loss:.2f}',
-                                        monitor='val_loss', mode='min', save_top_k=5)
-    # 5. My custom callback
-    log_callback = LogCallback(wandb_logger, test_loader)
-
-    (OUTPUTDIR/Path(name)).mkdir(parents=True, exist_ok=True)
-    # Define Trainer
-    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=[lr_logger, log_callback, checkpoint_callback], 
-                        default_root_dir=OUTPUTDIR/Path(name)) 
+    trainer = get_pl_trainer(name, test_loader, **trainer_params)
     
     logging.info("Start training...")
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader)
+
+    if resume:
+        checkpoint = get_last_checkpoint(trainer.default_root_dir)
+    else:
+        checkpoint = None
+    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader, ckpt_path=checkpoint)
 
     logging.info("Done!")

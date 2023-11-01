@@ -7,7 +7,7 @@ authors = ["Your Name <you@example.com>"]
 
 
 [tool.poetry.dependencies]
-python = ">=3.10.0,<4.0"
+python = "^3.11.3"
 tqdm = "*"
 scikit-learn = "*"
 scikit-image = "*"
@@ -23,6 +23,7 @@ h5py = "*"
 diffusers = {path = "diffusers", extras = ["torch", "training"], develop = true}
 accelerate = "*"
 transformers = "*"
+plotly = "*"
 
 
 

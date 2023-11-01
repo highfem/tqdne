@@ -82,7 +82,6 @@ class DDPMPipeline1DCond(DiffusionPipeline):
 
         for t in self.progress_bar(self.scheduler.timesteps):
             inputs = to_inputs(low_res, sig)
-
             # 1. predict noise model_output
             model_output = self.unet(inputs, t).sample
 

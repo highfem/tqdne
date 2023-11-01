@@ -46,6 +46,19 @@ def fig2PIL(fig):
         The PIL Image.
 
     """
-    return PIL.Image.frombytes(
-        "RGB", fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
-    )
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = fig.canvas.tostring_rgb()
+    return PIL.Image.frombytes(mode="RGB", size=(w, h), data=buf)
+
+
+
+def get_last_checkpoint(dirpath):
+    checkpoints = sorted(list(Path(dirpath).glob("*.ckpt")))
+    if len(checkpoints) == 0:
+        logging.info("No checkpoint found. Returning None.")
+        return None
+    # Load the checkpoint with the latest epoch
+    checkpoint = checkpoints[-1]
+    logging.info(f"Last checkpoint is : {checkpoint}")
+    return checkpoint
