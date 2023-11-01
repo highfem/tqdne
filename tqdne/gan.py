@@ -3,8 +3,11 @@ import pytorch_lightning as L
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
-from tqdne.data_utils import SeisData, uniform_noise
+from tqdne.ganutils.evaluation import evaluate_model
+
+torch.set_default_dtype(torch.float64)
 
 def embed(in_chan, out_chan):
     """
@@ -541,14 +544,10 @@ class Generator(nn.Module):
         v2 = v2.view(-1, 1, 150, 1)
 
         # concatenate conditional variables to input
-        x = torch.cat(
-            [
-                x,
-                v1,
-                v2,
-            ],
-            1,
-        )
+        # print("----------------------------------------------")
+        # print(x.shape, v1.shape, v2.shape)
+        # print("----------------------------------------------")
+        x = torch.cat([x, v1, v2], 1)
         # print('torch.cat([x, v1, v2, v3],1) shape: ', x.shape)
         # ------------------------------------------------
 
@@ -697,12 +696,64 @@ class Generator(nn.Module):
         return (x_out, xcn_out)
 
 
+class LogGanCallback(L.callbacks.Callback):
+    def __init__(self, mlf_logger, dataset, every=5) -> None:
+        super().__init__()
+        self.mlf_logger = mlf_logger
+        self.scores = []
+        self.scores_val = []
+        self.dataset = dataset
+        # self.dataset_train = dataset_train
+        self.cur_epoch = 0
+        self.every = every
+
+    # def on_train_batch_start(self, trainer, pl_module, batch, batch_idx) -> None:
+    #     print(pl_module)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        # if (pl_module.cur_epoch + 1) % 10 != 0:
+        #     return
+        self.cur_epoch += 1
+        save_loc_epoch = f"{self.mlf_logger.save_dir}/{self.mlf_logger.name}/{self.mlf_logger.run_id}/model_epoch_{self.cur_epoch}"
+        print(save_loc_epoch)
+        # self.mlf_logger.experiment.pytorch.save_model(self.G, save_loc_epoch)
+        # self.mlf_logger.experiment.pytorch.log_model(self.G, save_loc_epoch)
+
+        metrics_dir = os.path.join(save_loc_epoch, "metrics")
+        if not os.path.exists(metrics_dir):
+            os.makedirs(metrics_dir)
+
+        grid_dir = os.path.join(save_loc_epoch, "grid_plots")
+        if not os.path.exists(grid_dir):
+            os.makedirs(grid_dir)
+
+        fig_dir = os.path.join(save_loc_epoch, "figs")
+        if not os.path.exists(fig_dir):
+            os.makedirs(fig_dir)
+
+        epoch_loc_dirs = {
+            "output_dir": save_loc_epoch,
+            "metrics_dir": metrics_dir,
+            "grid_dir": grid_dir,
+            "fig_dir": fig_dir,
+        }
+
+        n_waveforms = 72 * 5
+        evaluate_model(
+            pl_module.G,
+            n_waveforms,
+            self.dataset,
+            epoch_loc_dirs,
+            self.mlf_logger,
+            pl_module.hparams
+        )
+
 class GAN(L.LightningModule):
     def __init__(
         self,
         reg_lambda,
         latent_dim,
-        n_critic,
+        n_critics,
         lr: float = 0.0002,
         b1: float = 0.5,
         b2: float = 0.999,
@@ -723,12 +774,15 @@ class GAN(L.LightningModule):
         self.G = Generator(z_size=self.hparams.latent_dim)
         self.D = Discriminator()
 
-        self.validation_z = torch.randn(8, self.hparams.latent_dim)
+    def random_z(self) -> torch.TensorType:
+        mean = torch.zeros(self.hparams.batch_size, 1, self.hparams.latent_dim)
+        return torch.normal(mean=mean)
+        # z = np.random.normal(size=[self.hparams.batch_size, 1, self.hparams.latent_dim]).astype(dtype=np.float64)
+        # z = torch.from_numpy(z)
+        # return z
 
-        self.example_input_array = torch.zeros(2, self.hparams.latent_dim)
-
-    def forward(self, z):
-        return self.G(z)
+    def forward(self, z, v1, v2):
+        return self.G(z, v1, v2)
 
     def discriminator_loss(self, real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc):
         Nsamp = real_wfs.size(0)
@@ -746,7 +800,7 @@ class GAN(L.LightningModule):
         # apply dicriminator
         D_xp = self.D(Xwf_p, Xcn_p, *i_vc)
         # Get gradient w.r.t. interpolates waveforms
-        Xout_wf = torch.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
+        Xout_wf = torch.autograd.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
         grads_wf = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xwf_p,
@@ -757,7 +811,7 @@ class GAN(L.LightningModule):
         )[0]
         grads_wf = grads_wf.view(grads_wf.size(0), -1)
         # get gradients w.r.t. normalizations
-        Xout_cn = torch.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
+        Xout_cn = torch.autograd.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
         grads_cn = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xcn_p,
@@ -774,7 +828,7 @@ class GAN(L.LightningModule):
 
         self.d_gploss = self.hparams.reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
         self.d_wloss = -torch.mean(y_hat) + torch.mean(y)
-        self.d_loss = self.d_w_loss + self.d_gp_loss
+        self.d_loss = self.d_wloss + self.d_gploss
 
         return self.d_loss
 
@@ -783,31 +837,20 @@ class GAN(L.LightningModule):
         self.g_loss = g_loss
         return g_loss
 
-    def training_step(self, sdat_train: SeisData):
+    def training_step(self, batch, batch_idx):
+        real_wfs, real_lcn, i_vc = batch
         optimizer_g, optimizer_d = self.optimizers()
         self.toggle_optimizer(optimizer_d)
 
+
         ### ---------- DISCRIMINATOR STEP ---------------
-        for i_c in range(self.hparams.n_critic):
-            # get random sample
-            (data_b, ln_cb, i_vc) = sdat_train.get_rand_batch()
-            # waves
-            real_wfs = torch.from_numpy(data_b).float()
-            # normalization constans
-            real_lcn = torch.from_numpy(ln_cb).float()
-            # conditional variables
-            i_vc = [torch.from_numpy(i_v).float() for i_v in i_vc]
+        optimizer_d.zero_grad()
+        # generate a batch of waveform no autograd
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
-            # generate a batch of waveform no autograd
-            z = uniform_noise(self.hparams.batch_size, self.hparams.latent_dim)
-            z = torch.from_numpy(z).float()
-            (fake_wfs, fake_lcn) = self.G(z, *i_vc)
-
-            d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
-            self.manual_backward(d_loss)
-            optimizer_d.step()
-            optimizer_d.zero_grad()
-
+        d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
+        self.manual_backward(d_loss)
+        optimizer_d.step()
         self.log("d_train_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
         self.log("d_train_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
         self.log("d_train_loss", self.d_loss, prog_bar=True, on_epoch=True)
@@ -815,33 +858,21 @@ class GAN(L.LightningModule):
         ### ---------- END DISCRIMINATOR STEP ---------------
 
         ### -------------- TAKE GENERATOR STEP ------------------------
-        self.toggle_optimizer(optimizer_g)
-        # 1. Train with fake waveforms
-        z = uniform_noise(self.hparams.batch_size, self.hparams.latent_dim)
-        z = torch.from_numpy(z).float()
-        # get random sampling of conditional variables
-        i_vg = sdat_train.get_rand_cond_v()
-        i_vg = [torch.from_numpy(i_v).float() for i_v in i_vg]
+        if (batch_idx + 1) % self.hparams.n_critics == 0:
+            self.toggle_optimizer(optimizer_g)
+            optimizer_g.zero_grad()
 
-        # forward step 1 -> generate fake waveforms
-        (fake_wfs, fake_lcn) = self.G(z, *i_vg)
-        # calculate loss
-        g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vg)
-        # Calculate gradients for generator
-        self.manual_backward(g_loss)
-        # update weights for generator -> run optimizer
-        optimizer_g.step()
-        optimizer_g.zero_grad()
-        self.untoggle_optimizer(optimizer_g)
-        self.log("g_train_loss", g_loss, prog_bar=True, on_epoch=True)
+            # forward step 1 -> generate fake waveforms
+            (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
+            # calculate loss
+            g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
+            # Calculate gradients for generator
+            self.manual_backward(g_loss)
+            # update weights for generator -> run optimizer
+            optimizer_g.step()
+            self.untoggle_optimizer(optimizer_g)
+            self.log("g_train_loss", g_loss, prog_bar=True, on_epoch=True)
 
-    def on_train_epoch_end(self):
-        print(
-            "Epoch [{:5d}] | d_loss: {:6.4f} | g_loss: {:6.4f}".format(
-                self.cur_epoch + 1, self.d_loss.item(), self.g_loss.item()
-            )
-        )
-        self.cur_epoch += 1
 
     def configure_optimizers(self):
         lr = self.hparams.lr
@@ -852,23 +883,14 @@ class GAN(L.LightningModule):
         opt_d = torch.optim.Adam(self.D.parameters(), lr=lr, betas=(b1, b2))
         return [opt_g, opt_d], []
 
-    def validation_step(self, sdat_val: SeisData):
+    def validation_step(self, batch, batch_idx):
         ### ---------- DISCRIMINATOR STEP ---------------
         # 1. get real data
         # get random sample
-        (data_b, ln_cb, i_vc) = sdat_val.get_rand_batch()
-        # waves
-        real_wfs = torch.from_numpy(data_b).float()
-        # normalization constans
-        real_lcn = torch.from_numpy(ln_cb).float()
-        # conditional variables
-        i_vc = [torch.from_numpy(i_v).float() for i_v in i_vc]
-        # number of samples
+        real_wfs, real_lcn, i_vc = batch
 
         # generate a batch of waveform no autograd
-        z = uniform_noise(self.hparams.batch_size, self.hparams.latent_dim)
-        z = torch.from_numpy(z).float()
-        (fake_wfs, fake_lcn) = self.G(z, *i_vc)
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
         # random constant
         d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc) 
@@ -879,55 +901,9 @@ class GAN(L.LightningModule):
         ### ---------- TAKE GENERATOR STEP ------------------------
 
         # get random sampling of conditional variables
-        z = uniform_noise(self.hparams.batch_size, self.hparams.latent_dim)
-        z = torch.from_numpy(z).float()
-        i_vg = sdat_val.get_rand_cond_v()
-        i_vg = [torch.from_numpy(i_v).float() for i_v in i_vg]
-        (fake_wfs, fake_lcn) = self.G(z, *i_vg)
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
         # calculate loss
-        g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vg)
+        g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
         self.log("g_val_loss", g_loss, prog_bar=True, on_epoch=True)
 
-    # def on_validation_epoch_end(self):
-    #     save_loc_epoch = f"{self.logger.experiment.tracking_uri}/model_epoch/{self.cur_epoch}"
-    #     self.logger.experiment.pytorch.save_model(self.G, save_loc_epoch)
-    #     self.logger.experiment.pytorch.log_model(self.G, save_loc_epoch)
-
-    #     metrics_dir = os.path.join(save_loc_epoch, "metrics")
-    #     if not os.path.exists(metrics_dir):
-    #         os.makedirs(metrics_dir)
-
-    #     grid_dir = os.path.join(save_loc_epoch, "grid_plots")
-    #     if not os.path.exists(grid_dir):
-    #         os.makedirs(grid_dir)
-
-    #     fig_dir = os.path.join(save_loc_epoch, "figs")
-    #     if not os.path.exists(fig_dir):
-    #         os.makedirs(fig_dir)
-
-    #     epoch_loc_dirs = {
-    #         "output_dir": save_loc_epoch,
-    #         "metrics_dir": metrics_dir,
-    #         "grid_dir": grid_dir,
-    #         "fig_dir": fig_dir,
-    #     }
-
-    #     n_waveforms = 72 * 5
-    #     evaluate_model(
-    #         self.G,
-    #         n_waveforms,
-    #         sdat_all,
-    #         epoch_loc_dirs,
-    #         self.cur_epoch,
-    #         self.hparams,
-    #     )
-
-
-
-    #     z = self.validation_z.type_as(self.generator.model[0].weight)
-        
-    #     # log sampled images
-    #     sample_imgs = self(z)
-    #     grid = torchvision.utils.make_grid(sample_imgs)
-    #     self.logger.experiment.add_image("generated_images", grid, self.current_epoch)
