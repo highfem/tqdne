@@ -40,7 +40,6 @@ class LogCallback(Callback):
                     alpha=0.5,
                     label="Reconstructed",
                 )
-                plt.xlim(1, 5)
                 plt.legend()
                 plt.tight_layout()
                 # image = fig2PIL(fig)
