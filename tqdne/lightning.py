@@ -77,7 +77,7 @@ class LogCallback(Callback):
         mask = np.logical_and(t < 5, t > 1)
 
         for i in range(c):
-            wandb.log({"prec_vs_target" : wandb.plot.line_series(
+            wandb.log({f"{name}_pred_vs_target_{i}" : wandb.plot.line_series(
             xs=t[mask],
             ys=[pred[i, mask], target[i, mask]],
             keys=["Prediction", "Target"],

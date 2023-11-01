@@ -1,27 +1,23 @@
-from diffusers import DiffusionPipeline
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
+import os
+# select GPU 1
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
+
 from tqdne.conf import DATASETDIR
-from pathlib import Path
 from tqdne.dataset import H5Dataset
 from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
 from diffusers import DDPMScheduler
 from tqdne.diffusers import DDPMPipeline1DCond
-from tqdne.lightning import LightningDDMP, LogCallback
-
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from tqdne.lightning import LightningDDMP
+from tqdne.training import get_pl_trainer
 from pathlib import Path
-from pytorch_lightning.loggers import WandbLogger
-
-from tqdne.conf import OUTPUTDIR, PROJECT_NAME
-
-import pytorch_lightning as pl
+from tqdne.utils import get_last_checkpoint
 import logging
+
 
 if __name__ == '__main__':
 
+    resume = True
     logging.info("Loading data...")
     t = (5501 // 32) * 32
     batch_size = 64
@@ -104,25 +100,14 @@ if __name__ == '__main__':
 
     logging.info("Build Pytorch Lightning Trainer...")
 
-    # 1. Wandb Logger
-    wandb_logger = WandbLogger(project=PROJECT_NAME) # add project='projectname' to log to a specific project
-
-    # 2. Learning Rate Logger
-    lr_logger = LearningRateMonitor()
-    # 3. Set Early Stopping
-    # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
-    # 4. saves checkpoints to 'model_path' whenever 'val_loss' has a new min
-    checkpoint_callback = ModelCheckpoint(dirpath=OUTPUTDIR / Path(name), filename='{name}_{epoch}-{val_loss:.2f}',
-                                        monitor='val_loss', mode='min', save_top_k=5)
-    # 5. My custom callback
-    log_callback = LogCallback(wandb_logger, test_loader)
-
-    (OUTPUTDIR/Path(name)).mkdir(parents=True, exist_ok=True)
-    # Define Trainer
-    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=[lr_logger, log_callback, checkpoint_callback], 
-                        default_root_dir=OUTPUTDIR/Path(name)) 
+    trainer = get_pl_trainer(name, test_loader, **trainer_params)
     
     logging.info("Start training...")
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader)
+
+    if resume:
+        checkpoint = get_last_checkpoint(trainer.default_root_dir)
+    else:
+        checkpoint = None
+    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader, ckpt_path=checkpoint)
 
     logging.info("Done!")
