@@ -2,8 +2,11 @@ from pathlib import Path
 from typing import Callable, Type
 import logging
 import os
+from typing import Tuple
 
 from dotenv import load_dotenv
+from dataclasses import dataclass, field
+
 
 
 # Set up the default logger
@@ -65,3 +68,39 @@ OUTPUTDIR = LazyEnv(
 ).eval()
 
 PROJECT_NAME = "tqdne"
+
+@dataclass
+class Config:
+    """Configuration class for the project."""
+
+    # Dataset
+    datasetdir: Path = DATASETDIR
+    outputdir: Path = OUTPUTDIR
+    project_name: str = PROJECT_NAME
+    
+    # dataset_files:
+    data_upsample_train: str = "data_upsample_train.h5"
+    data_upsample_test: str = "data_upsample_test.h5"
+
+    data_upsample_noise_train: str = "data_upsample_train.h5"
+    data_upsample_noise_test: str = "data_upsample_test.h5"
+
+
+    # Sampling frequency
+    fs: int = 100
+    # Filter parameters
+    params_filter: dict = field(default_factory= lambda: {"N": 2, "Wn": 1, "btype":'lp'})
+
+    # Noise on the input
+    sigma_in: float = 0.01
+
+    # Input data parameters
+    datapath: Path = DATASETDIR / Path("wforms_GAN_input_v20220805.h5")
+    features_keys: Tuple[str] = (
+        "hypocentral_distance",
+        "is_shallow_crustal",
+        "log10snr",
+        "magnitude",
+        "vs30"
+    )
+

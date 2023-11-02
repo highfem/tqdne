@@ -2,19 +2,10 @@ from pathlib import Path
 import h5py
 from scipy import signal
 import numpy as np
-from tqdne.conf import DATASETDIR
+from tqdne.conf import Config
 import tqdm
 import torch
 
-# Some global variables
-datapath = DATASETDIR / Path("wforms_GAN_input_v20220805.h5")
-features_keys = [
-    "hypocentral_distance",
-    "is_shallow_crustal",
-    "log10snr",
-    "magnitude",
-    "vs30",
-]
 
 
 def compute_mean_std(array):
@@ -50,7 +41,7 @@ def compute_mean_std_features(datapath, features_keys):
     return np.array(means), np.array(stds)
 
 
-def extract_sample_from_h5file(f, idx):
+def extract_sample_from_h5file(f, idx, config=Config()):
     """Extract a sample from a h5 file.
 
     Args:
@@ -62,11 +53,11 @@ def extract_sample_from_h5file(f, idx):
     waveform = f["waveforms"][:, :, idx]
     # replace nan with 0
     waveform = np.nan_to_num(waveform)
-    features = [np.nan_to_num(f[key][0, idx]) for key in features_keys]
+    features = [np.nan_to_num(f[key][0, idx]) for key in config.features_keys]
     return waveform, np.array(features)
 
 
-def build_sample(waveform, features, means, stds, sos):
+def build_sample(waveform, features, means, stds, sos, sigam_in=0.01):
     # Filter the waveform
     datafilt = []
     for channel in waveform:
@@ -75,7 +66,8 @@ def build_sample(waveform, features, means, stds, sos):
 
     # Normalize the waveform with respect of the datafilt
     scale = np.abs(datafilt).max()
-    datafilt = datafilt / scale * 2
+    datafilt = datafilt / scale * 2 + np.random.randn(*datafilt.shape) * sigam_in
+    
     waveform = waveform / scale / 5
 
     # normalize the features
@@ -84,9 +76,20 @@ def build_sample(waveform, features, means, stds, sos):
     return features, datafilt, waveform, scale
 
 
-def build_dataset(output_path=DATASETDIR):
-    fs = 100
-    sos = signal.butter(2, 1, "lp", fs=fs, output="sos")
+def build_dataset(config=Config()):
+    """Build the dataset."""
+
+    # extract the config information
+    output_path = config.datasetdir
+    datapath = config.datapath
+    features_keys = config.features_keys
+    fs = config.fs
+    params_filter = config.params_filter
+    sigma_in = config.sigma_in
+
+    # Create the filter
+    sos = signal.butter(**params_filter, fs=fs, output="sos")
+
     with h5py.File(datapath, "r") as f:
         time = f["time_vector"][:]
         t = len(time)
@@ -101,7 +104,7 @@ def build_dataset(output_path=DATASETDIR):
         test_indices = permutation[n_train:]
         means, stds = compute_mean_std_features(datapath, features_keys)
 
-        processed_path = output_path / Path("data_train.h5")
+        processed_path = output_path / Path(config.data_upsample_train)
         with h5py.File(processed_path, "w") as fout:
             fout.create_dataset("time", data=time)
             waveforms = fout.create_dataset("waveform", (n_train, 3, t))
@@ -110,15 +113,13 @@ def build_dataset(output_path=DATASETDIR):
             scales = fout.create_dataset("scale", (n_train,))
             for i, idx in tqdm.tqdm(enumerate(train_indices), total=n_train):
                 waveform, features = extract_sample_from_h5file(f, idx)
-                features, datafilt, waveform, scale = build_sample(
-                    waveform, features, means, stds, sos
-                )
+                features, datafilt, waveform, scale = build_sample(waveform, features, means, stds, sos, sigma_in)
                 waveforms[i] = waveform
                 filtereds[i] = datafilt
                 featuress[i] = features
                 scales[i] = scale
 
-        processed_path = output_path / Path("data_test.h5")
+        processed_path = output_path / Path(config.data_upsample_test)
         with h5py.File(processed_path, "w") as fout:
             fout.create_dataset("time", data=time)
             waveforms = fout.create_dataset("waveform", (n_test, 3, t))
@@ -127,9 +128,7 @@ def build_dataset(output_path=DATASETDIR):
             scales = fout.create_dataset("scale", (n_test,))
             for i, idx in tqdm.tqdm(enumerate(test_indices), total=n_test):
                 waveform, features = extract_sample_from_h5file(f, idx)
-                features, datafilt, waveform, scale = build_sample(
-                    waveform, features, means, stds, sos
-                )
+                features, datafilt, waveform, scale = build_sample(waveform, features, means, stds, sos, sigma_in)
                 waveforms[i] = waveform
                 filtereds[i] = datafilt
                 featuress[i] = features

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     max_epochs = 100
     prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
-    name = '1D-UNET-UPSAMPLE-DDPM'
+    name = '1D-UNET-UPSAMPLE-DDPM-noisy'
 
 
     path_train = DATASETDIR / Path("data_train.h5")
