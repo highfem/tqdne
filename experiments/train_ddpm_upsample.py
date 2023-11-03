@@ -2,7 +2,7 @@ import os
 # select GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-from tqdne.conf import DATASETDIR
+from tqdne.conf import Config
 from tqdne.dataset import H5Dataset
 from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
@@ -25,10 +25,10 @@ if __name__ == '__main__':
     prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
     name = '1D-UNET-UPSAMPLE-DDPM-noisy'
+    config = Config()
 
-
-    path_train = DATASETDIR / Path("data_train.h5")
-    path_test = DATASETDIR / Path("data_test.h5")
+    path_train = config.datasetdir/ Path(config.data_upsample_train)
+    path_test = config.datasetdir/ Path(config.data_upsample_test)
     train_dataset = H5Dataset(path_train, cut=t)
     test_dataset = H5Dataset(path_test, cut=t)
 

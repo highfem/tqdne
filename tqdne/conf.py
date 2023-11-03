@@ -82,9 +82,6 @@ class Config:
     data_upsample_train: str = "data_upsample_train.h5"
     data_upsample_test: str = "data_upsample_test.h5"
 
-    data_upsample_noise_train: str = "data_upsample_train.h5"
-    data_upsample_noise_test: str = "data_upsample_test.h5"
-
 
     # Sampling frequency
     fs: int = 100
