@@ -730,14 +730,14 @@ class LogGanCallback(L.callbacks.Callback):
         }
 
         n_waveforms = 72 * 5
-        evaluate_model(
-            pl_module.G,
-            n_waveforms,
-            self.dataset,
-            epoch_loc_dirs,
-            self.mlf_logger,
-            pl_module.hparams,
-        )
+        # evaluate_model(
+        #     pl_module.G,
+        #     n_waveforms,
+        #     self.dataset,
+        #     epoch_loc_dirs,
+        #     self.mlf_logger,
+        #     pl_module.hparams,
+        # )
 
 
 class GAN(L.LightningModule):
