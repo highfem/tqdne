@@ -13,13 +13,13 @@ import numpy as np
 
 class WaveformDataset(torch.utils.data.Dataset):
     def __init__(self, data_file, attr_file, v_names, cut=None):
-        logging.info("Loading data ...")
+        print("Loading data ...")
         wfs = np.load(data_file)
         if cut:
             wfs = wfs[: int(wfs.shape[0] * cut)]
-        logging.info("Loaded samples: ", wfs.shape[0])
+        print("Loaded samples: ", wfs.shape[0])
         self.ws = wfs.copy()
-        logging.info("normalizing data ...")
+        print("normalizing data ...")
         wfs_norm = np.max(np.abs(wfs), axis=1)  # 2)
         self.cnorms = wfs_norm.copy()
         wfs_norm = wfs_norm[:, np.newaxis]
