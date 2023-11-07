@@ -24,6 +24,8 @@ diffusers = {path = "diffusers", extras = ["torch", "training"], develop = true}
 accelerate = "*"
 transformers = "*"
 plotly = "*"
+mlflow = "^2.8.0"
+seaborn = "^0.13.0"
 
 
 

@@ -6,13 +6,6 @@ import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import torch
-
-def uniform_noise(Nbatch, dim):
-    # Generate noise from a uniform distribution
-    m = 1
-    return np.random.normal(size=[Nbatch, m, dim]).astype(
-        dtype=np.float32)
 
 
 def set_up_folders(run_id, args):
@@ -92,12 +85,13 @@ def get_waves_real_bin(s_dat, distbs, mbs, verbose=0):
     # select bin of interest
     ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
           (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]))
+    ix_wfs = ix[:wfs.shape[0]]
 
     # get normalization coefficients
     df_s = df[ix]
     # get waveforms
-    ws_r = wfs[ix, :]
-    c_r = cnorms[ix]
+    ws_r = wfs[ix_wfs, :]
+    c_r = cnorms[ix_wfs]
     n_obs = ix.sum()
 
     means = {'dist': df_s['dist'].mean(),
@@ -151,6 +145,7 @@ def make_maps_scale(v_min, v_max):
     # return tuple of functions
     return (to_scale_11, to_real)
 
+
 class SeisData(object):
     """
     Class to manage seismic data
@@ -182,7 +177,7 @@ class SeisData(object):
 
     # -------------------------------------------------
 
-    def __init__(self, data_file, attr_file, batch_size, sample_rate, v_names, isel):
+    def __init__(self, data_file, attr_file, batch_size, sample_rate, v_names, cut = None):
         """
         Loads data and creates the data handler object
         :param data_file: file with waveform data
@@ -193,7 +188,7 @@ class SeisData(object):
         :param isel: set of indices to use
         """
         # store configuration parameters
-        self.data_file = data_file
+        # self.data_file = data_file
         self.batch_size = batch_size
 
         if not isinstance(v_names, list):
@@ -203,6 +198,8 @@ class SeisData(object):
         # load data
         print("Loading data ...")
         wfs = np.load(data_file)
+        if cut:
+            wfs = wfs[:int(wfs.shape[0] * cut)]
         print("Loaded samples: ", wfs.shape[0])
         # total number of training samples
         Ntrain = wfs.shape[0]
@@ -257,6 +254,7 @@ class SeisData(object):
         self._init_vcond()
 
         # partion the dataset
+        isel = np.arange(wfs.shape[0])
         Nsel = len(isel)
 
         # ----- sample a fracion of the dataset ------
@@ -399,23 +397,3 @@ class SeisData(object):
         """
         Nb_tot = np.floor(self.Ntrain / self.batch_size)
         return int(Nb_tot)
-
-class SeismicDataset(torch.utils.data.Dataset):
-    def __init__(self, n=1024 * 8, t=5488):
-        super().__init__()
-        self.n = n
-        self.t = t
-        self.lp = signal.butter(10, 1, "hp", fs=100, output="sos")
-        self.bp = signal.butter(2, [0.25, 10], "bp", fs=100, output="sos")
-
-    def __len__(self):
-        return self.n
-
-    def __getitem__(self, index):
-        noise = np.random.randn(self.t)
-        x = signal.sosfilt(self.bp, noise)
-        lowpass = signal.sosfilt(self.lp, x) + 0.1 * x
-        return torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32), torch.tensor(
-            x.reshape(1, -1), dtype=torch.float32
-        )
-
