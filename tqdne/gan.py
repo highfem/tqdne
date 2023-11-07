@@ -786,13 +786,13 @@ class GAN(L.LightningModule):
         real_lcn = real_lcn.view(real_lcn.size(0), -1)
 
         # for waves
-        Xwf_p = (alpha * real_wfs + ((1.0 - alpha) * fake_wfs)).requires_grad_(True)
+        Xwf_p = (alpha * real_wfs + ((1.0 - alpha) * fake_wfs)).requires_grad_(True).to(self.device)
         # for normalization
         Xcn_p = (alpha_cn * real_lcn + ((1.0 - alpha_cn) * fake_lcn)).requires_grad_(
             True
-        )
+        ).to(self.device)
         # apply dicriminator
-        D_xp = self.D(Xwf_p, Xcn_p, *i_vc)
+        D_xp = self.D(Xwf_p, Xcn_p, *i_vc).to(self.device)
         # Get gradient w.r.t. interpolates waveforms
         Xout_wf = torch.autograd.Variable(
             torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
@@ -809,7 +809,7 @@ class GAN(L.LightningModule):
         # get gradients w.r.t. normalizations
         Xout_cn = torch.autograd.Variable(
             torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
-        )
+        ).to(self.device)
         grads_cn = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xcn_p,
