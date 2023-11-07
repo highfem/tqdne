@@ -297,7 +297,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                 ]
                 vc_list = [i.to(device) for i in vc_list]
 
-                random_data = grf.sample(samples, device=device)
+                random_data = grf.sample(samples)
                 syn_data, syn_scaler = G(random_data, *vc_list)
                 syn_data = syn_data.squeeze().detach().cpu().numpy()
                 syn_data = syn_data * syn_scaler.detach().cpu().numpy()
