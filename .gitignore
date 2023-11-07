@@ -15,3 +15,5 @@ outputs/
 **/wandb/
 .venv
 .env
+dist
+mlruns

@@ -779,7 +779,7 @@ class GAN(L.LightningModule):
     def discriminator_loss(self, real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc):
         Nsamp = real_wfs.size(0)
         # random constant
-        alpha = torch.Tensor(np.random.random((Nsamp, 1, 1, 1)))
+        alpha = torch.Tensor(np.random.random((Nsamp, 1, 1, 1))).to(self.device)
         alpha_cn = alpha.view(Nsamp, 1)
         # Get random interpolation between real and fake samples
         real_wfs = real_wfs.view(-1, 1, 1000, 1)
@@ -796,7 +796,7 @@ class GAN(L.LightningModule):
         # Get gradient w.r.t. interpolates waveforms
         Xout_wf = torch.autograd.Variable(
             torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
-        )
+        ).to(self.device)
         grads_wf = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xwf_p,
@@ -819,7 +819,7 @@ class GAN(L.LightningModule):
             only_inputs=True,
         )[0]
         # concatenate grad vectors
-        grads = torch.cat([grads_wf, grads_cn], 1)
+        grads = torch.cat([grads_wf, grads_cn], 1).to(self.device)
 
         y_hat = self.D(real_wfs, real_lcn, *i_vc)
         y = self.D(fake_wfs, fake_lcn, *i_vc)
