@@ -346,8 +346,9 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                     dist / dist_max * torch.ones(samples, 1),
                     mag / mag_max * torch.ones(samples, 1),
                 ]
+                vc_list = [i.to(G.device) for i in vc_list]
 
-                random_data = grf.sample(samples)
+                random_data = grf.sample(samples).to(G.device)
                 syn_data, syn_scaler = G(random_data, *vc_list)
                 syn_data = syn_data.squeeze().detach().cpu().numpy()
                 syn_data = syn_data * syn_scaler.detach().cpu().numpy()
