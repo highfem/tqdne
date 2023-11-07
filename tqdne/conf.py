@@ -67,6 +67,12 @@ OUTPUTDIR = LazyEnv(
     return_type=Path,
 ).eval()
 
+PROJECT_PATH = LazyEnv(
+    "PROJEC_PATH",
+    PATH_ROOT,
+    return_type=Path,
+).eval()
+
 PROJECT_NAME = "tqdne"
 
 @dataclass
@@ -77,10 +83,13 @@ class Config:
     datasetdir: Path = DATASETDIR
     outputdir: Path = OUTPUTDIR
     project_name: str = PROJECT_NAME
+    project_path: Path = PROJECT_PATH
     
     # dataset_files:
     data_upsample_train: str = "data_upsample_train.h5"
     data_upsample_test: str = "data_upsample_test.h5"
+    data_waveforms: str = "waveforms.npy"
+    data_attributes: str = "attributes.csv"
 
 
     # Sampling frequency
