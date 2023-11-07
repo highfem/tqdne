@@ -37,16 +37,16 @@ class WaveformDataset(torch.utils.data.Dataset):
 
         self.vc_lst = []
         for v_name in v_names:
-            logging.info("---------", v_name, "-----------")
-            logging.info("min " + v_name, df_meta[v_name].min())
-            logging.info("max " + v_name, df_meta[v_name].max())
+            print("---------", v_name, "-----------")
+            print("min " + v_name, df_meta[v_name].min())
+            print("max " + v_name, df_meta[v_name].max())
             # 1. rescale variables to be between 0,1
             v = df_meta[v_name].to_numpy()
             v = (v - v.min()) / (v.max() - v.min())
 
             # reshape conditional variables
             vc = np.reshape(v, (v.shape[0], 1))
-            logging.info("vc shape", vc.shape)
+            print("vc shape", vc.shape)
             # 3. store conditional variable
             self.vc_lst.append(vc)
 
@@ -81,9 +81,9 @@ def main():
     latent_dim = 100
     time_delta = 0.05
     discriminator_size = 1000
-    frac_train = 0.8
+    frac_train = 0.005
 
-    logging.info("Loading data...")
+    print("Loading data...")
     sdat_train = SeisData(
         data_file=data_file,
         attr_file=attr_file,
@@ -112,7 +112,7 @@ def main():
     mlf_logger = MLFlowLogger(
         experiment_name="lightning_logs", tracking_uri="file:./mlruns"
     )
-    logging.info("--------------------------- TRAIN ------------------------------")
+    print("--------------------------- TRAIN ------------------------------")
     trainer = L.Trainer(
         accelerator="auto",
         devices=1,

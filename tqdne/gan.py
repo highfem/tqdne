@@ -9,6 +9,7 @@ from tqdne.ganutils.evaluation import evaluate_model
 
 torch.set_default_dtype(torch.float64)
 
+
 def embed(in_chan, out_chan):
     """
     Creates embeding with 4 dense layers
@@ -38,23 +39,15 @@ def FCNC(n_vs=150, hidden_1=256, hidden_2=512):
     Fully connected neural net for normalization factors
     """
     layers = nn.Sequential(
-        # linear layer (n_vs -> hidden_1)
         nn.Linear(n_vs, hidden_1),
         torch.nn.ReLU(),
-        # linear layer (hidden_1 -> hidden_2)
         nn.Linear(hidden_1, hidden_2),
         torch.nn.ReLU(),
-        # linear layer (hidden_2 -> hidden_2)
         nn.Linear(hidden_2, hidden_2),
         torch.nn.ReLU(),
-        # nn.Linear(hidden_2, 2*hidden_2), torch.nn.ReLU(),
-        # nn.Linear(2*hidden_2, hidden_2), torch.nn.ReLU(),
-        # linear layer (hidden_2 -> hidden_1)
         nn.Linear(hidden_2, hidden_1),
         torch.nn.ReLU(),
-        # linear layer (hidden_2 -> 1)
         nn.Linear(hidden_1, 1),
-        # tanh output
         torch.nn.Tanh(),
     )
 
@@ -64,8 +57,6 @@ def FCNC(n_vs=150, hidden_1=256, hidden_2=512):
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
-
-        #  --- init function ---
 
         #  get embeddings for the conditional variables
         self.embed1 = embed(1, 1000)
@@ -745,8 +736,9 @@ class LogGanCallback(L.callbacks.Callback):
             self.dataset,
             epoch_loc_dirs,
             self.mlf_logger,
-            pl_module.hparams
+            pl_module.hparams,
         )
+
 
 class GAN(L.LightningModule):
     def __init__(
@@ -771,12 +763,12 @@ class GAN(L.LightningModule):
         self.g_val_loss = None
 
         # networks
-        self.G = Generator(z_size=self.hparams.latent_dim)
-        self.D = Discriminator()
+        self.G = Generator(z_size=self.hparams.latent_dim).to(self.device)
+        self.D = Discriminator().to(self.device)
 
     def random_z(self) -> torch.TensorType:
         mean = torch.zeros(self.hparams.batch_size, 1, self.hparams.latent_dim)
-        return torch.normal(mean=mean)
+        return torch.normal(mean=mean).to(self.device)
         # z = np.random.normal(size=[self.hparams.batch_size, 1, self.hparams.latent_dim]).astype(dtype=np.float64)
         # z = torch.from_numpy(z)
         # return z
@@ -796,11 +788,15 @@ class GAN(L.LightningModule):
         # for waves
         Xwf_p = (alpha * real_wfs + ((1.0 - alpha) * fake_wfs)).requires_grad_(True)
         # for normalization
-        Xcn_p = (alpha_cn * real_lcn + ((1.0 - alpha_cn) * fake_lcn)).requires_grad_(True)
+        Xcn_p = (alpha_cn * real_lcn + ((1.0 - alpha_cn) * fake_lcn)).requires_grad_(
+            True
+        )
         # apply dicriminator
         D_xp = self.D(Xwf_p, Xcn_p, *i_vc)
         # Get gradient w.r.t. interpolates waveforms
-        Xout_wf = torch.autograd.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
+        Xout_wf = torch.autograd.Variable(
+            torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
+        )
         grads_wf = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xwf_p,
@@ -811,7 +807,9 @@ class GAN(L.LightningModule):
         )[0]
         grads_wf = grads_wf.view(grads_wf.size(0), -1)
         # get gradients w.r.t. normalizations
-        Xout_cn = torch.autograd.Variable(torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False)
+        Xout_cn = torch.autograd.Variable(
+            torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
+        )
         grads_cn = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xcn_p,
@@ -826,26 +824,29 @@ class GAN(L.LightningModule):
         y_hat = self.D(real_wfs, real_lcn, *i_vc)
         y = self.D(fake_wfs, fake_lcn, *i_vc)
 
-        self.d_gploss = self.hparams.reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
+        self.d_gploss = (
+            self.hparams.reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
+        )
         self.d_wloss = -torch.mean(y_hat) + torch.mean(y)
         self.d_loss = self.d_wloss + self.d_gploss
 
         return self.d_loss
 
     def generator_loss(self, wfs, lcn, i_vg):
-        g_loss = -torch.mean(self.D(wfs, lcn, *i_vg))
+        g_loss = -torch.mean(self.D(wfs, lcn, *i_vg)).to(self.device)
         self.g_loss = g_loss
         return g_loss
 
     def training_step(self, batch, batch_idx):
         real_wfs, real_lcn, i_vc = batch
+        real_wfs = real_wfs.to(self.device)
+        real_lcn = real_lcn.to(self.device)
+        i_vc = [i.to(self.device) for i in i_vc]
         optimizer_g, optimizer_d = self.optimizers()
         self.toggle_optimizer(optimizer_d)
 
-
         ### ---------- DISCRIMINATOR STEP ---------------
         optimizer_d.zero_grad()
-        # generate a batch of waveform no autograd
         (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
         d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
@@ -862,17 +863,12 @@ class GAN(L.LightningModule):
             self.toggle_optimizer(optimizer_g)
             optimizer_g.zero_grad()
 
-            # forward step 1 -> generate fake waveforms
             (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
-            # calculate loss
             g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
-            # Calculate gradients for generator
             self.manual_backward(g_loss)
-            # update weights for generator -> run optimizer
             optimizer_g.step()
             self.untoggle_optimizer(optimizer_g)
             self.log("g_train_loss", g_loss, prog_bar=True, on_epoch=True)
-
 
     def configure_optimizers(self):
         lr = self.hparams.lr
@@ -893,12 +889,9 @@ class GAN(L.LightningModule):
         (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
         # random constant
-        d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc) 
+        d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
         self.log("d_val_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
         self.log("d_val_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
-        ### ---------- END DISCRIMINATOR STEP ---------------
-
-        ### ---------- TAKE GENERATOR STEP ------------------------
 
         # get random sampling of conditional variables
         (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
@@ -906,4 +899,3 @@ class GAN(L.LightningModule):
         # calculate loss
         g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
         self.log("g_val_loss", g_loss, prog_bar=True, on_epoch=True)
-
