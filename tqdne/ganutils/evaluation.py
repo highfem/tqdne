@@ -38,6 +38,7 @@ def calc_mean_distances(G, dataset, wfs, c_norms, means, samples, noise_dim):
         dist / dist_max * torch.ones(samples, 1),
         mag / mag_max * torch.ones(samples, 1),
     ]
+    vc_list = [i.to(G.device) for i in vc_list]
 
     grf = rand_noise(1, noise_dim, device=device)
     random_data = grf.sample(samples)
@@ -157,6 +158,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                 dist / dist_max * torch.ones(n_waveforms, 1),
                 mag / mag_max * torch.ones(n_waveforms, 1),
             ]
+            vc_list = [i.to(G.device) for i in vc_list]
 
             grf = rand_noise(1, args.latent_dim, device=device)
             random_data = grf.sample(n_waveforms)
@@ -190,6 +192,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                 dist / dist_max * torch.ones(n_waveforms, 1),
                 mag / mag_max * torch.ones(n_waveforms, 1),
             ]
+            vc_list = [i.to(G.device) for i in vc_list]
 
             grf = rand_noise(1, args.latent_dim, device=device)
             random_data = grf.sample(n_waveforms)
@@ -220,6 +223,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                 dist / dist_max * torch.ones(n_tot, 1),
                 mag / mag_max * torch.ones(n_tot, 1),
         ]
+        vc_list = [i.to(device)]
         grf = rand_noise(1, args.latent_dim, device=device)
         random_data = grf.sample(n_tot)
         syn_data, syn_scaler = G(random_data, *vc_list)
@@ -291,8 +295,9 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                     dist / dist_max * torch.ones(samples, 1),
                     mag / mag_max * torch.ones(samples, 1),
                 ]
+                vc_list = [i.to(device) for i in vc_list]
 
-                random_data = grf.sample(samples)
+                random_data = grf.sample(samples, device=device)
                 syn_data, syn_scaler = G(random_data, *vc_list)
                 syn_data = syn_data.squeeze().detach().cpu().numpy()
                 syn_data = syn_data * syn_scaler.detach().cpu().numpy()
@@ -348,7 +353,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, logger, args):
                 ]
                 vc_list = [i.to(G.device) for i in vc_list]
 
-                random_data = grf.sample(samples).to(G.device)
+                random_data = grf.sample(samples)
                 syn_data, syn_scaler = G(random_data, *vc_list)
                 syn_data = syn_data.squeeze().detach().cpu().numpy()
                 syn_data = syn_data * syn_scaler.detach().cpu().numpy()
