@@ -23,10 +23,10 @@ class WFDataModule(L.LightningDataModule):
         self.data_val = WaveformDataset(wfs_val, self.df_attr, self.v_names)
 
     def get_wfs(self) -> np.ndarray:
-        return self.wfs
+        return np.copy(self.wfs)
 
     def get_attr(self) -> pd.DataFrame:
-        return self.df_attr
+        return self.df_attr.copy()
 
     def train_dataloader(self):
         return DataLoader(self.data_train, batch_size=self.batch_size, num_workers=23)
