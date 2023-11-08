@@ -1,13 +1,18 @@
-from tqdne.gan_lightning import GAN, LogGanCallback
-from tqdne.ganutils.data_utils import SeisData
+from tqdne.gan_lightning import GAN
+from tqdne.callbacks import LogGanCallback
+
+# from tqdne.ganutils.data_utils import SeisData
 from tqdne.ganutils.dataset import WFDataModule, WaveformDataset
 import pytorch_lightning as L
-from pytorch_lightning.loggers import MLFlowLogger
+
+# from pytorch_lightning.loggers import MLFlowLogger
+from pytorch_lightning.loggers import WandbLogger
 import torch
 from tqdne.conf import Config
 from pathlib import Path
 import numpy as np
 import pandas as pd
+
 
 def main():
     # Setting up Args
@@ -17,7 +22,7 @@ def main():
     condv_names = ["dist", "mag"]
     plot_format = "pdf"
 
-    batch_size = 4
+    batch_size = 128
     sample_rate = 100
     gp_lambda = 10.0
     n_critic = 10
@@ -58,16 +63,17 @@ def main():
         # discriminator_size=discriminator_size,
         # plot_format=plot_format,
     )
-    mlf_logger = MLFlowLogger(
-        experiment_name="lightning_logs", tracking_uri="file:./mlruns"
-    )
+    # mlf_logger = MLFlowLogger(
+    #     experiment_name="lightning_logs", tracking_uri="file:./mlruns"
+    # )
+    wandb_logger = WandbLogger(project="tqdne")
     print("--------------------------- TRAIN ------------------------------")
     trainer = L.Trainer(
         accelerator="auto",
         devices=1,
         max_epochs=300,
-        logger=mlf_logger,
-        callbacks=[LogGanCallback(mlf_logger, dataset=None)],
+        logger=wandb_logger,
+        callbacks=[LogGanCallback(wandb_logger, dataset=dm)],
     )
     trainer.fit(model, dm)
 

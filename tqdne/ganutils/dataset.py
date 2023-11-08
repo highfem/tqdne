@@ -5,28 +5,34 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as L
 
+
 class WFDataModule(L.LightningDataModule):
     def __init__(self, wfs_file, attr_file, v_names, batch_size, train_ratio):
         super().__init__()
-        self.wfs_file = wfs_file
-        self.attr_file = attr_file
         self.v_names = v_names
         self.batch_size = batch_size
         self.train_ratio = train_ratio
-        wfs = np.load(self.wfs_file)
-        n = int(wfs.shape[0] * self.train_ratio)
-        wfs_train = wfs[:n]
-        wfs_val = wfs[n:]
-        df_attr = pd.read_csv(self.attr_file)
+        self.wfs = np.load(wfs_file)
+        n = int(self.wfs.shape[0] * self.train_ratio)
+        wfs_train = self.wfs[:n]
+        wfs_val = self.wfs[n:]
+        self.df_attr = pd.read_csv(attr_file)
 
-        self.data_train = WaveformDataset(wfs, df_attr, self.v_names)
-        self.data_val = WaveformDataset(wfs_val, df_attr, self.v_names)
+        self.data_train = WaveformDataset(wfs_train, self.df_attr, self.v_names)
+        self.data_val = WaveformDataset(wfs_val, self.df_attr, self.v_names)
+
+    def get_wfs(self) -> np.ndarray:
+        return self.wfs
+
+    def get_attr(self) -> pd.DataFrame:
+        return self.df_attr
 
     def train_dataloader(self):
-        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers = 7)
+        return DataLoader(self.data_train, batch_size=self.batch_size, num_workers=23)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.data_val, batch_size=self.batch_size, num_workes=23)
+
 
 class WaveformDataset(Dataset):
     def __init__(self, wfs, df_attr, v_names):
@@ -67,5 +73,3 @@ class WaveformDataset(Dataset):
     def __getitem__(self, index):
         vc_b = [v[index, :] for v in self.vc_lst]
         return (self.wfs[index], self.ln_cns[index], vc_b)
-
-
