@@ -32,15 +32,17 @@ class GAN(L.LightningModule):
         self.G = Generator(z_size=self.hparams.latent_dim)
         self.D = Discriminator()
 
-    def random_z(self) -> torch.TensorType:
-        mean = torch.zeros(self.hparams.batch_size, 1, self.hparams.latent_dim)
+    def random_z(self, num_waveforms = None) -> torch.TensorType:
+        if num_waveforms == None:
+            num_waveforms = self.hparams.batch_size
+        mean = torch.zeros(num_waveforms, 1, self.hparams.latent_dim)
         return torch.normal(mean=mean).to(self.device)
         # z = np.random.normal(size=[self.hparams.batch_size, 1, self.hparams.latent_dim]).astype(dtype=np.float64)
         # z = torch.from_numpy(z)
         # return z
 
-    def sample(self, v1, v2):
-        return self.forward(self.random_z(), v1, v2)
+    def sample(self, num_waveforms, v1, v2):
+        return self.forward(self.random_z(num_waveforms), v1, v2)
 
     def forward(self, z, v1, v2):
         return self.G(z, v1, v2)

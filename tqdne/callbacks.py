@@ -53,7 +53,7 @@ class LogGanCallback(L.callbacks.Callback):
         ]
         vc_list = [i.to(pl_module.device) for i in vc_list]
 
-        syn_data, syn_scaler = pl_module.sample(*vc_list)
+        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, *vc_list)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
         syn_data = syn_data * syn_scaler.detach().cpu().numpy()
 
