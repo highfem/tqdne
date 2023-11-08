@@ -57,12 +57,13 @@ class LogGanCallback(L.callbacks.Callback):
         syn_data = syn_data.squeeze().detach().cpu().numpy()
         syn_data = syn_data * syn_scaler.detach().cpu().numpy()
 
-        synthetic_data_log = np.log(np.abs(np.array(syn_data + 1e-10)))
-        sd_mean = np.mean(synthetic_data_log, axis=0)
+        # synthetic_data_log = np.log(np.abs(np.array(syn_data + 1e-10)))
+        # sd_mean = np.mean(synthetic_data_log, axis=0)
 
-        y = np.exp(sd_mean)
+        y = syn_data
+        # y = np.exp(sd_mean)
 
-        nt = synthetic_data_log.shape[1]
+        nt = syn_data.shape[1]
         tt = self.timedelta * np.arange(0, nt)
         return tt, y
 
@@ -95,13 +96,13 @@ class LogGanCallback(L.callbacks.Callback):
                 )
         plt.legend()
         plt.xlabel("Time [s]")
-        plt.ylabel("Log-Amplitude")
+        plt.ylabel("Amplitude")
         wandb.log({"LogAmplitude-x-Time": plt})
         plt.close("all")
         plt.clf()
         plt.cla()
 
-    def on_train_epoch_end(self, trainer, pl_module):
+    def on_train_step_end(self, trainer, pl_module):
         if (pl_module.cur_epoch + 1) % self.every != 0:
             return
         self.cur_epoch += 1
