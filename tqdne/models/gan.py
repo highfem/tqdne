@@ -530,9 +530,9 @@ class Generator(nn.Module):
         v2 = v2.view(-1, 1, 150, 1)
 
         # concatenate conditional variables to input
-        print("----------------------------------------------")
-        print(x.shape, v1.shape, v2.shape)
-        print("----------------------------------------------")
+        # print("----------------------------------------------")
+        # print(x.shape, v1.shape, v2.shape)
+        # print("----------------------------------------------")
         x = torch.cat([x, v1, v2], 1)
         # print('torch.cat([x, v1, v2, v3],1) shape: ', x.shape)
         # ------------------------------------------------
