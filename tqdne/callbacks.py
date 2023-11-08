@@ -9,7 +9,7 @@ from tqdne.ganutils.evaluation import evaluate_model
 
 class LogGanCallback(L.callbacks.Callback):
     def __init__(
-        self, wandb_logger, dataset, every=10, timedelta=0.05, n_waveforms=72 * 5
+        self, wandb_logger, dataset, every=1, timedelta=0.05, n_waveforms=72 * 5
     ) -> None:
         super().__init__()
         self.wandb_logger = wandb_logger

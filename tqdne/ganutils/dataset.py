@@ -17,7 +17,7 @@ class WFDataModule(L.LightningDataModule):
         m = int((n * self.train_ratio) / batch_size) * batch_size
         wfs_train = self.wfs[:m]
         wfs_val = self.wfs[m: n]
-        self.df_attr = pd.read_csv(attr_file)
+        self.df_attr = pd.read_csv(attr_file)[v_names]
 
         self.data_train = WaveformDataset(wfs_train, self.df_attr, self.v_names)
         self.data_val = WaveformDataset(wfs_val, self.df_attr, self.v_names)
@@ -48,25 +48,15 @@ class WaveformDataset(Dataset):
         min_lc_m = np.min(lc_m)
         self.ln_cns = 2.0 * (lc_m - min_lc_m) / (max_lc_m - min_lc_m) - 1.0
 
-        # store All attributes
-        # store pandas dict as attribute
-        df_meta = df_attr[v_names]
-
         self.vc_lst = []
         for v_name in v_names:
-            v = df_meta[v_name].to_numpy()
+            v = df_attr[v_name].to_numpy()
             v = (v - v.min()) / (v.max() - v.min())
-
             # reshape conditional variables
             vc = np.reshape(v, (v.shape[0], 1))
             print("vc shape", vc.shape)
             # 3. store conditional variable
             self.vc_lst.append(vc)
-
-        vc_b = []
-        for v in self.vc_lst:
-            vc_b.append(v)
-        self.vc_lst = vc_b
 
     def __len__(self):
         return self.ws.shape[0]
