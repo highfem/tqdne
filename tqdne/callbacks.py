@@ -102,7 +102,7 @@ class LogGanCallback(L.callbacks.Callback):
         plt.clf()
         plt.cla()
 
-    def on_train_step_end(self, trainer, pl_module):
+    def on_train_batch_end(self, trainer, pl_module):
         if (pl_module.cur_epoch + 1) % self.every != 0:
             return
         self.cur_epoch += 1
