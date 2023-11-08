@@ -124,8 +124,8 @@ class GAN(L.LightningModule):
         d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
         self.manual_backward(d_loss)
         optimizer_d.step()
-        i_vc_out = [i.detach().cpu().numpy() for i in i_vc]
-        self.log({"dist_conf_v": wandb.Histogram(i_vc_out[0]), "mag_cond_v": wandb.Histogram(i_vc_out[1])})
+        # i_vc_out = [i.detach().cpu().numpy() for i in i_vc]
+        self.log({"dist_conf_v": i_vc[0], "mag_cond_v": i_vc[1]})
         self.log("d_train_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
         self.log("d_train_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
         self.log("d_train_loss", self.d_loss, prog_bar=True, on_epoch=True)
