@@ -1,60 +1,9 @@
-import os
 import pytorch_lightning as L
 import numpy as np
 import torch
 from tqdne.models.gan import Generator, Discriminator
-from tqdne.ganutils.evaluation import evaluate_model
 
 torch.set_default_dtype(torch.float64)
-
-class LogGanCallback(L.callbacks.Callback):
-    def __init__(self, mlf_logger, dataset, every=5) -> None:
-        super().__init__()
-        self.mlf_logger = mlf_logger
-        self.scores = []
-        self.scores_val = []
-        self.dataset = dataset
-        # self.dataset_train = dataset_train
-        self.cur_epoch = 0
-        self.every = every
-
-    def on_train_epoch_end(self, trainer, pl_module):
-        if (pl_module.cur_epoch + 1) % 10 != 0:
-            return
-        self.cur_epoch += 1
-        save_loc_epoch = f"{self.mlf_logger.save_dir}/{self.mlf_logger.name}/{self.mlf_logger.run_id}/model_epoch_{self.cur_epoch}"
-        print(save_loc_epoch)
-        # self.mlf_logger.experiment.pytorch.save_model(self.G, save_loc_epoch)
-        # self.mlf_logger.experiment.pytorch.log_model(self.G, save_loc_epoch)
-
-        metrics_dir = os.path.join(save_loc_epoch, "metrics")
-        if not os.path.exists(metrics_dir):
-            os.makedirs(metrics_dir)
-
-        grid_dir = os.path.join(save_loc_epoch, "grid_plots")
-        if not os.path.exists(grid_dir):
-            os.makedirs(grid_dir)
-
-        fig_dir = os.path.join(save_loc_epoch, "figs")
-        if not os.path.exists(fig_dir):
-            os.makedirs(fig_dir)
-
-        epoch_loc_dirs = {
-            "output_dir": save_loc_epoch,
-            "metrics_dir": metrics_dir,
-            "grid_dir": grid_dir,
-            "fig_dir": fig_dir,
-        }
-
-        n_waveforms = 72 * 5
-        evaluate_model(
-            pl_module.G,
-            n_waveforms,
-            self.dataset,
-            epoch_loc_dirs,
-            self.mlf_logger,
-            pl_module.hparams,
-        )
 
 
 class GAN(L.LightningModule):
@@ -90,6 +39,9 @@ class GAN(L.LightningModule):
         # z = torch.from_numpy(z)
         # return z
 
+    def sample(self, v1, v2):
+        return self.forward(self.random_z(), v1, v2)
+
     def forward(self, z, v1, v2):
         return self.G(z, v1, v2)
 
@@ -105,7 +57,9 @@ class GAN(L.LightningModule):
         # for waves
         Xwf_p = (alpha * real_wfs + ((1.0 - alpha) * fake_wfs)).requires_grad_(True)
         # for normalization
-        Xcn_p = (alpha_cn * real_lcn + ((1.0 - alpha_cn) * fake_lcn)).requires_grad_(True)
+        Xcn_p = (alpha_cn * real_lcn + ((1.0 - alpha_cn) * fake_lcn)).requires_grad_(
+            True
+        )
         # apply dicriminator
         D_xp = self.D(Xwf_p, Xcn_p, *i_vc)
         # Get gradient w.r.t. interpolates waveforms
@@ -205,7 +159,9 @@ class GAN(L.LightningModule):
 
         # random constant
         with torch.enable_grad():
-            d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
+            d_loss = self.discriminator_loss(
+                real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc
+            )
         self.log("d_val_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
         self.log("d_val_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
 
