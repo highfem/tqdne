@@ -39,7 +39,7 @@ class LogGanCallback(L.callbacks.Callback):
 
         return {"dist_bins": dist_bins, "mag_bins": mag_bins}
 
-    def get_sample_from_conds(self, pl_module, mag, dist, n_waveforms):
+    def get_sample_from_conds(self, pl_module, mag, dist):
         dist_min = self.attr["dist"].min()
         dist_max = self.attr["dist"].max()
         dist_mean = self.attr["dist"].mean()
@@ -48,8 +48,8 @@ class LogGanCallback(L.callbacks.Callback):
         mag_max = self.attr["mag"].max()
         mag_mean = self.attr["mag"].mean()
         vc_list = [
-            dist / dist_max * torch.ones(n_waveforms, 1),
-            mag / mag_max * torch.ones(n_waveforms, 1),
+            dist / dist_max * torch.ones(self.n_waveforms, 1),
+            mag / mag_max * torch.ones(self.n_waveforms, 1),
         ]
         vc_list = [i.to(pl_module.device) for i in vc_list]
 

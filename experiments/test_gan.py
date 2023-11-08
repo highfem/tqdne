@@ -22,7 +22,7 @@ def main():
     condv_names = ["dist", "mag"]
     plot_format = "pdf"
 
-    batch_size = 128
+    batch_size = 256
     sample_rate = 100
     gp_lambda = 10.0
     n_critic = 10
