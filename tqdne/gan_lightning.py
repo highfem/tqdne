@@ -174,4 +174,4 @@ class GAN(L.LightningModule):
 
         # calculate loss
         g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
-        self.log("g_val_loss", g_loss, prog_bar=True, on_epoch=True)
+        self.log("val_loss", g_loss, prog_bar=True, on_epoch=True)
