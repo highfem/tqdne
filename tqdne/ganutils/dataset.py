@@ -31,7 +31,7 @@ class WFDataModule(L.LightningDataModule):
         return DataLoader(self.data_train, batch_size=self.batch_size, num_workers=23)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, num_workes=23)
+        return DataLoader(self.data_val, batch_size=self.batch_size, num_workers=23)
 
 
 class WaveformDataset(Dataset):

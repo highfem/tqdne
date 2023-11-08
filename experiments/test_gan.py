@@ -46,10 +46,10 @@ def main():
     wfs = np.load(data_file)
     df_attr = pd.read_csv(attr_file)
     dm = WFDataModule(data_file, attr_file, condv_names, batch_size, frac_train)
-    dataset = WaveformDataset(wfs, df_attr, condv_names)
-    waveform_dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=True, num_workers=7
-    )
+    # dataset = WaveformDataset(wfs, df_attr, condv_names)
+    # waveform_dataloader = torch.utils.data.DataLoader(
+    #     dataset, batch_size=batch_size, shuffle=True, num_workers=7
+    # )
 
     model = GAN(
         latent_dim=latent_dim,
