@@ -13,9 +13,10 @@ class WFDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.train_ratio = train_ratio
         self.wfs = np.load(wfs_file)
-        n = int(self.wfs.shape[0] * self.train_ratio)
-        wfs_train = self.wfs[:n]
-        wfs_val = self.wfs[n:]
+        n = (self.wfs.shape[0] // batch_size) * batch_size
+        m = int((n * self.train_ratio) / batch_size) * batch_size
+        wfs_train = self.wfs[:m]
+        wfs_val = self.wfs[m: n]
         self.df_attr = pd.read_csv(attr_file)
 
         self.data_train = WaveformDataset(wfs_train, self.df_attr, self.v_names)
