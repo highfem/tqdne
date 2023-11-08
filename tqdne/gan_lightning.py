@@ -108,6 +108,7 @@ class GAN(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         real_wfs, real_lcn, i_vc = batch
+        print(real_wfs.shape, real_lcn.shape, i_vc[0].shape, i_vc[1].shape)
         # real_wfs = real_wfs.to(self.device)
         # real_lcn = real_lcn.to(self.device)
         # i_vc = [i.to(self.device) for i in i_vc]

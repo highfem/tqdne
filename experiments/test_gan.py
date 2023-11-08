@@ -32,7 +32,7 @@ def main():
     latent_dim = 100
     time_delta = 0.05
     discriminator_size = 1000
-    frac_train = 0.8
+    frac_train = 0.01
 
     print("Loading data...")
     # sdat_train = SeisData(
