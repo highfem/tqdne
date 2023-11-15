@@ -153,7 +153,6 @@ class GAN(L.LightningModule):
         return [opt_g, opt_d], []
 
     def validation_step(self, batch, batch_idx):
-        return
         ### ---------- DISCRIMINATOR STEP ---------------
         # 1. get real data
         # get random sample
