@@ -30,9 +30,9 @@ class LogGanCallback(L.callbacks.Callback):
         ]
         vc_list = [i.to(pl_module.device) for i in vc_list]
 
-        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, *vc_list)
+        syn_data, _ = pl_module.sample(self.n_waveforms, *vc_list)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
-        syn_data = syn_data * syn_scaler.detach().cpu().numpy()
+        # syn_data = syn_data * syn_scaler.detach().cpu().numpy()
 
         # synthetic_data_log = np.log(np.abs(np.array(syn_data + 1e-10)))
         # sd_mean = np.mean(synthetic_data_log, axis=0)
