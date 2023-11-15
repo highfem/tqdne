@@ -15,7 +15,7 @@ def main():
     data_file = config.datasetdir / Path(config.data_waveforms)
     attr_file = config.datasetdir / Path(config.data_attributes)
     condv_names = ["dist", "mag"]
-    plot_format = "pdf"
+    # plot_format = "pdf"
 
     resume = False
     max_epochs = 50
@@ -35,7 +35,7 @@ def main():
         "b2": 0.9,
     }
     trainer_parameters = {
-        "max_epochs": 50,
+        "max_epochs": max_epochs,
         "accelerator": "auto",
         "devices": "auto",
     }
@@ -53,7 +53,7 @@ def main():
     else:
         checkpoint = None
     
-    trainer.fit(model, dm)
+    trainer.fit(model, dm, ckpt_path=checkpoint)
 
-
-main()
+if __name__ == "__main__":
+    main()
