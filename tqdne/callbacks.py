@@ -47,30 +47,38 @@ class LogGanCallback(L.callbacks.Callback):
 
     def log_sample_image(self, trainer, pl_module):
         n = np.random.randint(0, self.datasize, size=(2,))
-        m = np.random.randint(0, self.datasize, size=(2,))
-        for i in n:
-            for j in m:
-                sample_dist = self.attr["dist"].loc[i]
-                sample_mag = self.attr["mag"].loc[i]
-                sample_norm_dist = self.attr["norm_dist"].loc[i]
-                sample_norm_mag = self.attr["norm_mag"].loc[i]
-                tt, y = self.get_sample_from_conds(
-                    pl_module,
-                    sample_norm_mag,
-                    sample_norm_dist,
-                )
-                plt.semilogy(
-                    tt,
-                    y,
-                    "-",
-                    label=f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}",
-                    alpha=0.8,
-                    lw=0.5,
-                )
-        plt.legend()
-        plt.xlabel("Time [s]")
-        plt.ylabel("Log-Amplitude")
-        wandb.log({"LogAmplitude-x-Time": plt})
+        fig, axis = plt.subplots(2)
+        for cnt, i in enumerate(n):
+            sample_dist = self.attr["dist"].loc[i]
+            sample_mag = self.attr["mag"].loc[i]
+            sample_norm_dist = self.attr["norm_dist"].loc[i]
+            sample_norm_mag = self.attr["norm_mag"].loc[i]
+            tt, y = self.get_sample_from_conds(
+                pl_module,
+                sample_norm_mag,
+                sample_norm_dist,
+            )
+            axis[cnt].legend()
+            axis[cnt].xlabel("Time [s]")
+            axis[cnt].ylabel("Log-Amplitude")
+            axis[cnt].title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
+            axis[cnt].semilogy(
+                tt,
+                y,
+                "-",
+                label="Synthetic",
+                alpha=0.8,
+                lw=0.5,
+            )
+            axis[cnt].semilogy(
+                tt,
+                self.wfs[i],
+                "-",
+                label="Real",
+                alpha=0.8,
+                lw=0.5,
+            )
+        wandb.log({"LogAmplitude-x-Time": fig})
         plt.close("all")
         plt.clf()
         plt.cla()
