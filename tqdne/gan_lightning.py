@@ -125,9 +125,9 @@ class GAN(L.LightningModule):
         self.manual_backward(d_loss)
         optimizer_d.step()
         # i_vc_out = [i.detach().cpu().numpy() for i in i_vc]
-        self.log("d_train_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
-        self.log("d_train_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
-        self.log("d_train_loss", self.d_loss, prog_bar=False, on_epoch=True)
+        self.log("d_train_gploss", self.d_gploss, prog_bar=True)
+        self.log("d_train_wloss", self.d_wloss, prog_bar=True)
+        self.log("d_train_loss", self.d_loss, prog_bar=False)
         self.untoggle_optimizer(optimizer_d)
         ### ---------- END DISCRIMINATOR STEP ---------------
 
@@ -141,7 +141,7 @@ class GAN(L.LightningModule):
             self.manual_backward(g_loss)
             optimizer_g.step()
             self.untoggle_optimizer(optimizer_g)
-            self.log("g_train_loss", g_loss, prog_bar=True, on_epoch=True)
+            self.log("g_train_loss", g_loss, prog_bar=True)
 
     def configure_optimizers(self):
         lr = self.hparams.lr
@@ -166,12 +166,12 @@ class GAN(L.LightningModule):
             d_loss = self.discriminator_loss(
                 real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc
             )
-        self.log("d_val_wloss", self.d_wloss, prog_bar=True, on_epoch=True)
-        self.log("d_val_gploss", self.d_gploss, prog_bar=True, on_epoch=True)
+        self.log("d_val_wloss", self.d_wloss, prog_bar=True)
+        self.log("d_val_gploss", self.d_gploss, prog_bar=True)
 
         # get random sampling of conditional variables
         (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
 
         # calculate loss
         g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
-        self.log("val_loss", g_loss, prog_bar=True, on_epoch=True)
+        self.log("val_loss", g_loss, prog_bar=True)

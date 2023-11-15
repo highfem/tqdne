@@ -41,7 +41,7 @@ class LogGanCallback(L.callbacks.Callback):
 
         y = torch.exp(sd_mean)
 
-        nt = sd_mean.shape[1]
+        nt = sd_mean.shape[0]
         tt = self.timedelta * np.arange(0, nt)
         return tt, y
 
