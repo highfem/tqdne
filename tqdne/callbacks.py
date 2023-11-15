@@ -53,7 +53,7 @@ class LogGanCallback(L.callbacks.Callback):
                 sample_dist = self.attr["dist"].loc[i]
                 sample_mag = self.attr["mag"].loc[i]
                 sample_norm_dist = self.attr["norm_dist"].loc[i]
-                sample_norm_mag = self.attr["mag_dist"].loc[i]
+                sample_norm_mag = self.attr["norm_mag"].loc[i]
                 tt, y = self.get_sample_from_conds(
                     pl_module,
                     sample_norm_mag,
