@@ -47,7 +47,7 @@ class LogGanCallback(L.callbacks.Callback):
 
     def log_sample_image(self, trainer, pl_module):
         n = np.random.randint(0, self.datasize, size=(2,))
-        fig, axis = plt.subplots(2)
+        fig, axis = plt.subplots(2, 1, figsize=(12, 6))
         for cnt, i in enumerate(n):
             sample_dist = self.attr["dist"].loc[i]
             sample_mag = self.attr["mag"].loc[i]
@@ -58,11 +58,11 @@ class LogGanCallback(L.callbacks.Callback):
                 sample_norm_mag,
                 sample_norm_dist,
             )
-            axis[cnt].legend()
-            axis[cnt].xlabel("Time [s]")
-            axis[cnt].ylabel("Log-Amplitude")
-            axis[cnt].title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
-            axis[cnt].semilogy(
+            axis[cnt][0].legend()
+            axis[cnt][0].set_xlabel("Time [s]")
+            axis[cnt][0].set_ylabel("Log-Amplitude")
+            axis[cnt][0].set_title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
+            axis[cnt][0].semilogy(
                 tt,
                 y,
                 "-",
@@ -70,7 +70,7 @@ class LogGanCallback(L.callbacks.Callback):
                 alpha=0.8,
                 lw=0.5,
             )
-            axis[cnt].semilogy(
+            axis[cnt][0].semilogy(
                 tt,
                 self.wfs[i],
                 "-",
