@@ -42,8 +42,7 @@ def main():
     }
     log_callback_parameters = {
         "every": 1,
-        "timedelta": 0.05,
-        "n_waveforms": 72 * 5,
+        "n_waveforms": 3,
     }
 
     print("Loading Model")

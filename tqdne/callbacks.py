@@ -9,7 +9,7 @@ from tqdne.ganutils.evaluation import evaluate_model
 
 class LogGanCallback(L.callbacks.Callback):
     def __init__(
-        self, wandb_logger, dataset, every=1, timedelta=0.05, n_waveforms = 5
+        self, wandb_logger, dataset, every=1, n_waveforms = 5
     ) -> None:
         super().__init__()
         self.wandb_logger = wandb_logger
@@ -17,7 +17,6 @@ class LogGanCallback(L.callbacks.Callback):
         self.wfs = dataset.get_wfs()
         self.cur_epoch = 0
         self.every = every
-        self.timedelta = 0.05
         self.n_waveforms = n_waveforms
     
         self.datasize = len(self.attr)
