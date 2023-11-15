@@ -20,7 +20,7 @@ def main():
     resume = False
     max_epochs = 50
     batch_size = 256
-    frac_train = 0.8
+    frac_train = 0.01
 
     print("Loading data...")
     dm = WFDataModule(data_file, attr_file, condv_names, batch_size, frac_train)
