@@ -38,6 +38,7 @@ def main():
         "max_epochs": max_epochs,
         "accelerator": "auto",
         "devices": "auto",
+        "log_every_n_steps": 10,
     }
     log_callback_parameters = {
         "every": 1,

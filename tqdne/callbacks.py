@@ -70,7 +70,7 @@ class LogGanCallback(L.callbacks.Callback):
                 alpha=0.8,
                 lw=0.5,
             )
-            axis[cnt][0].semilogy(
+            axis[cnt].semilogy(
                 tt,
                 self.wfs[i],
                 "-",
