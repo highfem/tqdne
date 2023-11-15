@@ -58,11 +58,12 @@ class LogGanCallback(L.callbacks.Callback):
                 sample_norm_mag,
                 sample_norm_dist,
             )
+            print(tt.shape, y.shape, self.wfs[i].shape)
             axis[cnt].legend()
             axis[cnt].set_xlabel("Time [s]")
             axis[cnt].set_ylabel("Log-Amplitude")
             axis[cnt].set_title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
-            axis[cnt].semilogy(
+            axis[cnt].plot(
                 tt,
                 y,
                 "-",
@@ -70,7 +71,7 @@ class LogGanCallback(L.callbacks.Callback):
                 alpha=0.8,
                 lw=0.5,
             )
-            axis[cnt].semilogy(
+            axis[cnt].plot(
                 tt,
                 self.wfs[i],
                 "-",
