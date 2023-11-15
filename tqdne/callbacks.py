@@ -42,7 +42,7 @@ class LogGanCallback(L.callbacks.Callback):
         y = np.exp(sd_mean)
 
         nt = sd_mean.shape[0]
-        tt = self.timedelta * np.arange(0, nt)
+        tt = np.arange(0, nt)
         return tt, y
 
     def log_sample_image(self, trainer, pl_module):
@@ -59,10 +59,6 @@ class LogGanCallback(L.callbacks.Callback):
                 sample_norm_dist,
             )
             print(tt.shape, y.shape, self.wfs[i].shape)
-            axis[cnt].legend()
-            axis[cnt].set_xlabel("Time [s]")
-            axis[cnt].set_ylabel("Log-Amplitude")
-            axis[cnt].set_title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
             axis[cnt].plot(
                 tt,
                 y,
@@ -79,6 +75,10 @@ class LogGanCallback(L.callbacks.Callback):
                 alpha=0.8,
                 lw=0.5,
             )
+            axis[cnt].set_xlabel("Time [s]")
+            axis[cnt].set_ylabel("Log-Amplitude")
+            axis[cnt].set_title(f"Dist: {sample_dist:.2f}km, Mag: {sample_mag:.2f}")
+            axis[cnt].legend()
         wandb.log({"LogAmplitude-x-Time": fig})
         plt.close("all")
         plt.clf()
