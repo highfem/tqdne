@@ -1,7 +1,6 @@
 import pytorch_lightning as L
 import numpy as np
 import torch
-import wandb
 from tqdne.models.gan import Generator, Discriminator
 
 torch.set_default_dtype(torch.float64)

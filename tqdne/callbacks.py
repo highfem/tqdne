@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import wandb
-from tqdne.ganutils.evaluation import evaluate_model
 
 class MetricsCallback(L.callbacks.Callback):
     def __init__(self, dataset, every=1, n_samples=500):
