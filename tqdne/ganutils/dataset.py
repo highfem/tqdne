@@ -27,6 +27,9 @@ class WFDataModule(L.LightningDataModule):
 
     def get_attr(self) -> pd.DataFrame:
         return self.df_attr.copy()
+    
+    def getSignalFromDecomp(self, wfs: np.array, lcn: np.array):
+        return self.data_train.getSignalFromDecomp(wfs, lcn)
 
     def train_dataloader(self):
         return DataLoader(self.data_train, batch_size=self.batch_size, num_workers=23)
@@ -44,9 +47,9 @@ class WaveformDataset(Dataset):
         wfs_norm = wfs_norm[:, np.newaxis]
         self.wfs = wfs / wfs_norm
         lc_m = np.log10(self.cnorms)
-        max_lc_m = np.max(lc_m)
-        min_lc_m = np.min(lc_m)
-        self.ln_cns = 2.0 * (lc_m - min_lc_m) / (max_lc_m - min_lc_m) - 1.0
+        self.max_lc_m = np.max(lc_m)
+        self.min_lc_m = np.min(lc_m)
+        self.ln_cns = 2.0 * (lc_m - self.min_lc_m) / (self.max_lc_m - self.min_lc_m) - 1.0
 
         self.vc_lst = []
         for v_name in v_names:
@@ -57,6 +60,11 @@ class WaveformDataset(Dataset):
             print("vc shape", vc.shape)
             # 3. store conditional variable
             self.vc_lst.append(vc)
+
+    def getSignalFromDecomp(self, wfs: np.array, lcn: np.array):
+        lcn_ = (self.max_lc_m - self.max_lc_m) * (lcn + 1.0) / 2.0 + self.min_lc_m
+        lcn_ = 10 ** lcn_
+        return lcn_ * wfs
 
     def __len__(self):
         return self.ws.shape[0]

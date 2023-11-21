@@ -4,6 +4,7 @@ from tqdne.gan_lightning import GAN
 from tqdne.ganutils.dataset import WFDataModule
 from tqdne.utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
+from tqdne.callbacks import PlotCallback, MetricsCallback
 
 # from pytorch_lightning.loggers import MLFlowLogger
 from tqdne.conf import Config
@@ -31,8 +32,8 @@ def main():
         "n_critics": 10,
         "batch_size": batch_size,
         "lr": 1e-4,
-        "b1": 0.0,
-        "b2": 0.9,
+        "b1": 0.9,
+        "b2": 0.999,
     }
     trainer_parameters = {
         "max_epochs": max_epochs,
@@ -40,14 +41,24 @@ def main():
         "devices": "auto",
         "log_every_n_steps": 10,
     }
-    log_callback_parameters = {
+    plot_callback_parameters = {
+        "dataset": dm,
         "every": 1,
         "n_waveforms": 3,
     }
+    metrics_callback_parameters = {
+        "dataset": dm,
+        "every": 1,
+        "n_samples": 500,        
+    }
+    specific_callbacks = [
+        MetricsCallback(**metrics_callback_parameters),
+        PlotCallback(**plot_callback_parameters)
+    ]
 
     print("Loading Model")
     model = GAN(**model_parameters)
-    trainer = get_pl_trainer("WGAN", dm, callback_pars=log_callback_parameters, **trainer_parameters)
+    trainer = get_pl_trainer("WGAN", dm, specific_callbacks=specific_callbacks, **trainer_parameters)
     if resume:
         checkpoint = get_last_checkpoint(trainer.default_root_dir)
     else:

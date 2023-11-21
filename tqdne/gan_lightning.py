@@ -15,7 +15,7 @@ class GAN(L.LightningModule):
         n_critics,
         batch_size,
         lr: float = 0.0002,
-        b1: float = 0.5,
+        b1: float = 0.9,
         b2: float = 0.999,
     ):
         super().__init__()

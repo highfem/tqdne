@@ -1,7 +1,7 @@
 
 from pathlib import Path
 # from tqdne.lightning import LogCallback
-from tqdne.callbacks import LogGanCallback
+from tqdne.callbacks import PlotCallback
 
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pathlib import Path
@@ -14,7 +14,7 @@ import pytorch_lightning as pl
 
 
 
-def get_pl_trainer(name, val_loader, project=PROJECT_NAME, callback_pars = {}, **trainer_params):
+def get_pl_trainer(name, val_loader, project=PROJECT_NAME, specific_callbacks = [], **trainer_params):
 
     # 1. Wandb Logger
     wandb_logger = WandbLogger(project=project) # add project='projectname' to log to a specific project
@@ -27,13 +27,13 @@ def get_pl_trainer(name, val_loader, project=PROJECT_NAME, callback_pars = {}, *
     checkpoint_callback = ModelCheckpoint(dirpath=OUTPUTDIR / Path(name), filename='{name}_{epoch}-{val_loss:.2f}',
                                         monitor='val_loss', mode='min', save_top_k=5)
     # 5. My custom callback
-    log_callback = LogGanCallback(wandb_logger, val_loader, **callback_pars)
-
+    lst_cbk = [lr_logger, checkpoint_callback, *specific_callbacks]
+    print(lst_cbk)
     output_dir = (OUTPUTDIR/Path(name))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define Trainer
-    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=[lr_logger, log_callback, checkpoint_callback], 
+    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=lst_cbk, 
                         default_root_dir=output_dir ) 
     
     return trainer

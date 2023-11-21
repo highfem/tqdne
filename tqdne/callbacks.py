@@ -1,4 +1,5 @@
 import os
+from random import sample
 import pytorch_lightning as L
 import numpy as np
 import torch
@@ -6,13 +7,41 @@ import matplotlib.pyplot as plt
 import wandb
 from tqdne.ganutils.evaluation import evaluate_model
 
+class MetricsCallback(L.callbacks.Callback):
+    def __init__(self, dataset, every=1, n_samples=500):
+        super().__init__()
+        self.dataset = dataset
+        self.wfs = dataset.get_wfs()
+        self.attr = dataset.get_attr()
+        self.attr["norm_dist"] = self.attr["dist"]/self.attr["dist"].max()
+        self.attr["norm_mag"] = self.attr["mag"]/self.attr["mag"].max()  
+        self.every = every
+        self.num_samples = n_samples
 
-class LogGanCallback(L.callbacks.Callback):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if (pl_module.cur_epoch + 1) % self.every != 0:
+            return
+        wfs, lcn, vc_i = batch
+
+        syn_data, syn_scaler = pl_module.sample(wfs.size(0), *vc_i)
+        syn_data = syn_data.squeeze().detach().cpu().numpy()
+        syn_scaler = syn_scaler.detach().cpu().numpy()
+        # syn_data = syn_data * syn_scaler
+        syn_data = self.dataset.getSignalFromDecomp(syn_data, syn_scaler)
+
+        wfs = wfs.detach().cpu().numpy()
+        lcn = lcn.detach().cpu().numpy().reshape(-1, 1)
+        real_wfs = self.dataset.getSignalFromDecomp(wfs, lcn)
+        
+        metrics = np.mean(np.sum((syn_data - real_wfs) ** 2, axis = 1), axis=0)
+        wandb.log({"Mean Squared Difference": metrics})    
+
+class PlotCallback(L.callbacks.Callback):
     def __init__(
-        self, wandb_logger, dataset, every=1, n_waveforms = 5
+        self, dataset, every=1, n_waveforms = 5
     ) -> None:
         super().__init__()
-        self.wandb_logger = wandb_logger
+        self.dataset = dataset
         self.attr = dataset.get_attr()
         self.wfs = dataset.get_wfs()
         self.cur_epoch = 0
@@ -20,8 +49,10 @@ class LogGanCallback(L.callbacks.Callback):
         self.n_waveforms = n_waveforms
     
         self.datasize = len(self.attr)
-        self.attr["norm_dist"] = (self.attr["dist"] - self.attr["dist"].min()) / (self.attr["dist"].max() - self.attr["dist"].min())
-        self.attr["norm_mag"] = (self.attr["mag"] - self.attr["mag"].min()) / (self.attr["mag"].max() - self.attr["mag"].min())
+        #self.attr["norm_dist"] = (self.attr["dist"] - self.attr["dist"].min()) / (self.attr["dist"].max() - self.attr["dist"].min())
+        #self.attr["norm_mag"] = (self.attr["mag"] - self.attr["mag"].min()) / (self.attr["mag"].max() - self.attr["mag"].min())
+        self.attr["norm_dist"] = self.attr["dist"]/self.attr["dist"].max()
+        self.attr["norm_mag"] = self.attr["mag"]/self.attr["mag"].max()  
 
     def get_sample_from_conds(self, pl_module, mag, dist):
         vc_list = [
@@ -30,15 +61,18 @@ class LogGanCallback(L.callbacks.Callback):
         ]
         vc_list = [i.to(pl_module.device) for i in vc_list]
 
-        syn_data, _ = pl_module.sample(self.n_waveforms, *vc_list)
+        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, *vc_list)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
-        # syn_data = syn_data * syn_scaler.detach().cpu().numpy()
+        syn_scaler = syn_scaler.detach().cpu().numpy()
+        syn_data = self.dataset.getSignalFromDecomp(syn_data, syn_scaler)
+        # syn_data = syn_data * syn_scaler
 
         # synthetic_data_log = np.log(np.abs(np.array(syn_data + 1e-10)))
         # sd_mean = np.mean(synthetic_data_log, axis=0)
         sd_mean = np.mean(syn_data, axis=0)
 
-        y = np.exp(sd_mean)
+        # y = np.exp(sd_mean)
+        y = sd_mean
 
         nt = sd_mean.shape[0]
         tt = np.arange(0, nt)
@@ -57,7 +91,6 @@ class LogGanCallback(L.callbacks.Callback):
                 sample_norm_mag,
                 sample_norm_dist,
             )
-            print(tt.shape, y.shape, self.wfs[i].shape)
             axis[cnt].plot(
                 tt,
                 y,
