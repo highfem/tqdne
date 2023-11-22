@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from math import ceil, log2
+from tqdne.utils.positionalencoding import positional_encoding
 
 class CGenerator(nn.Module):
     r"""Conditional GAN (CGAN) generator based on a DCGAN model from
@@ -26,10 +27,11 @@ class CGenerator(nn.Module):
     """
     def __init__(
         self,
-        num_classes,
-        encoding_dims=100,
-        out_size=32,
-        out_channels=3,
+        num_variables,
+        encoding_dims=128,
+        encoding_L = 8,
+        out_size=1024,
+        out_channels=1,
         step_channels=64,
         batchnorm=True,
         nonlinearity=None,
@@ -38,9 +40,9 @@ class CGenerator(nn.Module):
     ):
         super(CGenerator, self).__init__()
         self.encoding_input_dims = encoding_dims
-        self.num_classes = num_classes
-        self.label_embeddings = nn.Embedding(self.num_classes, self.num_classes)
-        self.encoding_input_cond_dims = encoding_dims + num_classes
+        self.num_variables = num_variables
+        self.label_embeddings = lambda x: torch.flatten(positional_encoding(x, encoding_L), start_dim=1)
+        self.encoding_input_cond_dims = encoding_dims + 2 * encoding_L * num_variables
         self.label_type = label_type
         if out_size < 16 or ceil(log2(out_size)) != log2(out_size):
             raise Exception(
@@ -57,18 +59,18 @@ class CGenerator(nn.Module):
         if batchnorm is True:
             model.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(
+                    nn.ConvTranspose1d(
                         self.encoding_input_cond_dims, d, 4, 1, 0, bias=use_bias
                     ),
-                    nn.BatchNorm2d(d),
+                    nn.BatchNorm1d(d),
                     nl,
                 )
             )
             for i in range(num_repeats):
                 model.append(
                     nn.Sequential(
-                        nn.ConvTranspose2d(d, d // 2, 4, 2, 1, bias=use_bias),
-                        nn.BatchNorm2d(d // 2),
+                        nn.ConvTranspose1d(d, d // 2, 4, 2, 1, bias=use_bias),
+                        nn.BatchNorm1d(d // 2),
                         nl,
                     )
                 )
@@ -76,7 +78,7 @@ class CGenerator(nn.Module):
         else:
             model.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(
+                    nn.ConvTranspose1d(
                         self.encoding_input_cond_dims, d, 4, 1, 0, bias=use_bias
                     ),
                     nl,
@@ -85,7 +87,7 @@ class CGenerator(nn.Module):
             for i in range(num_repeats):
                 model.append(
                     nn.Sequential(
-                        nn.ConvTranspose2d(d, d // 2, 4, 2, 1, bias=use_bias),
+                        nn.ConvTranspose1d(d, d // 2, 4, 2, 1, bias=use_bias),
                         nl,
                     )
                 )
@@ -93,7 +95,7 @@ class CGenerator(nn.Module):
 
         model.append(
             nn.Sequential(
-                nn.ConvTranspose2d(d, self.ch, 4, 2, 1, bias=True), last_nl
+                nn.ConvTranspose1d(d, self.ch, 4, 2, 1, bias=True), last_nl
             )
         )
         self.model = nn.Sequential(*model)
@@ -112,10 +114,12 @@ class CGenerator(nn.Module):
                 nn.init.constant_(m.weight, 1.0)
                 nn.init.constant_(m.bias, 0.0)
 
-    def sampler(self, sample_size, device):
+    def sampler(self, sample_size, cond_list,device):
+        print("oi")
+        cond_list_tensor = torch.tensor(cond_list, dtype=torch.float32, device=device)
         return [
             torch.randn(sample_size, self.encoding_input_dims, device=device),
-            torch.randint(0, self.num_classes, (sample_size,), device=device),
+            cond_list_tensor,
         ]
 
     def forward(self, z, y, feature_matching=False):
@@ -130,9 +134,13 @@ class CGenerator(nn.Module):
         Returns:
             A 4D torch.Tensor of the generated image.
         """
-        y_emb = self.label_embeddings(y.type(torch.LongTensor).to(y.device))
-        x = torch.cat((z, y_emb), dim=1)
-        x = x.view(-1, x.size(1), 1, 1)
+        z1 = z.unsqueeze(2)
+        y_emb = self.label_embeddings(y.to(y.device)).unsqueeze(2)
+        print("Shape of y_emb and z")
+        print(y_emb.shape, z1.shape, flush=True)
+        x = torch.cat((z1, y_emb), dim=1)
+        print(x.shape)
+        # x = x.view(-1, x.size(1), 1, 1)
         return self.model(x)
 
 
@@ -148,9 +156,10 @@ class CDiscriminator(nn.Module):
 
     def __init__(
         self,
-        num_classes,
-        in_size=32,
-        in_channels=3,
+        num_variables,
+        in_size=1024,
+        encoding_L = 8,
+        in_channels=1,
         step_channels=64,
         batchnorm=True,
         nonlinearity=None,
@@ -159,9 +168,9 @@ class CDiscriminator(nn.Module):
     ):
         super(CDiscriminator, self).__init__()
         self.input_dims = in_channels
-        self.num_classes = num_classes
-        self.label_embeddings = nn.Embedding(self.num_classes, self.num_classes)
-        self.input_cond_dims = in_channels + num_classes
+        self.num_variables = num_variables
+        self.label_embeddings =  lambda x: torch.flatten(positional_encoding(x, encoding_L), start_dim=1)
+        self.input_cond_dims = in_channels + 2 * encoding_L * num_variables # + num_classes * encoding_L * 2
         self.label_type = label_type
         if in_size < 16 or ceil(log2(in_size)) != log2(in_size):
             raise Exception(
@@ -179,15 +188,15 @@ class CDiscriminator(nn.Module):
         d = self.n
         model = [
             nn.Sequential(
-                nn.Conv2d(self.input_cond_dims, d, 4, 2, 1, bias=True), nl
+                nn.Conv1d(self.input_cond_dims, d, 4, 2, 1, bias=True), nl
             )
         ]
         if batchnorm is True:
             for i in range(num_repeats):
                 model.append(
                     nn.Sequential(
-                        nn.Conv2d(d, d * 2, 4, 2, 1, bias=use_bias),
-                        nn.BatchNorm2d(d * 2),
+                        nn.Conv1d(d, d * 2, 4, 2, 1, bias=use_bias),
+                        nn.BatchNorm1d(d * 2),
                         nl,
                     )
                 )
@@ -196,12 +205,12 @@ class CDiscriminator(nn.Module):
             for i in range(num_repeats):
                 model.append(
                     nn.Sequential(
-                        nn.Conv2d(d, d * 2, 4, 2, 1, bias=use_bias), nl
+                        nn.Conv1d(d, d * 2, 4, 2, 1, bias=use_bias), nl
                     )
                 )
                 d *= 2
         self.disc = nn.Sequential(
-            nn.Conv2d(d, 1, 4, 1, 0, bias=use_bias), last_nl
+            nn.Conv1d(d, 1, 4, 1, 0, bias=use_bias), last_nl
         )
         self.model = nn.Sequential(*model)
         self._weight_initializer()
@@ -233,12 +242,15 @@ class CDiscriminator(nn.Module):
         """
         # TODO(Aniket1998): If directly expanding the embeddings gives poor results,
         # try layers of transposed convolution over the embeddings
-        y_emb = self.label_embeddings(y.type(torch.LongTensor).to(y.device))
-        y_emb = (
-            y_emb.unsqueeze(2)
-            .unsqueeze(3)
-            .expand(-1, y_emb.size(1), x.size(2), x.size(3))
-        )
+        y_emb = self.label_embeddings(y.to(y.device))
+        y_emb = y_emb.unsqueeze(2).expand(-1, y_emb.size(1), x.size(2))
+        print("Shape of x and y_emb")
+        print(x.shape, y_emb.shape, flush=True)
+        # y_emb = (
+        #     y_emb.unsqueeze(2)
+        #     .unsqueeze(3)
+        #     .expand(-1, y_emb.size(1), x.size(2), x.size(3))
+        # )
         x1 = torch.cat((x, y_emb), dim=1)
         x1 = self.model(x1)
         if feature_matching is True:

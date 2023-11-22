@@ -40,7 +40,7 @@ def positional_encoding(x, L, xrange=1.0):
     isnumpy = type(x) == np.ndarray
     if isnumpy:
         x = torch.from_numpy(x)
-    x /= (xrange *2) 
+    x /= (xrange * 2.0) 
     shape = x.shape
     ndim = len(shape)
     x = x.unsqueeze(ndim)

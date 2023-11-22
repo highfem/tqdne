@@ -5985,6 +5985,17 @@ typing = ["mypy (==1.5.1)", "types-PyYAML", "types-emoji", "types-protobuf", "ty
 visual = ["SciencePlots (>=2.0.0)", "matplotlib (>=3.2.0)"]
 
 [[package]]
+name = "torchsummary"
+version = "1.5.1"
+description = "Model summary in PyTorch similar to `model.summary()` in Keras"
+optional = false
+python-versions = "*"
+files = [
+    {file = "torchsummary-1.5.1-py3-none-any.whl", hash = "sha256:10f41d1743fb918f83293f13183f532ab1bb8f6639a1b89e5f8592ec1919a976"},
+    {file = "torchsummary-1.5.1.tar.gz", hash = "sha256:981bf689e22e0cf7f95c746002f20a24ad26aa6b9d861134a14bc6ce92230590"},
+]
+
+[[package]]
 name = "torchvision"
 version = "0.15.1"
 description = "image and video datasets and models for torch deep learning"
@@ -6628,4 +6639,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11.3"
-content-hash = "95c7797109065caf2e01bdb23e7c3fdaf9974a82c05cfffa65f8f797332f8ae0"
+content-hash = "6f1bba2334d509391c5f403aac3c4a83f1793f165ac5037a3b02c425f5d61fe9"
