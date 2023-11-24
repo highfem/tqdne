@@ -115,31 +115,29 @@ class CGenerator(nn.Module):
                 nn.init.constant_(m.bias, 0.0)
 
     def sampler(self, sample_size, cond_list,device):
-        print("oi")
         cond_list_tensor = torch.tensor(cond_list, dtype=torch.float32, device=device)
         return [
             torch.randn(sample_size, self.encoding_input_dims, device=device),
             cond_list_tensor,
         ]
 
-    def forward(self, z, y, feature_matching=False):
+    def forward(self, z, y):
         r"""Calculates the output tensor on passing the encoding ``x`` through the Generator.
 
         Args:
             x (torch.Tensor): A 2D torch tensor of the encoding sampled from a probability
                 distribution.
-            feature_matching (bool, optional): Returns the activation from a predefined intermediate
-                layer.
 
         Returns:
             A 4D torch.Tensor of the generated image.
         """
+        # print(y.shape)
         z1 = z.unsqueeze(2)
         y_emb = self.label_embeddings(y.to(y.device)).unsqueeze(2)
-        print("Shape of y_emb and z")
-        print(y_emb.shape, z1.shape, flush=True)
+        # print("Shape of y_emb and z")
+        # print(y_emb.shape, z1.shape, flush=True)
         x = torch.cat((z1, y_emb), dim=1)
-        print(x.shape)
+        # print(x.shape)
         # x = x.view(-1, x.size(1), 1, 1)
         return self.model(x)
 
@@ -158,7 +156,7 @@ class CDiscriminator(nn.Module):
         self,
         num_variables,
         in_size=1024,
-        encoding_L = 8,
+        encoding_L=8,
         in_channels=1,
         step_channels=64,
         batchnorm=True,
@@ -244,13 +242,14 @@ class CDiscriminator(nn.Module):
         # try layers of transposed convolution over the embeddings
         y_emb = self.label_embeddings(y.to(y.device))
         y_emb = y_emb.unsqueeze(2).expand(-1, y_emb.size(1), x.size(2))
-        print("Shape of x and y_emb")
-        print(x.shape, y_emb.shape, flush=True)
+        #print("Shape of x and y_emb")
+        #print(x.shape, y_emb.shape, flush=True)
         # y_emb = (
         #     y_emb.unsqueeze(2)
         #     .unsqueeze(3)
         #     .expand(-1, y_emb.size(1), x.size(2), x.size(3))
         # )
+        x1 = x1.unsqueeze(1)
         x1 = torch.cat((x, y_emb), dim=1)
         x1 = self.model(x1)
         if feature_matching is True:

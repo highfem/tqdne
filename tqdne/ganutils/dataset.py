@@ -7,17 +7,28 @@ import pytorch_lightning as L
 
 
 class WFDataModule(L.LightningDataModule):
-    def __init__(self, wfs_file, attr_file, v_names, batch_size, train_ratio):
+    def __init__(self, wfs_file, attr_file, wfs_expected_size, v_names, batch_size, train_ratio):
         super().__init__()
         self.v_names = v_names
         self.batch_size = batch_size
         self.train_ratio = train_ratio
         self.wfs = np.load(wfs_file)
+        self.df_attr = pd.read_csv(attr_file)[v_names]
+
+        # Reformatting waveforms
+        if self.wfs.shape[1] != wfs_expected_size:
+            n = wfs_expected_size - self.wfs.shape[1]
+            repeat_column = self.wfs[:, 0].reshape(-1, 1)
+            filling = repeat_column * np.ones((self.wfs.shape[0], n))
+            self.wfs = np.concatenate((filling, self.wfs), axis=1)
+        assert self.wfs.shape[1] == wfs_expected_size, "Reshaping failed"
+
+        # Preventing bad division by batch_size
         n = (self.wfs.shape[0] // batch_size) * batch_size
         m = int((n * self.train_ratio) / batch_size) * batch_size
         wfs_train = self.wfs[:m]
         wfs_val = self.wfs[m: n]
-        self.df_attr = pd.read_csv(attr_file)[v_names]
+        
 
         self.data_train = WaveformDataset(wfs_train, self.df_attr, self.v_names)
         self.data_val = WaveformDataset(wfs_val, self.df_attr, self.v_names)
@@ -40,12 +51,16 @@ class WFDataModule(L.LightningDataModule):
 
 class WaveformDataset(Dataset):
     def __init__(self, wfs, df_attr, v_names):
-        self.ws = wfs.copy()
         print("normalizing data ...")
+        self.ws = wfs.copy()
+        
+        # Normalize wfs
         wfs_norm = np.max(np.abs(wfs), axis=1)  # 2)
         self.cnorms = wfs_norm.copy()
         wfs_norm = wfs_norm[:, np.newaxis]
         self.wfs = wfs / wfs_norm
+
+        # Transform normalization
         lc_m = np.log10(self.cnorms)
         self.max_lc_m = np.max(lc_m)
         self.min_lc_m = np.min(lc_m)

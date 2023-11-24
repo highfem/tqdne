@@ -63,7 +63,7 @@ class GAN(L.LightningModule):
             True
         )
         # apply dicriminator
-        D_xp = self.D(Xwf_p, Xcn_p, *i_vc)
+        D_xp = self.D(Xwf_p, Xcn_p, i_vc)
         # Get gradient w.r.t. interpolates waveforms
         Xout_wf = torch.autograd.Variable(
             torch.Tensor(Nsamp, 1).fill_(1.0), requires_grad=False
@@ -92,8 +92,8 @@ class GAN(L.LightningModule):
         # concatenate grad vectors
         grads = torch.cat([grads_wf, grads_cn], 1)
 
-        y_hat = self.D(real_wfs, real_lcn, *i_vc)
-        y = self.D(fake_wfs, fake_lcn, *i_vc)
+        y_hat = self.D(real_wfs, real_lcn, i_vc)
+        y = self.D(fake_wfs, fake_lcn, i_vc)
 
         self.d_gploss = (
             self.hparams.reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
@@ -118,7 +118,7 @@ class GAN(L.LightningModule):
 
         ### ---------- DISCRIMINATOR STEP ---------------
         optimizer_d.zero_grad()
-        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), i_vc)
 
         d_loss = self.discriminator_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, i_vc)
         self.manual_backward(d_loss)
@@ -135,7 +135,7 @@ class GAN(L.LightningModule):
             self.toggle_optimizer(optimizer_g)
             optimizer_g.zero_grad()
 
-            (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
+            (fake_wfs, fake_lcn) = self.G(self.random_z(), i_vc)
             g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)
             self.manual_backward(g_loss)
             optimizer_g.step()
@@ -158,7 +158,7 @@ class GAN(L.LightningModule):
         real_wfs, real_lcn, i_vc = batch
 
         # generate a batch of waveform no autograd
-        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), i_vc)
 
         # random constant
         with torch.enable_grad():
@@ -169,7 +169,7 @@ class GAN(L.LightningModule):
         self.log("d_val_gploss", self.d_gploss, prog_bar=True)
 
         # get random sampling of conditional variables
-        (fake_wfs, fake_lcn) = self.G(self.random_z(), *i_vc)
+        (fake_wfs, fake_lcn) = self.G(self.random_z(), i_vc)
 
         # calculate loss
         g_loss = self.generator_loss(fake_wfs, fake_lcn, i_vc)

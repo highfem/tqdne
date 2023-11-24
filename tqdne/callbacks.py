@@ -48,19 +48,14 @@ class PlotCallback(L.callbacks.Callback):
         self.n_waveforms = n_waveforms
     
         self.datasize = len(self.attr)
-        #self.attr["norm_dist"] = (self.attr["dist"] - self.attr["dist"].min()) / (self.attr["dist"].max() - self.attr["dist"].min())
-        #self.attr["norm_mag"] = (self.attr["mag"] - self.attr["mag"].min()) / (self.attr["mag"].max() - self.attr["mag"].min())
-        self.attr["norm_dist"] = self.attr["dist"]/self.attr["dist"].max()
-        self.attr["norm_mag"] = self.attr["mag"]/self.attr["mag"].max()  
+        self.attr["norm_dist"] = (self.attr["dist"] - self.attr["dist"].min()) / (self.attr["dist"].max() - self.attr["dist"].min())
+        self.attr["norm_mag"] = (self.attr["mag"] - self.attr["mag"].min()) / (self.attr["mag"].max() - self.attr["mag"].min())
+
 
     def get_sample_from_conds(self, pl_module, mag, dist):
-        vc_list = [
-            dist * torch.ones(self.n_waveforms, 1),
-            mag * torch.ones(self.n_waveforms, 1),
-        ]
-        vc_list = [i.to(pl_module.device) for i in vc_list]
-
-        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, *vc_list)
+        dist_torch = dist * torch.ones(self.n_waveforms, 1).to(pl_module.device)
+        mag_torch = mag * torch.ones(self.n_waveforms, 1).to(pl_module.device)
+        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, dist_torch, mag_torch)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
         syn_scaler = syn_scaler.detach().cpu().numpy()
         syn_data = self.dataset.getSignalFromDecomp(syn_data, syn_scaler)

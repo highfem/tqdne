@@ -2,7 +2,7 @@ from tqdne.gan_lightning import GAN
 
 # from tqdne.ganutils.data_utils import SeisData
 from tqdne.ganutils.dataset import WFDataModule
-from tqdne.utils import get_last_checkpoint
+from tqdne.model_utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
 from tqdne.callbacks import PlotCallback, MetricsCallback
 
@@ -18,15 +18,17 @@ def main():
     condv_names = ["dist", "mag"]
     # plot_format = "pdf"
 
-    resume = False
-    max_epochs = 50
-    batch_size = 256
+    resume = True
+    max_epochs = 100
+    batch_size = 128
     frac_train = 0.8
+    wfs_expected_size = 1024
 
     print("Loading data...")
-    dm = WFDataModule(data_file, attr_file, condv_names, batch_size, frac_train)
+    dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
 
     model_parameters = {
+        "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
         "latent_dim": 100,
         "n_critics": 10,
