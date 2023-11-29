@@ -1,5 +1,4 @@
 from tqdne.gan_lightning import GAN
-
 # from tqdne.ganutils.data_utils import SeisData
 from tqdne.ganutils.dataset import WFDataModule
 from tqdne.model_utils import get_last_checkpoint
@@ -18,8 +17,8 @@ def main():
     condv_names = ["dist", "mag"]
     # plot_format = "pdf"
 
-    resume = True
-    max_epochs = 100
+    resume = False
+    max_epochs = 200
     batch_size = 128
     frac_train = 0.8
     wfs_expected_size = 1024
@@ -30,8 +29,8 @@ def main():
     model_parameters = {
         "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
-        "latent_dim": 100,
-        "n_critics": 10,
+        "latent_dim": 128,
+        "n_critics": 5,
         "batch_size": batch_size,
         "lr": 1e-4,
         "b1": 0.9,
@@ -51,7 +50,7 @@ def main():
     metrics_callback_parameters = {
         "dataset": dm,
         "every": 1,
-        "n_samples": 500,        
+        "n_samples": 50,        
     }
     specific_callbacks = [
         MetricsCallback(**metrics_callback_parameters),

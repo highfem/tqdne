@@ -12,8 +12,8 @@ class MetricsCallback(L.callbacks.Callback):
         self.dataset = dataset
         self.wfs = dataset.get_wfs()
         self.attr = dataset.get_attr()
-        self.attr["norm_dist"] = self.attr["dist"]/self.attr["dist"].max()
-        self.attr["norm_mag"] = self.attr["mag"]/self.attr["mag"].max()  
+        self.attr["norm_dist"] = (self.attr["dist"] - self.attr["dist"].min()) / (self.attr["dist"].max() - self.attr["dist"].min())
+        self.attr["norm_mag"] = (self.attr["mag"] - self.attr["mag"].min()) / (self.attr["mag"].max() - self.attr["mag"].min())
         self.every = every
         self.num_samples = n_samples
 
@@ -22,7 +22,7 @@ class MetricsCallback(L.callbacks.Callback):
             return
         wfs, lcn, vc_i = batch
 
-        syn_data, syn_scaler = pl_module.sample(wfs.size(0), *vc_i)
+        syn_data, syn_scaler = pl_module.sample(wfs.size(0), vc_i)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
         syn_scaler = syn_scaler.detach().cpu().numpy()
         # syn_data = syn_data * syn_scaler
@@ -55,7 +55,8 @@ class PlotCallback(L.callbacks.Callback):
     def get_sample_from_conds(self, pl_module, mag, dist):
         dist_torch = dist * torch.ones(self.n_waveforms, 1).to(pl_module.device)
         mag_torch = mag * torch.ones(self.n_waveforms, 1).to(pl_module.device)
-        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, dist_torch, mag_torch)
+        conds =  torch.cat((dist_torch, mag_torch), dim=1)
+        syn_data, syn_scaler = pl_module.sample(self.n_waveforms, conds)
         syn_data = syn_data.squeeze().detach().cpu().numpy()
         syn_scaler = syn_scaler.detach().cpu().numpy()
         syn_data = self.dataset.getSignalFromDecomp(syn_data, syn_scaler)
