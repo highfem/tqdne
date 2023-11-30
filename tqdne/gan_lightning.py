@@ -54,7 +54,7 @@ class GAN(L.LightningModule):
         grads_wf = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xwf_p,
-            grad_outputs=torch.ones_like(Xwf_p).to(self.device),
+            grad_outputs=torch.ones((Nsamp, 1)).to(self.device),
             create_graph=True,
             retain_graph=True,
             only_inputs=True,
@@ -64,7 +64,7 @@ class GAN(L.LightningModule):
         grads_cn = torch.autograd.grad(
             outputs=D_xp,
             inputs=Xcn_p,
-            grad_outputs=torch.ones_like(Xcn_p).to(self.device),
+            grad_outputs=torch.ones((Nsamp, 1)).to(self.device),
             create_graph=True,
             retain_graph=True,
             only_inputs=True,
