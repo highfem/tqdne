@@ -14,9 +14,7 @@ class GAN(L.LightningModule):
         latent_dim,
         n_critics,
         batch_size,
-        lr: float = 0.0001,
-        b1: float = 0.9,
-        b2: float = 0.999,
+        optimizer_params
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -122,12 +120,11 @@ class GAN(L.LightningModule):
             self.log("g_train_loss", g_loss, prog_bar=True)
 
     def configure_optimizers(self):
-        lr = self.hparams.lr
-        b1 = self.hparams.b1
-        b2 = self.hparams.b2
+        lr = self.hparams.optimizer_params["lr"]
+        momentum = self.hparams.optimizer_params["momentum"]
 
-        opt_g = torch.optim.Adam(self.G.parameters(), lr=lr, betas=(b1, b2))
-        opt_d = torch.optim.Adam(self.D.parameters(), lr=lr, betas=(b1, b2))
+        opt_g = torch.optim.SGD(self.G.parameters(), lr=lr, momentum=momentum)
+        opt_d = torch.optim.SGD(self.D.parameters(), lr=lr, momentum=momentum)
         return [opt_g, opt_d], []
 
     def validation_step(self, batch, batch_idx):

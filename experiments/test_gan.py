@@ -26,15 +26,19 @@ def main():
     print("Loading data...")
     dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
 
+    optimizer_parameters = {
+        "lr": 3e-5,
+        "momentum": 0.4,
+        # "b1": 0.9,
+        # "b2": 0.999,
+    }
     model_parameters = {
         "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
         "latent_dim": 128,
         "n_critics": 5,
         "batch_size": batch_size,
-        "lr": 1e-4,
-        "b1": 0.9,
-        "b2": 0.999,
+        "optimizer_params": optimizer_parameters,
     }
     trainer_parameters = {
         "max_epochs": max_epochs,
