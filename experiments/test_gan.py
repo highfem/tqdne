@@ -1,7 +1,9 @@
+from email import generator
 from tqdne.gan_lightning import GAN
 # from tqdne.ganutils.data_utils import SeisData
 from tqdne.ganutils.dataset import WFDataModule
 from tqdne.model_utils import get_last_checkpoint
+from tqdne.models.gan import Discriminator
 from tqdne.training import get_pl_trainer
 from tqdne.callbacks import PlotCallback, MetricsCallback, SimplePlotCallback
 from tqdne.simple_dataset import StationarySignalDM
@@ -19,10 +21,12 @@ def main():
     # plot_format = "pdf"
 
     resume = False
-    max_epochs = 500
+    max_epochs = 400
     batch_size = 128
     frac_train = 0.8
     wfs_expected_size = 1024
+    latent_dim = 128
+    channels = 1
 
     print("Loading data...")
     # dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
@@ -35,13 +39,31 @@ def main():
         #"b1": 0.9,
         #"b2": 0.999,
     }
+    generator_parameters = {
+        "num_variables": 0,
+        "latent_dim": latent_dim,
+        "encoding_L":4,
+        "out_size": wfs_expected_size,
+        "out_channels": channels,
+        "step_channels":32,
+        "batchnorm": False,
+    }
+    discriminator_parameters = {
+        "num_variables": 0,
+        "in_size": wfs_expected_size,
+        "encoding_L":4,
+        "in_channels":channels,
+        "step_channels":32,
+        "batchnorm": False,
+    }
     model_parameters = {
         "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
-        "latent_dim": 128,
-        "n_critics": 1,
+        "n_critics": 3,
         "batch_size": batch_size,
         "optimizer_params": optimizer_parameters,
+        "generator_params": generator_parameters,
+        "discriminator_params": discriminator_parameters,
     }
     trainer_parameters = {
         "max_epochs": max_epochs,

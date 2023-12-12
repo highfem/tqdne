@@ -12,10 +12,11 @@ class GAN(L.LightningModule):
         self,
         waveform_size,
         reg_lambda,
-        latent_dim,
         n_critics,
         batch_size,
-        optimizer_params
+        optimizer_params,
+        generator_params,
+        discriminator_params,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -30,10 +31,8 @@ class GAN(L.LightningModule):
 
         # networks
         #TODO: Change num_variables to 2, out_channels to 2
-        self.G = CGenerator(
-            num_variables=1, out_channels=1, encoding_dims=latent_dim, out_size=waveform_size
-        )
-        self.D = CDiscriminator(num_variables=1, in_channels=1, in_size=waveform_size)
+        self.G = CGenerator(**generator_params)
+        self.D = CDiscriminator(**discriminator_params)
 
     def sample(self, num_waveforms, cond_list):
         z, cond_tensor = self.G.sampler(num_waveforms, cond_list, self.device)

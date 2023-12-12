@@ -30,7 +30,7 @@ class CGenerator(nn.Module):
     def __init__(
         self,
         num_variables,
-        encoding_dims=128,
+        latent_dim=128,
         encoding_L=4,
         out_size=1024,
         out_channels=2,
@@ -41,12 +41,12 @@ class CGenerator(nn.Module):
         label_type="generated",
     ):
         super(CGenerator, self).__init__()
-        self.encoding_input_dims = encoding_dims
+        self.encoding_input_dims = latent_dim
         self.num_variables = num_variables
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.encoding_input_cond_dims = encoding_dims # + 2 * encoding_L * num_variables
+        self.encoding_input_cond_dims = latent_dim + 2 * encoding_L * num_variables
         self.label_type = label_type
         if out_size < 16 or ceil(log2(out_size)) != log2(out_size):
             raise Exception(
@@ -168,7 +168,7 @@ class CDiscriminator(nn.Module):
         encoding_L=4,
         in_channels=2,
         step_channels=32,
-        batchnorm=False,
+        batchnorm=True,
         nonlinearity=None,
         last_nonlinearity=None,
         label_type="required",
@@ -179,7 +179,7 @@ class CDiscriminator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.input_cond_dims = in_channels # + 2 * encoding_L * num_variables  # + num_classes * encoding_L * 2
+        self.input_cond_dims = in_channels + 2 * encoding_L * num_variables  # + num_classes * encoding_L * 2
         self.label_type = label_type
         if in_size < 16 or ceil(log2(in_size)) != log2(in_size):
             raise Exception(
