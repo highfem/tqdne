@@ -1,3 +1,4 @@
+from flask import g
 import pytorch_lightning as L
 import numpy as np
 import torch
@@ -28,14 +29,18 @@ class GAN(L.LightningModule):
         self.g_val_loss = None
 
         # networks
+        #TODO: Change num_variables to 2, out_channels to 2
         self.G = CGenerator(
-            num_variables=2, encoding_dims=latent_dim, out_size=waveform_size
+            num_variables=1, out_channels=1, encoding_dims=latent_dim, out_size=waveform_size
         )
-        self.D = CDiscriminator(num_variables=2, in_size=waveform_size)
+        self.D = CDiscriminator(num_variables=1, in_channels=1, in_size=waveform_size)
 
     def sample(self, num_waveforms, cond_list):
         z, cond_tensor = self.G.sampler(num_waveforms, cond_list, self.device)
-        return self.forward(z, cond_tensor)
+        # TODO: Undo this
+        w = self.forward(z, cond_tensor)
+        w = w.view(w.size(0), -1)
+        return w, None
 
     def forward(self, z, cond_tensor: torch.TensorType):
         return self.G(z, cond_tensor)
@@ -43,11 +48,14 @@ class GAN(L.LightningModule):
     def gradient_penalty_loss(self, real_wfs, real_lcn, fake_wfs, fake_lcn, cond_tensor):
         Nsamp = real_wfs.size(0)
         alpha = torch.Tensor(np.random.random((Nsamp, 1))).type_as(real_wfs)
+        # print("real_wfs shape:", real_wfs.shape)
+        # print("fake_wfs shape:", fake_wfs.shape)
         Xwf_p = (alpha * real_wfs + ((1.0 - alpha) * fake_wfs)).requires_grad_(True)
         # for normalization
-        Xcn_p = (alpha * real_lcn + ((1.0 - alpha) * fake_lcn)).requires_grad_(True)
+        # Xcn_p = (alpha * real_lcn + ((1.0 - alpha) * fake_lcn)).requires_grad_(True)
         # apply dicriminator
-        D_xp = self.D(Xwf_p, Xcn_p, cond_tensor)
+        # D_xp = self.D(Xwf_p, Xcn_p, cond_tensor)
+        D_xp = self.D(Xwf_p, cond_tensor)
         # Get gradient w.r.t. interpolates waveforms
         grads_wf = torch.autograd.grad(
             outputs=D_xp,
@@ -58,30 +66,35 @@ class GAN(L.LightningModule):
             only_inputs=True,
         )[0]
         grads_wf = grads_wf.view(grads_wf.size(0), -1)
+        # TODO: Uncomment this
         # get gradients w.r.t. normalizations
-        grads_cn = torch.autograd.grad(
-            outputs=D_xp,
-            inputs=Xcn_p,
-            grad_outputs=torch.ones((Nsamp, 1)).to(self.device),
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        grads_cn = grads_cn.view(grads_cn.size(0), -1)
+        # grads_cn = torch.autograd.grad(
+        #     outputs=D_xp,
+        #     inputs=Xcn_p,
+        #     grad_outputs=torch.ones((Nsamp, 1)).to(self.device),
+        #     create_graph=True,
+        #     retain_graph=True,
+        #     only_inputs=True,
+        # )[0]
+        # grads_cn = grads_cn.view(grads_cn.size(0), -1)
         # concatenate grad vectors
-        grads = torch.cat([grads_wf, grads_cn], 1)
+        # grads = torch.cat([grads_wf, grads_cn], 1)
+        grads = grads_wf
         loss = (
             self.hparams.reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
         )
         return loss
     
     def discriminator_wloss(self, real_wfs, real_lcn, fake_wfs, fake_lcn, cond_tensor):
-        y_real_sample = self.D(real_wfs, real_lcn, cond_tensor)
-        y_fake_sample = self.D(fake_wfs, fake_lcn, cond_tensor)
+        # y_real_sample = self.D(real_wfs, real_lcn, cond_tensor)
+        # y_fake_sample = self.D(fake_wfs, fake_lcn, cond_tensor)
+        y_real_sample = self.D(real_wfs, cond_tensor)
+        y_fake_sample = self.D(fake_wfs, cond_tensor)
         loss = -torch.mean(y_real_sample) + torch.mean(y_fake_sample)
         return loss
 
     def discriminator_loss(self, real_wfs, real_lcn, cond_tensor):
+        # print("cond_tensor: ", cond_tensor.shape)
         (fake_wfs, fake_lcn) = self.sample(self.hparams.batch_size, cond_tensor)
         self.d_gploss = self.gradient_penalty_loss(real_wfs, real_lcn, fake_wfs, fake_lcn, cond_tensor)
         self.d_wloss = self.discriminator_wloss(real_wfs, real_lcn, fake_wfs, fake_lcn, cond_tensor)
@@ -89,7 +102,8 @@ class GAN(L.LightningModule):
         return self.d_loss
 
     def generator_loss(self, wfs, lcn, i_vg):
-        g_loss = -torch.mean(self.D(wfs, lcn, i_vg))
+        # g_loss = -torch.mean(self.D(wfs, lcn, i_vg))
+        g_loss = -torch.mean(self.D(wfs, i_vg))
         self.g_loss = g_loss
         return g_loss
 
@@ -122,7 +136,11 @@ class GAN(L.LightningModule):
     def configure_optimizers(self):
         lr = self.hparams.optimizer_params["lr"]
         momentum = self.hparams.optimizer_params["momentum"]
+        # b1 = self.hparams.optimizer_params["b1"]
+        # b2 = self.hparams.optimizer_params["b2"]
 
+        # opt_g = torch.optim.Adam(self.G.parameters(), lr=lr, betas=(b1, b2))
+        # opt_d = torch.optim.Adam(self.D.parameters(), lr=lr, betas=(b1, b2))    
         opt_g = torch.optim.SGD(self.G.parameters(), lr=lr, momentum=momentum)
         opt_d = torch.optim.SGD(self.D.parameters(), lr=lr, momentum=momentum)
         return [opt_g, opt_d], []
@@ -132,6 +150,8 @@ class GAN(L.LightningModule):
         # 1. get real data
         # get random sample
         real_wfs, real_lcn, i_vc = batch
+
+        # print("i_vc shape:", i_vc.shape)
         with torch.enable_grad():
             d_loss = self.discriminator_loss(
                 real_wfs, real_lcn, i_vc

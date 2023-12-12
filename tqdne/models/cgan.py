@@ -46,7 +46,7 @@ class CGenerator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.encoding_input_cond_dims = encoding_dims + 2 * encoding_L * num_variables
+        self.encoding_input_cond_dims = encoding_dims # + 2 * encoding_L * num_variables
         self.label_type = label_type
         if out_size < 16 or ceil(log2(out_size)) != log2(out_size):
             raise Exception(
@@ -133,13 +133,15 @@ class CGenerator(nn.Module):
             A 2D torch.Tensor of the generated signal.
         """
         z1 = z.unsqueeze(2)
-        y_emb = self.label_embeddings(y).unsqueeze(2)
-
-        x = torch.cat((z1, y_emb), dim=1)
+        #y_emb = self.label_embeddings(y).unsqueeze(2)
+        #x = torch.cat((z1, y_emb), dim=1)
+        x = z1
         out = self.model(x)
-        wfs = out[:, 0, :,]
-        lcn = torch.mean(out[:, 1, :], dim=1, keepdim=True)
-        return wfs, lcn
+        # TODO: Uncomment this
+        # wfs = out[:, 0, :,]
+        # lcn = torch.mean(out[:, 1, :], dim=1, keepdim=True)
+        #return wfs, lcn
+        return out
 
 
 class CDiscriminator(nn.Module):
@@ -177,9 +179,7 @@ class CDiscriminator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.input_cond_dims = (
-            in_channels + 2 * encoding_L * num_variables
-        )  # + num_classes * encoding_L * 2
+        self.input_cond_dims = in_channels # + 2 * encoding_L * num_variables  # + num_classes * encoding_L * 2
         self.label_type = label_type
         if in_size < 16 or ceil(log2(in_size)) != log2(in_size):
             raise Exception(
@@ -229,7 +229,9 @@ class CDiscriminator(nn.Module):
                 nn.init.constant_(m.weight, 1.0)
                 nn.init.constant_(m.bias, 0.0)
 
-    def forward(self, x, norm, cond_vars):
+    # def forward(self, x, norm, cond_vars):
+    # TODO: Add normalization
+    def forward(self, x, cond_vars):
         """
         Forward pass of the Conditional Generative Adversarial Network (CGAN) model.
 
@@ -244,11 +246,13 @@ class CDiscriminator(nn.Module):
         """
         x_ch = x.unsqueeze(1)
 
-        cond_emb = self.label_embeddings(cond_vars)
-        cond_emb = cond_emb.unsqueeze(2).expand(-1, cond_emb.size(1), x_ch.size(2))
+        # cond_emb = self.label_embeddings(cond_vars)
+        # cond_emb = cond_emb.unsqueeze(2).expand(-1, cond_emb.size(1), x_ch.size(2))
 
-        norm_emb = norm.unsqueeze(2).expand(-1, 1, x_ch.size(2))
+        # norm_emb = norm.unsqueeze(2).expand(-1, 1, x_ch.size(2))
 
-        x_ch = torch.cat((x_ch, cond_emb, norm_emb), dim=1)
+        # TODO: Undo this
+        # x_ch = torch.cat((x_ch, cond_emb, norm_emb), dim=1)
+        # x_ch = torch.cat((x_ch, cond_emb), dim=1)
         x_ch = self.model(x_ch)
         return self.disc(x_ch).view(-1, 1)

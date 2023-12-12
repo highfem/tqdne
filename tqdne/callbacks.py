@@ -133,3 +133,73 @@ class PlotCallback(L.callbacks.Callback):
         mag_bins = np.arange(mag_min, mag_max + mag_step_size / 2.0, step=mag_step_size)
 
         return {"dist_bins": dist_bins, "mag_bins": mag_bins}
+
+
+class SimplePlotCallback(L.callbacks.Callback):
+    def __init__(
+        self, dataset, every=1, n_waveforms = 5
+    ) -> None:
+        super().__init__()
+        self.dataset = dataset
+        self.every = every
+        self.attr = dataset.get_conds()
+        self.wfs = dataset.get_wfs()
+        self.datasize = len(self.wfs)
+        self.n_waveforms = n_waveforms
+
+    def get_sample_from_conds(self, pl_module, cond):
+        conds = torch.from_numpy(cond).to(pl_module.device) * torch.ones(self.n_waveforms, 1).to(pl_module.device)
+        # conds =  torch.cat(cond, dim=1)
+        syn_data, _ = pl_module.sample(self.n_waveforms, conds)
+        syn_data = syn_data.squeeze().detach().cpu().numpy()
+        # syn_scaler = syn_scaler.detach().cpu().numpy()
+        # syn_data = self.dataset.getSignalFromDecomp(syn_data, syn_scaler)
+        # syn_data = syn_data * syn_scaler
+
+        # synthetic_data_log = np.log(np.abs(np.array(syn_data + 1e-10)))
+        # sd_mean = np.mean(synthetic_data_log, axis=0)
+        sd_mean = np.mean(syn_data, axis=0)
+
+        # y = np.exp(sd_mean)
+        y = sd_mean
+
+        nt = sd_mean.shape[0]
+        tt = np.arange(0, nt)
+        return tt, y
+
+    def log_sample_image(self, trainer, pl_module):
+        n = np.random.randint(0, self.datasize, size=(2,))
+        fig, axis = plt.subplots(2, 1, figsize=(12, 6))
+        for cnt, i in enumerate(n):
+            sample_cond = self.attr[i]
+            tt, y = self.get_sample_from_conds(
+                pl_module,
+                sample_cond
+            )
+            axis[cnt].plot(
+                tt,
+                y,
+                "-",
+                label="Synthetic",
+                alpha=0.8,
+                lw=0.5,
+            )
+            axis[cnt].plot(
+                tt,
+                self.wfs[i],
+                "-",
+                label="Real",
+                alpha=0.8,
+                lw=0.5,
+            )
+            axis[cnt].set_xlabel("Time [s]")
+            axis[cnt].set_ylabel("Log-Amplitude")
+            axis[cnt].set_title(f"p: {sample_cond}")
+            axis[cnt].legend()
+        wandb.log({"sample wave": fig})
+        plt.close("all")
+        plt.clf()
+        plt.cla()
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.log_sample_image(trainer, pl_module)

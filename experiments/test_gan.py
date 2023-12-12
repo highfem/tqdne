@@ -3,7 +3,8 @@ from tqdne.gan_lightning import GAN
 from tqdne.ganutils.dataset import WFDataModule
 from tqdne.model_utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
-from tqdne.callbacks import PlotCallback, MetricsCallback
+from tqdne.callbacks import PlotCallback, MetricsCallback, SimplePlotCallback
+from tqdne.simple_dataset import StationarySignalDM
 
 # from pytorch_lightning.loggers import MLFlowLogger
 from tqdne.conf import Config
@@ -18,25 +19,27 @@ def main():
     # plot_format = "pdf"
 
     resume = False
-    max_epochs = 200
+    max_epochs = 500
     batch_size = 128
     frac_train = 0.8
     wfs_expected_size = 1024
 
     print("Loading data...")
-    dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
+    # dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
+    dataset_size = 10000
+    dm = StationarySignalDM(dataset_size, wfs_expected_size, batch_size, frac_train)
 
     optimizer_parameters = {
-        "lr": 3e-5,
-        "momentum": 0.4,
-        # "b1": 0.9,
-        # "b2": 0.999,
+        "lr": 1e-4,
+        "momentum": 0.5,
+        #"b1": 0.9,
+        #"b2": 0.999,
     }
     model_parameters = {
         "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
         "latent_dim": 128,
-        "n_critics": 5,
+        "n_critics": 1,
         "batch_size": batch_size,
         "optimizer_params": optimizer_parameters,
     }
@@ -56,14 +59,17 @@ def main():
         "every": 1,
         "n_samples": 50,        
     }
+    # specific_callbacks = [
+    #     MetricsCallback(**metrics_callback_parameters),
+    #     PlotCallback(**plot_callback_parameters)
+    # ]
     specific_callbacks = [
-        MetricsCallback(**metrics_callback_parameters),
-        PlotCallback(**plot_callback_parameters)
+        SimplePlotCallback(**plot_callback_parameters)
     ]
 
     print("Loading Model")
     model = GAN(**model_parameters)
-    trainer = get_pl_trainer("WGAN", dm, specific_callbacks=specific_callbacks, **trainer_parameters)
+    trainer = get_pl_trainer("WGAN", dm, project="tqdne-dummydataset", specific_callbacks=specific_callbacks, **trainer_parameters)
     if resume:
         checkpoint = get_last_checkpoint(trainer.default_root_dir)
     else:
