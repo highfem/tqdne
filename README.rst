@@ -9,8 +9,15 @@ To get started, make sure you have the necessary permissions and clone the repos
 
 .. code-block:: bash
 
-   git https://github.com/nperraud/tqdne.git
+   git clone git@github.com:nperraud/tqdne.git
    cd tqdne
+
+
+You probably need to install the submodule:
+
+.. code-block:: bash
+   git submodule init
+   git submodule update
 
 
 Working with Poetry
