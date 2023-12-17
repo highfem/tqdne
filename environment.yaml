@@ -1,0 +1,41 @@
+name: tqdne
+channels:
+  - defaults
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.11
+  - tqdm
+  - scikit-learn
+  - scikit-image
+  - numpy
+  - matplotlib
+  - python-dotenv
+  - setuptools
+  - wandb
+  - pytorch>=2.1
+  - pytorch-cuda=12.1
+  - torchvision
+  - pytorch-lightning>=2.0.0
+  - h5py
+  - accelerate
+  - diffusers
+  - transformers
+  - plotly
+  - pytest
+  - jupyterlab
+  - twine
+  - wheel
+  - flake8
+  - pylint
+  - sphinx<7.0.0
+  - numpydoc
+  - sphinxcontrib-bibtex
+  - sphinx-gallery
+  - memory_profiler
+  - sphinx-rtd-theme
+  - sphinx-copybutton
+  - nbsphinx
+  - pandoc
+  - black
+  - notebook=6.5.4

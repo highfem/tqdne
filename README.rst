@@ -46,7 +46,7 @@ To install miniconda, run the following command in the terminal:
       wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
       bash Miniconda3-latest-Linux-x86_64.sh
 
-Create a conda environment: The envenvironment.yml needs to be created!!!
+Create a conda environment:
 
 .. code-block:: bash
 
