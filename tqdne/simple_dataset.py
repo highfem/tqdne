@@ -47,8 +47,8 @@ class StationarySignalDM(L.LightningDataModule):
             self.p.append(p)
             self.wfs.append(sig)
         self.p = np.array(self.p)
-        print("shape p:", self.p.shape)
         self.wfs = np.array(self.wfs)
+        self.wfs = self.wfs[:,  np.newaxis, :]
 
         # Preventing bad division by batch_size
         n = (self.wfs.shape[0] // batch_size) * batch_size
@@ -99,7 +99,6 @@ class StationarySignalDataset(Dataset):
             v_names (list): List of attribute names.
 
         """
-        print("normalizing data ...")
         self.wfs = wfs
         self.p = p
 
@@ -125,4 +124,5 @@ class StationarySignalDataset(Dataset):
 
         """
         w = self.wfs[index]
-        return (w, np.full(w.shape,np.nan), self.p[index])
+        # return (w, np.full(w.shape,np.nan), self.p[index])
+        return w

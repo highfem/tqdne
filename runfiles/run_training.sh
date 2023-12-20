@@ -11,4 +11,4 @@ module load daint-gpu
 module load cray-python
 # module load TensorFlow
 
-srun poetry run python $HOME/tqdne/experiments/test_gan.py
+srun poetry run python $HOME/tqdne/experiments/test_wgan.py

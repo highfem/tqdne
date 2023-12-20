@@ -117,8 +117,7 @@ class CGenerator(nn.Module):
                 nn.init.constant_(m.bias, 0.0)
 
     def sampler(self, sample_size, cond_list, device):
-        mean = torch.zeros(sample_size, self.encoding_input_dims)
-        z = torch.normal(mean=mean).to(device)
+        z = torch.randn((sample_size, self.encoding_input_dims)).to(device)
         cond_list_tensor = torch.tensor(cond_list, dtype=torch.float32, device=device)
         return z, cond_list_tensor
 
