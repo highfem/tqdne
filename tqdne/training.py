@@ -14,7 +14,7 @@ import pytorch_lightning as pl
 
 
 
-def get_pl_trainer(name, val_loader, project=PROJECT_NAME, specific_callbacks = [], **trainer_params):
+def get_pl_trainer(name, project=PROJECT_NAME, specific_callbacks = [], **trainer_params):
 
     # 1. Wandb Logger
     wandb_logger = WandbLogger(project=project) # add project='projectname' to log to a specific project

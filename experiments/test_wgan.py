@@ -1,7 +1,7 @@
 from tqdne.wgan_lightning import WGAN
 from tqdne.model_utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
-from tqdne.callbacks import SimplePlotCallback
+from tqdne.callbacks.sample_callback import SimplePlotCallback
 from tqdne.simple_dataset import StationarySignalDM
 
 # from pytorch_lightning.loggers import MLFlowLogger
