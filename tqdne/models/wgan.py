@@ -20,7 +20,8 @@ class WGenerator(nn.Module):
         # self.feature_sizes = (self.wave_size[0] / 16, self.wave_size[1] / 16)
         self.feature_size = int(wave_size / 16)
         self.latent_to_features = nn.Sequential(
-            nn.Linear(latent_dim, 8 * dim * self.feature_size), nn.ReLU()
+            nn.Linear(latent_dim, 8 * dim * self.feature_size), 
+            nn.ReLU()
         )
 
         self.features_to_image = nn.Sequential(
@@ -66,7 +67,7 @@ class WDiscriminator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.in_channels = in_channels + 2 * encoding_L * num_vars
+        self.in_channels = in_channels # + 2 * encoding_L * num_vars
 
         self.image_to_features = nn.Sequential(
             nn.Conv1d(self.in_channels, dim, 4, 2, 1),
@@ -82,7 +83,7 @@ class WDiscriminator(nn.Module):
         
         # 4 convolutions of stride 2, i.e. halving of size everytime
         # So output size will be 8 * (img_size / 2 ^ 4) * (img_size / 2 ^ 4)
-        output_size = 8 * dim * int(wave_size / 16)
+        output_size = 8 * dim * int(wave_size / 16) + 2 * encoding_L * num_vars
         self.features_to_prob = nn.Sequential(
             nn.Linear(output_size, 1),
             # nn.Sigmoid()
@@ -91,10 +92,10 @@ class WDiscriminator(nn.Module):
     def forward(self, input_data, cond=None):
         batch_size = input_data.size()[0]
         x = input_data.view(batch_size, 1, -1)
+        x = self.image_to_features(x)
+        x = x.view(batch_size, -1)
         if cond is not None:
             cond = self.label_embeddings(cond)
-            cond = cond.view(batch_size, -1, 1).expand(-1, -1, input_data.size(2))
             x = torch.cat([x, cond], dim=1)        
-        x = self.image_to_features(x)
         x = x.view(batch_size, -1)
         return self.features_to_prob(x)
