@@ -1,7 +1,6 @@
 
 from pathlib import Path
 # from tqdne.lightning import LogCallback
-from tqdne.callbacks import PlotCallback
 
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pathlib import Path

@@ -1,11 +1,11 @@
 from email import generator
 from tqdne.gan_lightning import GAN
 # from tqdne.ganutils.data_utils import SeisData
-from tqdne.ganutils.dataset import WFDataModule
-from tqdne.model_utils import get_last_checkpoint
+from tqdne.wfdataset import WFDataModule
+from tqdne.utils.model_utils import get_last_checkpoint
 from tqdne.models.gan import Discriminator
 from tqdne.training import get_pl_trainer
-from tqdne.callbacks import PlotCallback, MetricsCallback, SimplePlotCallback
+from tqdne.callbacks.sample_callback import SimplePlotCallback
 from tqdne.simple_dataset import StationarySignalDM
 
 # from pytorch_lightning.loggers import MLFlowLogger

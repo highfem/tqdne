@@ -16,12 +16,13 @@ class WGAN(L.LightningModule):
         optimizer_params,
         generator_params,
         discriminator_params,
+        conditional=False,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.automatic_optimization = False
         
-        self.losses = {'G': [], 'D': [], 'GP': [], 'gradient_norm': []}
+        self.conditional = conditional
         self.num_steps = 0
         self.gp_weight = reg_lambda
         self.critic_iterations = n_critics
@@ -31,24 +32,21 @@ class WGAN(L.LightningModule):
         self.G = WGenerator(**generator_params)
         self.D = WDiscriminator(**discriminator_params)
 
-    def sample_generator(self, num_samples):
+    def sample_generator(self, num_samples, cond=None):
         latent_samples = Variable(self.G.sample_latent(num_samples)).to(self.device)
-        generated_data = self.G(latent_samples)
+        generated_data = self.G(latent_samples, cond)
         return generated_data
     
-    def sample(self, num_samples):
-        generated_data = self.sample_generator(num_samples)
+    def sample(self, num_samples, cond=None):
+        generated_data = self.sample_generator(num_samples, cond)
         # Remove color channel
-        return generated_data.data.cpu().numpy()[:, 0, :]
-
-    def forward(self, z, cond_tensor: torch.TensorType):
-        return self.G(z, cond_tensor)
+        return generated_data.data.detach().cpu().numpy()[:, 0, :]
     
-    def generator_step(self, data):
+    def generator_step(self, data, cond=None):
         self.toggle_optimizer(self.g_opt)
         batch_size = data.size()[0]
-        generated_data = self.sample_generator(batch_size)
-        d_generated = self.D(generated_data)
+        generated_data = self.sample_generator(batch_size, cond)
+        d_generated = self.D(generated_data, cond)
         g_loss = - d_generated.mean()
         self.g_opt.zero_grad()
         self.manual_backward(g_loss)
@@ -56,7 +54,7 @@ class WGAN(L.LightningModule):
         self.log("g_loss", g_loss)
         self.untoggle_optimizer(self.g_opt)
 
-    def _gradient_penalty(self, real_data, generated_data):
+    def _gradient_penalty(self, real_data, generated_data, cond):
         batch_size = real_data.size()[0]
 
         # Calculate interpolation
@@ -66,7 +64,7 @@ class WGAN(L.LightningModule):
         interpolated = Variable(interpolated, requires_grad=True).to(self.device)
 
         # Calculate probability of interpolated examples
-        prob_interpolated = self.D(interpolated)
+        prob_interpolated = self.D(interpolated, cond)
 
         # Calculate gradients of probabilities with respect to examples
         gradients = torch_grad(outputs=prob_interpolated, inputs=interpolated,
@@ -76,7 +74,6 @@ class WGAN(L.LightningModule):
         # Gradients have shape (batch_size, num_channels, img_width, img_height),
         # so flatten to easily take norm per example in batch
         gradients = gradients.view(batch_size, -1)
-        self.losses['gradient_norm'].append(gradients.norm(2, dim=1).mean())
 
         # Derivatives of the gradient close to 0 can cause problems because of
         # the square root, so manually calculate norm and add epsilon
@@ -85,20 +82,22 @@ class WGAN(L.LightningModule):
         # Return gradient penalty
         return self.gp_weight * ((gradients_norm - 1) ** 2).mean()
 
-    def discriminator_step(self, data):
+    def discriminator_step(self, data, cond):
         batch_size = data.size()[0]
-        generated_data = self.sample_generator(batch_size)
+        generated_data = self.sample_generator(batch_size, cond)
         data = Variable(data).to(self.device)
-        d_real = self.D(data)
-        d_generated = self.D(generated_data)
+        d_real = self.D(data, cond)
+        d_generated = self.D(generated_data, cond)
 
         # Get gradient penalty
-        gradient_penalty = self._gradient_penalty(data, generated_data)
+        gradient_penalty = self._gradient_penalty(data, generated_data, cond)
         self.log("GP", gradient_penalty)
 
         self.toggle_optimizer(self.d_opt)
         self.d_opt.zero_grad()
-        d_loss = d_generated.mean() - d_real.mean() + gradient_penalty
+        d_critic =  d_generated.mean() - d_real.mean()
+        self.log("negative-critic", -d_critic)
+        d_loss = d_critic + gradient_penalty
         self.manual_backward(d_loss)
         self.d_opt.step()
         self.log("d_loss", d_loss)
@@ -106,11 +105,14 @@ class WGAN(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         self.g_opt, self.d_opt = self.optimizers()
-        data = batch
-        self.discriminator_step(data)
-        ### -------------- TAKE GENERATOR STEP ------------------------
+        if self.conditional:
+            data, cond = batch
+        else:
+            data, cond = batch, None
+
+        self.discriminator_step(data, cond)
         if (batch_idx + 1) % self.critic_iterations == 0:
-            self.generator_step(data)
+            self.generator_step(data, cond)
 
     def configure_optimizers(self):
         lr = self.hparams.optimizer_params["lr"]

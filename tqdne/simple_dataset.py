@@ -22,7 +22,7 @@ def random_stationary_signal(n = 1024, sigma = 1):
     return p*16, sig
 
 class StationarySignalDM(L.LightningDataModule):
-    def __init__(self, data_size, wfs_len, batch_size, train_ratio):
+    def __init__(self, data_size, wfs_len, batch_size, train_ratio, conditional=False):
         """
         Initialize the WFDataModule.
 
@@ -58,8 +58,8 @@ class StationarySignalDM(L.LightningDataModule):
         wfs_val = self.wfs[m: n]
         p_val = self.p[m: n]
         
-        self.data_train = StationarySignalDataset(wfs_train, p_train)
-        self.data_val = StationarySignalDataset(wfs_val, p_val)
+        self.data_train = StationarySignalDataset(wfs_train, p_train, conditional)
+        self.data_val = StationarySignalDataset(wfs_val, p_val, conditional)
 
     def get_wfs(self):
         return self.wfs.copy()
@@ -89,7 +89,7 @@ class StationarySignalDM(L.LightningDataModule):
 
 
 class StationarySignalDataset(Dataset):
-    def __init__(self, wfs, p):
+    def __init__(self, wfs, p, conditional=False):
         """
         Initialize the WaveformDataset.
 
@@ -101,6 +101,7 @@ class StationarySignalDataset(Dataset):
         """
         self.wfs = wfs
         self.p = p
+        self.conditional = conditional
 
     def __len__(self):
         """
@@ -124,5 +125,8 @@ class StationarySignalDataset(Dataset):
 
         """
         w = self.wfs[index]
-        # return (w, np.full(w.shape,np.nan), self.p[index])
-        return w
+        if self.conditional:
+            return (w, self.p[index])
+            # return (w, np.full(w.shape,np.nan), self.p[index])
+        else:
+            return w
