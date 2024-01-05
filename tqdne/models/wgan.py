@@ -91,7 +91,7 @@ class WDiscriminator(nn.Module):
 
     def forward(self, input_data, cond=None):
         batch_size = input_data.size()[0]
-        x = input_data.view(batch_size, 1, -1)
+        x = input_data.view(batch_size, self.in_channels, -1)
         x = self.image_to_features(x)
         x = x.view(batch_size, -1)
         if cond is not None:

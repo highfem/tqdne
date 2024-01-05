@@ -3,6 +3,7 @@ from tqdne.utils.model_utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
 from tqdne.callbacks.sample_callback import SimplePlotCallback
 from tqdne.simple_dataset import StationarySignalDM
+from tqdne.wfdataset import WaveformDM
 
 # from pytorch_lightning.loggers import MLFlowLogger
 from tqdne.conf import Config
@@ -11,6 +12,11 @@ from pathlib import Path
 
 def main():
     # Setting up Args
+    config = Config()
+    data_file = config.datasetdir / Path(config.data_waveforms)
+    attr_file = config.datasetdir / Path(config.data_attributes)
+    condv_names = ["dist", "mag"]
+
     resume = False
     conditional = True
     max_epochs = 800
@@ -19,14 +25,14 @@ def main():
     wfs_expected_size = 1024
     latent_dim = 128
     encoding_L = 4
-    num_vars = 1
+    num_vars = 2
 
     print("Loading data...")
-    # dm = WFDataModule(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
-    dataset_size = 10000
-    dm = StationarySignalDM(
-        dataset_size, wfs_expected_size, batch_size, frac_train, conditional=conditional
-    )
+    dm = WaveformDM(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
+    # dataset_size = 10000
+    # dm = StationarySignalDM(
+    #     dataset_size, wfs_expected_size, batch_size, frac_train, conditional=conditional
+    # )
 
     optimizer_parameters = {
         "lr": 1e-4,
@@ -37,14 +43,14 @@ def main():
     generator_parameters = {
         "latent_dim": latent_dim,
         "wave_size": wfs_expected_size,
-        "out_channels": 1,
+        "out_channels": 2,
         "encoding_L": encoding_L,
         "num_vars": num_vars,
         "dim": 32,
     }
     discriminator_parameters = {
         "wave_size": wfs_expected_size,
-        "in_channels": 1,
+        "in_channels": 2,
         "encoding_L": encoding_L,
         "num_vars": num_vars,
         "dim": 32,
@@ -65,7 +71,7 @@ def main():
         "log_every_n_steps": 10,
     }
     plot_callback_parameters = {
-        "dataset": dm.val_dataloader(),
+        "dataset": dm,
         "every": 1,
         "n_waveforms": 1,
         "conditional": conditional,
@@ -79,13 +85,15 @@ def main():
     #     MetricsCallback(**metrics_callback_parameters),
     #     PlotCallback(**plot_callback_parameters)
     # ]
-    specific_callbacks = [SimplePlotCallback(**plot_callback_parameters)]
+    specific_callbacks = [
+        SimplePlotCallback(**plot_callback_parameters)
+    ]
 
     print("Loading Model")
     model = WGAN(**model_parameters)
     trainer = get_pl_trainer(
         "WGAN",
-        project="tqdne-dummydataset",
+        project="tqdne",
         specific_callbacks=specific_callbacks,
         **trainer_parameters
     )

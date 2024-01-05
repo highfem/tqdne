@@ -40,7 +40,8 @@ class WGAN(L.LightningModule):
     def sample(self, num_samples, cond=None):
         generated_data = self.sample_generator(num_samples, cond)
         # Remove color channel
-        return generated_data.data.detach().cpu().numpy()[:, 0, :]
+        # TODO: Check this to fix the channel issue
+        return generated_data.data.detach().cpu().numpy()# [:, 0, :]
     
     def generator_step(self, data, cond=None):
         self.toggle_optimizer(self.g_opt)
@@ -84,7 +85,9 @@ class WGAN(L.LightningModule):
 
     def discriminator_step(self, data, cond):
         batch_size = data.size()[0]
+        # print("data, cond shape:", data.shape)
         generated_data = self.sample_generator(batch_size, cond)
+        # print("generated_data shape:", generated_data.shape)
         data = Variable(data).to(self.device)
         d_real = self.D(data, cond)
         d_generated = self.D(generated_data, cond)
@@ -113,6 +116,25 @@ class WGAN(L.LightningModule):
         self.discriminator_step(data, cond)
         if (batch_idx + 1) % self.critic_iterations == 0:
             self.generator_step(data, cond)
+    
+    def validation_step(self, batch, batch_idx):
+        if self.conditional:
+            data, cond = batch
+        else:
+            data, cond = batch, None
+
+        batch_size = data.size()[0]
+        generated_data = self.sample_generator(batch_size, cond)
+        data = Variable(data).to(self.device)
+        d_real = self.D(data, cond)
+        d_generated = self.D(generated_data, cond)
+        d_critic =  d_generated.mean() - d_real.mean()
+        with torch.enable_grad():
+            gradient_penalty = self._gradient_penalty(data, generated_data, cond)
+        self.log("val_GP", gradient_penalty)
+        self.log("val_negative-critic", -d_critic)
+        self.log("val_loss", -d_generated.mean())
+    
 
     def configure_optimizers(self):
         lr = self.hparams.optimizer_params["lr"]

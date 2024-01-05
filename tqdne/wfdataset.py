@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as L
 
 
-class WFDataModule(L.LightningDataModule):
+class WaveformDM(L.LightningDataModule):
     def __init__(self, wfs_file, attr_file, wfs_expected_size, v_names, batch_size, train_ratio):
         """
         Initialize the WFDataModule.
@@ -62,7 +62,7 @@ class WFDataModule(L.LightningDataModule):
         """
         return self.df_attr.copy()
     
-    def getSignalFromDecomp(self, wfs: np.array, lcn: np.array):
+    def denormalize(self, wfs: np.array, lcn: np.array):
         """
         Get the signal from decomposition.
 
@@ -74,7 +74,7 @@ class WFDataModule(L.LightningDataModule):
             np.array: The signal obtained from decomposition.
 
         """
-        return self.data_train.getSignalFromDecomp(wfs, lcn)
+        return self.data_train.denormalize(wfs, lcn)
 
     def train_dataloader(self):
         """
@@ -116,22 +116,26 @@ class WaveformDataset(Dataset):
         # self.cnorms = wfs_norm.copy()
         wfs_norm = wfs_norm[:, np.newaxis]
         self.wfs = wfs / wfs_norm
+        self.wfs = self.wfs[:, np.newaxis, :]
 
         # Transform normalization
         lc_m = np.log10(wfs_norm)
         self.max_lc_m = np.max(lc_m)
         self.min_lc_m = np.min(lc_m)
-        self.ln_cns = 2.0 * (lc_m - self.min_lc_m) / (self.max_lc_m - self.min_lc_m) - 1.0
+        ln_cns = 2.0 * (lc_m - self.min_lc_m) / (self.max_lc_m - self.min_lc_m) - 1.0
+        ln_cns = np.repeat(ln_cns, wfs.shape[1], axis=1).reshape(-1, 1, wfs.shape[1])
+
+        self.wfs = np.concatenate((self.wfs, ln_cns), axis=1)
 
         self.vc_lst = []
         for v_name in v_names:
             v = df_attr[v_name].to_numpy()
             v = (v - v.min()) / (v.max() - v.min())
-            vc = np.reshape(v, (v.shape[0], 1))
-            self.vc_lst.append(vc)
+            # vc = np.reshape(v, (v.shape[0], 1))
+            self.vc_lst.append(v)
         self.vc_lst = np.array(self.vc_lst)
 
-    def getSignalFromDecomp(self, wfs: np.array, lcn: np.array):
+    def denormalize(self, wfs: np.array, lcn: np.array):
         """
         Get the signal from decomposition.
 
@@ -168,5 +172,5 @@ class WaveformDataset(Dataset):
             tuple: A tuple containing the waveform, log compression values, and conditional variables.
 
         """
-        vc_b = self.vc_lst[:, index, :]
-        return (self.wfs[index], self.ln_cns[index], vc_b)
+        vc_b = self.vc_lst[:, index]
+        return (self.wfs[index], vc_b)

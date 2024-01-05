@@ -1,7 +1,7 @@
 from email import generator
 from tqdne.gan_lightning import GAN
 # from tqdne.ganutils.data_utils import SeisData
-from tqdne.wfdataset import WFDataModule
+from tqdne.wfdataset import WaveformDM
 from tqdne.utils.model_utils import get_last_checkpoint
 from tqdne.models.gan import Discriminator
 from tqdne.training import get_pl_trainer
