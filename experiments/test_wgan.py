@@ -1,3 +1,4 @@
+from diffusers.commands import env
 from tqdne.wgan_lightning import WGAN
 from tqdne.utils.model_utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
@@ -22,17 +23,27 @@ def main():
     max_epochs = 800
     batch_size = 64
     frac_train = 0.8
+    envelope_type = "pointwise"
     wfs_expected_size = 1024
     latent_dim = 128
     encoding_L = 4
     num_vars = 2
-
-    print("Loading data...")
-    dm = WaveformDM(data_file, attr_file, wfs_expected_size, condv_names, batch_size, frac_train)
+    
     # dataset_size = 10000
     # dm = StationarySignalDM(
     #     dataset_size, wfs_expected_size, batch_size, frac_train, conditional=conditional
     # )
+    datamodule_parameters = {
+        "wfs_file": data_file,
+        "attr_file": attr_file,
+        "wfs_expected_size": wfs_expected_size,
+        "v_names": condv_names,
+        "batch_size": batch_size,
+        "train_ratio": frac_train,
+        "envelope_type": envelope_type,
+    }
+    print("Loading data...")
+    dm = WaveformDM(**datamodule_parameters)
 
     optimizer_parameters = {
         "lr": 1e-4,

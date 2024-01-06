@@ -41,9 +41,9 @@ class SimplePlotCallback(Callback):
                 # conds = np.random.choice(conds.reshape(-1), (self.n_waveforms, 1))
                 # conds = torch.from_numpy(conds).to(pl_module.device)
             tt, y = self.get_sample(pl_module, conds)
-            print("tt shape", tt.shape)
-            print("y shape", y.shape)
-            print("--------------------------")
+            # print("tt shape", tt.shape)
+            # print("y shape", y.shape)
+            # print("--------------------------")
             fig, axis = plt.subplots(1, 1)
             if self.cond:
                 axis.plot(

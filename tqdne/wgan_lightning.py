@@ -85,7 +85,8 @@ class WGAN(L.LightningModule):
 
     def discriminator_step(self, data, cond):
         batch_size = data.size()[0]
-        # print("data, cond shape:", data.shape)
+        # 
+        # ("data, cond shape:", data.shape)
         generated_data = self.sample_generator(batch_size, cond)
         # print("generated_data shape:", generated_data.shape)
         data = Variable(data).to(self.device)
