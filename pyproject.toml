@@ -7,7 +7,7 @@ authors = ["Your Name <you@example.com>"]
 
 
 [tool.poetry.dependencies]
-python = "^3.11.3"
+python = "^3.11"
 tqdm = "*"
 scikit-learn = "*"
 scikit-image = "*"
@@ -24,6 +24,7 @@ diffusers = {path = "diffusers", extras = ["torch", "training"], develop = true}
 accelerate = "*"
 transformers = "*"
 plotly = "*"
+tifresi = {path = "tifresi", develop = true}
 
 
 

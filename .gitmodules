@@ -1,3 +1,6 @@
 [submodule "diffusers"]
 	path = diffusers
 	url = https://github.com/huggingface/diffusers.git
+[submodule "tifresi"]
+	path = tifresi
+	url = https://github.com/nperraud/tifresi.git
