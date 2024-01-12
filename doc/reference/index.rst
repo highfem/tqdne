@@ -7,5 +7,7 @@ API reference
 
    model
    dataset
-   lightning
+   logging
+   methods
+   metrics
    utils
