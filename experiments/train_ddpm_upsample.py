@@ -1,55 +1,67 @@
 import os
+
 # select GPU 1
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-from tqdne.conf import Config
-from tqdne.dataset import H5Dataset
-from torch.utils.data import DataLoader
-from diffusers import UNet1DModel
-from diffusers import DDPMScheduler
-from tqdne.diffusers import DDPMPipeline1DCond
-from tqdne.lightning import LightningDDMP
-from tqdne.training import get_pl_trainer
-from pathlib import Path
-from tqdne.utils import get_last_checkpoint
 import logging
+from pathlib import Path
 
+from torch.utils.data import DataLoader
 
-if __name__ == '__main__':
+from diffusers import DDPMScheduler, UNet1DModel
+from tqdne.conf import Config
+from tqdne.dataset import UpsamplingDataset
+from tqdne.diffusion import LightningDDMP
+from tqdne.metric import MeanSquaredError, PowerSpectralDensityFID, UpsamplingSamplePlot
+from tqdne.training import get_pl_trainer
+from tqdne.utils import get_last_checkpoint
 
-    resume = True
+if __name__ == "__main__":
+    resume = False
     logging.info("Loading data...")
     t = (5501 // 32) * 32
     batch_size = 64
     max_epochs = 100
-    prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
+    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
-    name = '1D-UNET-UPSAMPLE-DDPM-noisy'
+    name = "1D-UNET-UPSAMPLE-DDPM-noisy"
     config = Config()
 
-    path_train = config.datasetdir/ Path(config.data_upsample_train)
-    path_test = config.datasetdir/ Path(config.data_upsample_test)
-    train_dataset = H5Dataset(path_train, cut=t)
-    test_dataset = H5Dataset(path_test, cut=t)
+    path_train = config.datasetdir / Path(config.data_upsample_train)
+    path_test = config.datasetdir / Path(config.data_upsample_test)
+    train_dataset = UpsamplingDataset(path_train, cut=t)
+    test_dataset = UpsamplingDataset(path_test, cut=t)
 
-    channels = train_dataset[0][0].shape[0]
+    channels = train_dataset[0]["high_res"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
+
+    metrics = [
+        UpsamplingSamplePlot(fs=config.fs),
+        MeanSquaredError(),
+        PowerSpectralDensityFID(fs=config.fs),
+    ]
 
     logging.info("Set parameters...")
 
     # Unet parameters
     unet_params = {
-        "sample_size":t,
-        "in_channels":2*channels, 
-        "out_channels":channels,
-        "block_out_channels":  (32, 64, 128, 256),
-        "down_block_types": ('DownBlock1D', 'DownBlock1D', 'DownBlock1D', 'AttnDownBlock1D'),
-        "up_block_types": ('AttnUpBlock1D', 'UpBlock1D', 'UpBlock1D', 'UpBlock1D'),
-        "mid_block_type": 'UNetMidBlock1D',
+        "sample_size": t,
+        "in_channels": 2 * channels,
+        "out_channels": channels,
+        "block_out_channels": (32, 64, 128, 256),
+        "down_block_types": (
+            "DownBlock1D",
+            "DownBlock1D",
+            "DownBlock1D",
+            "AttnDownBlock1D",
+        ),
+        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
+        "mid_block_type": "UNetMidBlock1D",
         "out_block_type": "OutConv1DBlock",
-        "extra_in_channels" : 0 
+        "extra_in_channels": 0,
+        "act_fn": "relu",
     }
 
     scheduler_params = {
@@ -57,7 +69,7 @@ if __name__ == '__main__':
         "beta_start": 0.0001,
         "beta_end": 0.02,
         "num_train_timesteps": 1000,
-        "prediction_type": prediction_type, 
+        "prediction_type": prediction_type,
         "clip_sample": False,
     }
 
@@ -74,15 +86,16 @@ if __name__ == '__main__':
         # trainer parameters
         "accumulate_grad_batches": 1,
         "gradient_clip_val": 1,
-        "precision": "32-true",  
+        "precision": "32-true",
         # Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'),
         # 16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed').
         # Can be used on CPU, GPU, TPUs, HPUs or IPUs.
         "max_epochs": max_epochs,
         "accelerator": "auto",
         "devices": "auto",
-        "num_nodes": 1}
-    
+        "num_nodes": 1,
+    }
+
     logging.info("Build network...")
     net = UNet1DModel(**unet_params)
     logging.info(net.config)
@@ -91,23 +104,31 @@ if __name__ == '__main__':
     scheduler = DDPMScheduler(**scheduler_params)
     logging.info(scheduler.config)
 
-    logging.info("Build pipeline...")
-    pipeline = DDPMPipeline1DCond(net, scheduler)
-    logging.info(pipeline.config)
-
     logging.info("Build lightning module...")
-    model = LightningDDMP(net, scheduler, prediction_type=prediction_type, optimizer_params=optimizer_params)
+    model = LightningDDMP(
+        net,
+        scheduler,
+        prediction_type=prediction_type,
+        optimizer_params=optimizer_params,
+        low_res_input=True,
+        cond_input=False,
+    )
 
     logging.info("Build Pytorch Lightning Trainer...")
 
-    trainer = get_pl_trainer(name, test_loader, **trainer_params)
-    
+    trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
+
     logging.info("Start training...")
 
     if resume:
         checkpoint = get_last_checkpoint(trainer.default_root_dir)
     else:
         checkpoint = None
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader, ckpt_path=checkpoint)
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=test_loader,
+        ckpt_path=checkpoint,
+    )
 
     logging.info("Done!")
