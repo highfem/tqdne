@@ -30,6 +30,7 @@ plotly = "*"
 [tool.poetry.dev-dependencies]
 pytest = "*"
 jupyterlab = "*"
+ipywidgets = "*"
 twine = "*"
 setuptools = "*"
 wheel = "*"
