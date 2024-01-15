@@ -19,11 +19,11 @@ dependencies:
   - pytorch-lightning>=2.0.0
   - h5py
   - accelerate
-  - diffusers
   - transformers
   - plotly
   - pytest
   - jupyterlab
+  - ipywidgets
   - twine
   - wheel
   - flake8
@@ -39,3 +39,6 @@ dependencies:
   - pandoc
   - black
   - notebook=6.5.4
+  - pip
+  - pip:
+    - -e .
