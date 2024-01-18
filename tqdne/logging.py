@@ -69,7 +69,10 @@ class LogCallback(Callback):
             try:
                 plot = metric.plot()
                 name = metric.__class__.__name__
-                trainer.logger.experiment.log({f"{name} (Plot)": plot})
+                try:
+                    trainer.logger.experiment.log({f"{name} (Plot)": plot})
+                except:
+                    pass
                 trainer.logger.experiment.log({f"{name} (Image)": wandb.Image(plot)})
             except NotImplementedError:
                 pass
