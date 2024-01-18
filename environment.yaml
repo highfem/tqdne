@@ -13,7 +13,7 @@ dependencies:
   - python-dotenv
   - setuptools
   - wandb
-  - pytorch>=2.1
+  - pytorch::pytorch>=2.1
   - pytorch-cuda=12.1
   - torchvision
   - pytorch-lightning>=2.0.0
