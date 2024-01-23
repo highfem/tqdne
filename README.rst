@@ -13,9 +13,10 @@ To get started, make sure you have the necessary permissions and clone the repos
    cd tqdne
 
 
-You probably need to install the submodule:
+You also need to install the submodule:
 
 .. code-block:: bash
+
    git submodule init
    git submodule update
 
@@ -95,6 +96,7 @@ The code is linted using flake8. To run the linter, use the following command:
    flake8 --doctests --exclude=doc --ignore=E501
 
 or
+
 .. code-block:: bash
    
    make lint
