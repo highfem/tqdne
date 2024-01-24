@@ -10,6 +10,7 @@ dependencies:
   - scikit-image
   - numpy
   - matplotlib
+  - seaborn
   - python-dotenv
   - setuptools
   - wandb
