@@ -1,7 +1,5 @@
 import time
 
-import matplotlib.pyplot as plt
-import numpy as np
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
 
@@ -13,16 +11,14 @@ class LogCallback(Callback):
     Callback for logging metrics and visualizations during training and validation.
 
     Args:
-        wandb_logger (wandb.Logger): Wandb logger for logging metrics and visualizations.
         val_loader (torch.utils.data.DataLoader): Validation data loader.
         metrics (list): List of metrics to compute and log.
         limit_batches (int): Limit the number of validation batches to process (-1 for all).
         every (int): Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(self, wandb_logger, val_loader, metrics, limit_batches=1, every=1):
+    def __init__(self, val_loader, metrics, limit_batches=1, every=1):
         super().__init__()
-        self.wandb_logger = wandb_logger
         self.metrics = metrics
         self.val_loader = val_loader
         self.limit_batches = limit_batches
@@ -62,18 +58,20 @@ class LogCallback(Callback):
             if isinstance(result, dict):
                 pl_module.log_dict(result)
             elif result is not None:
-                pl_module.log(metric.__class__.__name__, result)
+                pl_module.log(metric.name, result)
 
         # Log metric plots
         for metric in self.metrics:
             try:
                 plot = metric.plot()
-                name = metric.__class__.__name__
+                name = metric.name
                 try:
+                    trainer.logger.experiment.log(
+                        {f"{name} (Image)": wandb.Image(plot)}
+                    )
                     trainer.logger.experiment.log({f"{name} (Plot)": plot})
                 except:
                     pass
-                trainer.logger.experiment.log({f"{name} (Image)": wandb.Image(plot)})
             except NotImplementedError:
                 pass
 

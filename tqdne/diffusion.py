@@ -65,7 +65,7 @@ class LightningDDMP(pl.LightningModule):
         # predict
         if self.cond_input:
             assert cond is not None
-            return self.net(input, t, cond)[0]
+            return self.net(input, t, cond=cond)[0]
         else:
             return self.net(input, t)[0]
 

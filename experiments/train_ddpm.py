@@ -1,7 +1,7 @@
 import os
 
 # select GPU 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import logging
 from pathlib import Path
@@ -12,7 +12,7 @@ from diffusers import DDPMScheduler, UNet1DModel
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
-from tqdne.metric import MeanSquaredError, PowerSpectralDensity, UpsamplingSamplePlot
+from tqdne.metric import PowerSpectralDensity, SamplePlot
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     max_epochs = 100
     prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
-    name = "1D-UNET-UPSAMPLE-DDPM-noisy"
+    name = "1D-UNET"
     config = Config()
 
     path_train = config.datasetdir / Path(config.data_upsample_train)
@@ -38,17 +38,16 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # metrics
-    plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    mse = [MeanSquaredError(channel=c) for c in range(channels)]
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    metrics = plots + mse + psd
+    metrics = plots + psd
 
     logging.info("Set parameters...")
 
     # Unet parameters
     unet_params = {
         "sample_size": t,
-        "in_channels": 2 * channels,
+        "in_channels": channels,
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
@@ -110,7 +109,7 @@ if __name__ == "__main__":
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=True,
+        low_res_input=False,
         cond_input=False,
     )
 

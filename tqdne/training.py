@@ -8,29 +8,46 @@ from tqdne.conf import Config
 from tqdne.logging import LogCallback
 
 
-def get_pl_trainer(name, val_loader, metrics, eval_every, config=Config(), **trainer_params):
+def get_pl_trainer(
+    name,
+    val_loader,
+    metrics,
+    eval_every,
+    log_to_wandb=True,
+    config=Config(),
+    **trainer_params
+):
     # wandb logger
-    wandb_logger = WandbLogger(
-        project=config.project_name
-    )  # add project='projectname' to log to a specific project
+    if log_to_wandb:
+        wandb_logger = WandbLogger(
+            project=config.project_name
+        )  # add project='projectname' to log to a specific project
+    else:
+        wandb_logger = None
 
     # learning rate logger
-    lr_logger = LearningRateMonitor()
+    callbacks = [LearningRateMonitor()]
+
+    # log callback
+    callbacks.append(LogCallback(val_loader, metrics, every=eval_every))
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=config.outputdir / Path(name),
-        filename="{name}_{epoch}-{val_loss:.2f}",
-        monitor="val_loss",
-        mode="min",
-        save_top_k=5,
-    )
-
-    # log callback
-    log_callback = LogCallback(wandb_logger, val_loader, metrics, every=eval_every)
+    if (
+        "enable_checkpointing" not in trainer_params
+        or trainer_params["enable_checkpointing"]
+    ):
+        callbacks.append(
+            ModelCheckpoint(
+                dirpath=config.outputdir / Path(name),
+                filename="{name}_{epoch}-{val_loss:.2f}",
+                monitor="val_loss",
+                mode="min",
+                save_top_k=5,
+            )
+        )
 
     output_dir = config.outputdir / Path(name)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -39,7 +56,7 @@ def get_pl_trainer(name, val_loader, metrics, eval_every, config=Config(), **tra
     trainer = pl.Trainer(
         **trainer_params,
         logger=wandb_logger,
-        callbacks=[lr_logger, log_callback, checkpoint_callback],
+        callbacks=callbacks,
         default_root_dir=output_dir
     )
 
