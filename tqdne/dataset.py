@@ -172,8 +172,9 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         # add noise to filtered
         filtered += np.random.randn(*filtered.shape) * self.sigma_in
 
-        # normalize features
-        features = (self.features[index] - self.features_means) / self.features_stds
+        # features
+        features = self.features[index]
+        # features = (features - self.features_means) / self.features_stds
 
         if self.cut:
             high_res = waveform[:, : self.cut]
@@ -185,5 +186,5 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         return {
             "high_res": torch.tensor(high_res, dtype=torch.float32),
             "low_res": torch.tensor(low_res, dtype=torch.float32),
-            "cond": torch.empty(0),
+            "cond": torch.tensor(features, dtype=torch.float32),
         }
