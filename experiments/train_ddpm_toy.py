@@ -1,13 +1,14 @@
 import os
-# select GPU 1
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+# select GPU 0
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 from tqdne.dataset import RandomDataset
 from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
 from diffusers import DDPMScheduler
-from tqdne.diffusers import DDPMPipeline1DCond
-from tqdne.lightning import LightningDDMP
+from tqdne.conf import Config
+from tqdne.diffusion import LightningDDMP
+from tqdne.metric import PowerSpectralDensity, SamplePlot, MeanSquaredError, UpsamplingSamplePlot
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 import logging
@@ -20,33 +21,43 @@ if __name__ == '__main__':
     t = (5501 // 32) * 32
     batch_size = 64
     max_epochs = 1000
-    prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
+    prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
 
     name = '1D-UNET-TOY-DDPM'
-
+    config = Config()
 
     train_dataset = RandomDataset(1024*8, t=t)
     test_dataset = RandomDataset(512, t=t)
 
 
-    channels = train_dataset[0][0].shape[0]
+    channels = train_dataset[0]["high_res"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
-    logging.info("Set parameters...")
+    # metrics
+    plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+    metrics = plots + psd
 
+    logging.info("Set parameters...")
     # Unet parameters
     unet_params = {
-        "sample_size":t,
-        "in_channels":channels*2, 
-        "out_channels":channels,
-        "block_out_channels":  (32, 64, 128),
-        "down_block_types": ('DownBlock1D', 'DownBlock1D', 'AttnDownBlock1D'),
-        "up_block_types": ('AttnUpBlock1D', 'UpBlock1D', 'UpBlock1D'),
-        "mid_block_type": 'UNetMidBlock1D',
+        "sample_size": t,
+        "in_channels": channels,
+        "out_channels": channels,
+        "block_out_channels": (32, 64, 128, 256),
+        "down_block_types": (
+            "DownBlock1D",
+            "DownBlock1D",
+            "DownBlock1D",
+            "AttnDownBlock1D",
+        ),
+        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
+        "mid_block_type": "UNetMidBlock1D",
         "out_block_type": "OutConv1DBlock",
-        "extra_in_channels" : 0,
+        "extra_in_channels": 0,
+        "act_fn": "relu",
     }
 
     scheduler_params = {
@@ -71,14 +82,15 @@ if __name__ == '__main__':
         # trainer parameters
         "accumulate_grad_batches": 1,
         "gradient_clip_val": 1,
-        "precision": "32-true",  
+        "precision": "32-true",
         # Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'),
         # 16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed').
         # Can be used on CPU, GPU, TPUs, HPUs or IPUs.
         "max_epochs": max_epochs,
         "accelerator": "auto",
         "devices": "auto",
-        "num_nodes": 1}
+        "num_nodes": 1,
+    }
 
     
     logging.info("Build network...")
@@ -89,23 +101,30 @@ if __name__ == '__main__':
     scheduler = DDPMScheduler(**scheduler_params)
     logging.info(scheduler.config)
 
-    logging.info("Build pipeline...")
-    pipeline = DDPMPipeline1DCond(net, scheduler)
-    logging.info(pipeline.config)
-
     logging.info("Build lightning module...")
-    model = LightningDDMP(net, scheduler, prediction_type=prediction_type, optimizer_params=optimizer_params)
+    model = LightningDDMP(
+        net,
+        scheduler,
+        prediction_type=prediction_type,
+        optimizer_params=optimizer_params,
+        low_res_input=False,
+        cond_input=False,
+    )
+
 
     logging.info("Build Pytorch Lightning Trainer...")
-
-    trainer = get_pl_trainer(name, test_loader, **trainer_params)
+    trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
     
     logging.info("Start training...")
-
     if resume:
         checkpoint = get_last_checkpoint(trainer.default_root_dir)
     else:
         checkpoint = None
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader, ckpt_path=checkpoint)
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=test_loader,
+        ckpt_path=checkpoint,
+    )
 
     logging.info("Done!")

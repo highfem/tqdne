@@ -90,21 +90,23 @@ class LightningDDMP(pl.LightningModule):
         return {"high_res": sample}
 
     def step(self, batch, train):
-        high_res = batch["high_res"]
+        high_res_batch = batch["high_res"]
+        low_res_batch = batch["low_res"]
+        cond_batch = batch["cond"] if self.cond_input else None
 
         # add noise
-        noise = torch.randn(high_res.shape, device=high_res.device)
+        noise = torch.randn(high_res_batch.shape, device=high_res_batch.device)
         timesteps = torch.randint(
             0,
             self.noise_scheduler.config.num_train_timesteps,
-            (high_res.shape[0],),
-            device=high_res.device,
+            (high_res_batch.shape[0],),
+            device=high_res_batch.device,
         ).long()
-        noisy_hig_res = self.noise_scheduler.add_noise(high_res, noise, timesteps)
+        noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, batch["low_res"], batch["cond"])
-        target = noise if self.prediction_type == "epsilon" else high_res
+        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch)
+        target = noise if self.prediction_type == "epsilon" else high_res_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)
 
