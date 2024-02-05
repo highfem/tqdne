@@ -51,7 +51,7 @@ Create a conda environment:
 
 .. code-block:: bash
 
-   conda env create -f environment.yml
+   conda env create -f environment.yaml
    conda activate tqdne
 
 
