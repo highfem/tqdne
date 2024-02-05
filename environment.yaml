@@ -15,7 +15,7 @@ dependencies:
   - setuptools
   - wandb
   - pytorch::pytorch>=2.1
-  - pytorch-cuda=12.1
+  - pytorch-cuda=11.8
   - torchvision
   - pytorch-lightning>=2.0.0
   - h5py
