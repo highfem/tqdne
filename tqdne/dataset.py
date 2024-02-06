@@ -62,7 +62,7 @@ def build_dataset(config=Config()):
     """Build the dataset."""
 
     # extract the config information
-    output_path = config.datasetdir
+    datasetdir = config.datasetdir
     datapath = config.datapath
     features_keys = config.features_keys
 
@@ -83,7 +83,7 @@ def build_dataset(config=Config()):
         means, stds = compute_mean_std_features(datapath, features_keys)
 
         def create_dataset(name, indices):
-            processed_path = output_path / Path(name)
+            processed_path = datasetdir / Path(name)
             with h5py.File(processed_path, "w") as fout:
                 fout.create_dataset("time", data=time)
                 fout.create_dataset("feature_means", data=means)
@@ -126,6 +126,8 @@ class RandomDataset(torch.utils.data.Dataset):
 
 
 class UpsamplingDataset(torch.utils.data.Dataset):
+    """Upsampling dataset."""
+
     def __init__(self, h5_path, cut=None, in_memory=False, config=Config()):
         super().__init__()
         self.h5_path = h5_path
@@ -182,6 +184,48 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         else:
             high_res = waveform
             low_res = filtered
+
+        return {
+            "high_res": torch.tensor(high_res, dtype=torch.float32),
+            "low_res": torch.tensor(low_res, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
+        }
+
+
+class SpectrogramUpsamplingDataset(UpsamplingDataset):
+    """Upsampling dataset with spectrogram representation."""
+
+    def __init__(self, h5_path, cut=None, in_memory=False, config=Config()):
+        super().__init__(h5_path, cut, in_memory, config)
+        self.config = config
+        
+        from tifresi.stft import GaussTruncTF
+        self.stft_system = GaussTruncTF(
+            hop_size=config.stft_hop_size, stft_channels=config.stft_channels
+        )
+
+    def __getitem__(self, index):
+        waveform = self.waveform[index]
+        filtered = self.filtered[index]
+
+        if self.cut:
+            high_res = waveform[:, : self.cut]
+            low_res = filtered[:, : self.cut]
+        else:
+            high_res = waveform
+            low_res = filtered
+
+        # get log-spectrogram
+        high_res = np.log(self.stft_system(waveform, normalize=False))
+        low_res = np.log(self.stft_system(filtered, normalize=False))
+
+        # normalize
+        high_res = (high_res - self.config.high_res_log_spec_mean) / self.config.hig_res_log_spec_std
+        low_res = (low_res - self.config.low_res_log_spec_mean) / self.config.low_res_log_spec_std
+
+        # features
+        features = self.features[index]
+        # features = (features - self.features_means) / self.features_stds
 
         return {
             "high_res": torch.tensor(high_res, dtype=torch.float32),

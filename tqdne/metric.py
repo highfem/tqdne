@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from tifresi.stft import GaussTruncTF
 from torch import Tensor
 from torchmetrics import Metric
 
@@ -205,6 +206,8 @@ class PowerSpectralDensity(AbstractMetric):
 
 
 class BinMetric(AbstractMetric):
+    """Wrapper to create a bin plot of a metric."""
+
     def __init__(
         self,
         metric,
@@ -294,3 +297,29 @@ class BinMetric(AbstractMetric):
         for row in self.metrics:
             for metric in row:
                 metric.reset()
+
+
+class SpectrogramInversion(AbstractMetric):
+    """Wrapper to invert the log spectrogram and compute a metric on the resulting signal."""
+
+    def __init__(self, metric: AbstractMetric, stft_channels: int, hop_size: int):
+        self.metric = metric
+        self.stft_system = GaussTruncTF(hop_size=hop_size, stft_channels=stft_channels)
+
+    def invert_log_spectrogram(self, log_spec):
+        spec = np.exp(log_spec)  # TODO: scaling
+        return self.stft_system.invert_spectrogram(spec)
+
+    def update(self, pred, target):
+        pred["high_res"] = self.invert_log_spectrogram(pred["high_res"])
+        if pred.has_key("low_res"):
+            pred["low_res"] = self.invert_log_spectrogram(pred["low_res"])
+
+        target["high_res"] = self.invert_log_spectrogram(target["high_res"])
+        if target.has_key("low_res"):
+            target["low_res"] = self.invert_log_spectrogram(target["low_res"])
+
+        self.metric.update(pred, target)
+
+    def __getattr__(self, attr):
+        return self.metric.attr

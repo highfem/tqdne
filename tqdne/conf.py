@@ -66,6 +66,7 @@ OUTPUTDIR = LazyEnv(
 
 PROJECT_NAME = "tqdne"
 
+
 @dataclass
 class Config:
     """Configuration class for the project."""
@@ -74,19 +75,28 @@ class Config:
     datasetdir: Path = DATASETDIR
     outputdir: Path = OUTPUTDIR
     project_name: str = PROJECT_NAME
-    
+
     # dataset_files:
     data_upsample_train: str = "data_upsample_train.h5"
     data_upsample_test: str = "data_upsample_test.h5"
 
-
     # Sampling frequency
     fs: int = 100
     # Filter parameters
-    params_filter: dict = field(default_factory= lambda: {"N": 2, "Wn": 1, "btype":'lp'})
+    params_filter: dict = field(
+        default_factory=lambda: {"N": 2, "Wn": 1, "btype": "lp"}
+    )
 
     # Noise on the input
     sigma_in: float = 0.01
+
+    # Spectrogram
+    stft_channels = 512
+    stft_hop_size = 16
+    high_res_log_spec_mean = -8.2
+    hig_res_log_spec_std = 3.1
+    low_res_log_spec_mean = -13.8
+    low_res_log_spec_std = 3.8
 
     # Input data parameters
     datapath: Path = DATASETDIR / Path("wforms_GAN_input_v20220805.h5")
@@ -95,6 +105,5 @@ class Config:
         "is_shallow_crustal",
         "log10snr",
         "magnitude",
-        "vs30"
+        "vs30",
     )
-
