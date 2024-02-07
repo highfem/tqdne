@@ -7,6 +7,7 @@ import tqdm
 from scipy import signal
 
 from tqdne.conf import Config
+from tqdne.representations import Representation
 
 
 def compute_mean_std(array):
@@ -122,6 +123,37 @@ class RandomDataset(torch.utils.data.Dataset):
         return {
             "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
             "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
+        }
+
+
+class WaveformDataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, representation: Representation, cut=None):
+        super().__init__()
+        self.h5_path = h5_path
+        self.representation = representation
+        with h5py.File(h5_path, "r") as file:
+            self.waveform = file["waveform"][:]
+            self.features = file["features"][:]
+            self.features_means = file["feature_means"][:]
+            self.features_stds = file["feature_stds"][:]
+
+        self.cut = cut
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, index):
+        waveform = self.waveform[index]
+        if self.cut:
+            waveform = waveform[:, : self.cut]
+
+        features = self.features[index]
+        features = (features - self.features_means) / self.features_stds
+
+        waveform = self.representation.get_representation(waveform)
+        return {
+            "high_res": torch.tensor(waveform, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
         }
 
 
