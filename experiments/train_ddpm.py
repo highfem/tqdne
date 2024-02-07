@@ -1,6 +1,6 @@
 import os
 
-# select GPU 1
+# select GPU 0
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import logging
@@ -22,13 +22,13 @@ if __name__ == "__main__":
     t = (5501 // 32) * 32
     batch_size = 64
     max_epochs = 100
-    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
+    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
 
     name = "1D-UNET"
     config = Config()
 
-    path_train = config.datasetdir / Path(config.data_upsample_train)
-    path_test = config.datasetdir / Path(config.data_upsample_test)
+    path_train = Path("datasets/data_upsample_train.h5")
+    path_test = Path("datasets/data_upsample_test.h5")
     train_dataset = UpsamplingDataset(path_train, cut=t)
     test_dataset = UpsamplingDataset(path_test, cut=t)
 

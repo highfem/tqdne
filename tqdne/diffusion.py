@@ -105,7 +105,7 @@ class LightningDDMP(pl.LightningModule):
         noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch)
+        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch) # TOASK: prediction type? Is it already handled by the net? I guess it's because the NN will learn it
         target = noise if self.prediction_type == "epsilon" else high_res_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)

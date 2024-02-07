@@ -22,7 +22,7 @@ if __name__ == "__main__":
     t = (5501 // 32) * 32
     batch_size = 64
     max_epochs = 100
-    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
+    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
 
     name = "1D-UNET-UPSAMPLE-DDPM-noisy"
     config = Config()

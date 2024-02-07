@@ -58,8 +58,8 @@ class SamplePlot(AbstractMetric):
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, self.reconstructed, "g", label="Reconstructed")
         ax.set_title(self.name)
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Amplitude")
+        ax.set_xlabel("Time (s)") 
+        ax.set_ylabel("Amplitude") #TODO: unit of measure?
         ax.legend()
         fig.tight_layout()
         return fig
@@ -186,7 +186,11 @@ class PowerSpectralDensity(AbstractMetric):
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(freqs, pred_mean, "g", label="Reconstructed")
         ax.fill_between(
-            freqs, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2
+            freqs, 
+            pred_mean - pred_std, 
+            pred_mean + pred_std, 
+            color="g", 
+            alpha=0.2,
         )
         ax.plot(freqs, target_mean, "r", label="Target")
         ax.fill_between(

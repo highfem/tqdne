@@ -16,7 +16,7 @@ dependencies:
   - wandb
   - pytorch::pytorch>=2.1
   - pytorch-cuda=11.8
-  - torchvision
+  - torchvision>=0.17
   - pytorch-lightning>=2.0.0
   - h5py
   - accelerate

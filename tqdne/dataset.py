@@ -74,7 +74,7 @@ def build_dataset(config=Config()):
         t = len(time)
         nf = len(features_keys)
         n = f["waveforms"].shape[2]
-        n_train = 1024 * (128 + 64)
+        n_train = 1024 * (128 + 64) # TO ASK: why these numbers?
         # reset the random state
         np.random.seed(42)
         permutation = np.random.permutation(n)

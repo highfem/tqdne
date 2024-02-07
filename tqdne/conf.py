@@ -54,7 +54,8 @@ PATH_ROOT = Path(__file__).parents[1]
 
 DATASETDIR = LazyEnv(
     "DATASET_DIR",
-    PATH_ROOT / Path("datasets"),
+    #PATH_ROOT / Path("datasets"),
+    "/store/sdsc/sd28",
     return_type=Path,
 ).eval()
 
