@@ -1,8 +1,14 @@
-from typing import Type
 import logging
 from pathlib import Path
-import pytorch_lightning as pl
+from typing import Type
+
 import PIL
+import pytorch_lightning as pl
+import torch
+
+
+def to_numpy(x):
+    return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
 
 
 def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
