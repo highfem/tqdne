@@ -8,12 +8,18 @@ from pathlib import Path
 
 from torch.utils.data import DataLoader
 
-from diffusers import DDPMScheduler, UNet1DModel
+from diffusers import DDPMScheduler
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
-from tqdne.metric import MeanSquaredError, PowerSpectralDensity, UpsamplingSamplePlot
+from tqdne.metric import (
+    BinMetric,
+    MeanSquaredError,
+    PowerSpectralDensity,
+    UpsamplingSamplePlot,
+)
 from tqdne.training import get_pl_trainer
+from tqdne.unet_1d import UNet1DModel
 from tqdne.utils import get_last_checkpoint
 
 if __name__ == "__main__":
@@ -24,7 +30,7 @@ if __name__ == "__main__":
     max_epochs = 100
     prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
 
-    name = "1D-UNET-UPSAMPLE-DDPM-noisy"
+    name = "COND-1D-UNET-UPSAMPLE-DDPM-noisy"
     config = Config()
 
     path_train = config.datasetdir / Path(config.data_upsample_train)
@@ -41,7 +47,8 @@ if __name__ == "__main__":
     plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
     mse = [MeanSquaredError(channel=c) for c in range(channels)]
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    metrics = plots + mse + psd
+    bin_metrics = [BinMetric(metric) for metric in mse + psd]
+    metrics = plots + mse + psd + bin_metrics
 
     logging.info("Set parameters...")
 
@@ -62,6 +69,8 @@ if __name__ == "__main__":
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,
         "act_fn": "relu",
+        "cond_dim": len(config.features_keys),
+        "cond_concat": True,
     }
 
     scheduler_params = {
@@ -111,7 +120,7 @@ if __name__ == "__main__":
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
         low_res_input=True,
-        cond_input=False,
+        cond_input=True,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")

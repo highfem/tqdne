@@ -9,8 +9,16 @@ To get started, make sure you have the necessary permissions and clone the repos
 
 .. code-block:: bash
 
-   git https://github.com/nperraud/tqdne.git
+   git clone git@github.com:nperraud/tqdne.git
    cd tqdne
+
+
+You also need to install the submodule:
+
+.. code-block:: bash
+
+   git submodule init
+   git submodule update
 
 
 Working with Poetry
@@ -39,11 +47,11 @@ To install miniconda, run the following command in the terminal:
       wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
       bash Miniconda3-latest-Linux-x86_64.sh
 
-Create a conda environment: The envenvironment.yml needs to be created!!!
+Create a conda environment:
 
 .. code-block:: bash
 
-   conda env create -f environment.yml
+   conda env create -f environment.yaml
    conda activate tqdne
 
 
@@ -88,6 +96,7 @@ The code is linted using flake8. To run the linter, use the following command:
    flake8 --doctests --exclude=doc --ignore=E501
 
 or
+
 .. code-block:: bash
    
    make lint

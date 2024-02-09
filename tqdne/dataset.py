@@ -1,11 +1,12 @@
 from pathlib import Path
-import h5py
-from scipy import signal
-import numpy as np
-from tqdne.conf import Config
-import tqdm
-import torch
 
+import h5py
+import numpy as np
+import torch
+import tqdm
+from scipy import signal
+
+from tqdne.conf import Config
 
 
 def compute_mean_std(array):
@@ -57,25 +58,6 @@ def extract_sample_from_h5file(f, idx, config=Config()):
     return waveform, np.array(features)
 
 
-def build_sample(waveform, features, means, stds, sos, sigam_in=0.01):
-    # Filter the waveform
-    datafilt = []
-    for channel in waveform:
-        datafilt.append(signal.sosfilt(sos, channel))
-    datafilt = np.array(datafilt)
-
-    # Normalize the waveform with respect of the datafilt
-    scale = np.abs(datafilt).max()
-    datafilt = datafilt / scale * 2 + np.random.randn(*datafilt.shape) * sigam_in
-    
-    waveform = waveform / scale / 5
-
-    # normalize the features
-    features = (features - means) / stds
-
-    return features, datafilt, waveform, scale
-
-
 def build_dataset(config=Config()):
     """Build the dataset."""
 
@@ -83,12 +65,9 @@ def build_dataset(config=Config()):
     output_path = config.datasetdir
     datapath = config.datapath
     features_keys = config.features_keys
-    fs = config.fs
-    params_filter = config.params_filter
-    sigma_in = config.sigma_in
 
     # Create the filter
-    sos = signal.butter(**params_filter, fs=fs, output="sos")
+    sos = signal.butter(**config.params_filter, fs=config.fs, output="sos")
 
     with h5py.File(datapath, "r") as f:
         time = f["time_vector"][:]
@@ -96,7 +75,6 @@ def build_dataset(config=Config()):
         nf = len(features_keys)
         n = f["waveforms"].shape[2]
         n_train = 1024 * (128 + 64)
-        n_test = n - n_train
         # reset the random state
         np.random.seed(42)
         permutation = np.random.permutation(n)
@@ -104,35 +82,25 @@ def build_dataset(config=Config()):
         test_indices = permutation[n_train:]
         means, stds = compute_mean_std_features(datapath, features_keys)
 
-        processed_path = output_path / Path(config.data_upsample_train)
-        with h5py.File(processed_path, "w") as fout:
-            fout.create_dataset("time", data=time)
-            waveforms = fout.create_dataset("waveform", (n_train, 3, t))
-            filtereds = fout.create_dataset("filtered", (n_train, 3, t))
-            featuress = fout.create_dataset("features", (n_train, nf))
-            scales = fout.create_dataset("scale", (n_train,))
-            for i, idx in tqdm.tqdm(enumerate(train_indices), total=n_train):
-                waveform, features = extract_sample_from_h5file(f, idx)
-                features, datafilt, waveform, scale = build_sample(waveform, features, means, stds, sos, sigma_in)
-                waveforms[i] = waveform
-                filtereds[i] = datafilt
-                featuress[i] = features
-                scales[i] = scale
+        def create_dataset(name, indices):
+            processed_path = output_path / Path(name)
+            with h5py.File(processed_path, "w") as fout:
+                fout.create_dataset("time", data=time)
+                fout.create_dataset("feature_means", data=means)
+                fout.create_dataset("feature_stds", data=stds)
+                waveforms = fout.create_dataset("waveform", (len(indices), 3, t))
+                filtered = fout.create_dataset("filtered", (len(indices), 3, t))
+                featuress = fout.create_dataset("features", (len(indices), nf))
+                for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
+                    waveform, features = extract_sample_from_h5file(f, idx)
+                    filtered[i] = np.array(
+                        [signal.sosfilt(sos, channel) for channel in waveform]
+                    )
+                    waveforms[i] = waveform
+                    featuress[i] = features
 
-        processed_path = output_path / Path(config.data_upsample_test)
-        with h5py.File(processed_path, "w") as fout:
-            fout.create_dataset("time", data=time)
-            waveforms = fout.create_dataset("waveform", (n_test, 3, t))
-            filtereds = fout.create_dataset("filtered", (n_test, 3, t))
-            featuress = fout.create_dataset("features", (n_test, nf))
-            scales = fout.create_dataset("scale", (n_test,))
-            for i, idx in tqdm.tqdm(enumerate(test_indices), total=n_test):
-                waveform, features = extract_sample_from_h5file(f, idx)
-                features, datafilt, waveform, scale = build_sample(waveform, features, means, stds, sos, sigma_in)
-                waveforms[i] = waveform
-                filtereds[i] = datafilt
-                featuress[i] = features
-                scales[i] = scale
+        create_dataset(config.data_upsample_train, train_indices)
+        create_dataset(config.data_upsample_test, test_indices)
 
 
 class RandomDataset(torch.utils.data.Dataset):
@@ -149,38 +117,40 @@ class RandomDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         noise = np.random.randn(self.t)
         x = signal.sosfilt(self.bp, noise)
-        lowpass = signal.sosfilt(self.lp, x) # + 0.1 * x
-        # lowpass = x / 2 
-        return torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32), torch.tensor(
-            x.reshape(1, -1), dtype=torch.float32
-        )
+        lowpass = signal.sosfilt(self.lp, x)  # + 0.1 * x
+
+        return {
+            "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
+            "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
+        }
 
 
-class H5Dataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, cut=None, in_memory=False):
-        super(H5Dataset, self).__init__()
+class UpsamplingDataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, cut=None, in_memory=False, config=Config()):
+        super().__init__()
         self.h5_path = h5_path
         self.in_memory = in_memory
+        self.sigma_in = config.sigma_in
         if in_memory:
             with h5py.File(h5_path, "r") as file:
                 self.features = file["features"][:]
-                self.filtered = file["filtered"][:]
-                self.scale = file["scale"][:]
                 self.waveform = file["waveform"][:]
+                self.filtered = file["filtered"][:]
                 self.time = file["time"][:]
+                self.features_means = file["feature_means"][:]
+                self.features_stds = file["feature_stds"][:]
 
         else:
             self.file = h5py.File(h5_path, "r")
             self.features = self.file["features"]
-            self.filtered = self.file["filtered"]
-            self.scale = self.file["scale"]
             self.waveform = self.file["waveform"]
+            self.filtered = self.file["filtered"]
             self.time = self.file["time"][:]
+            self.features_means = self.file["feature_means"][:]
+            self.features_stds = self.file["feature_stds"][:]
 
         self.n = len(self.features)
         assert self.n == len(self.waveform)
-        assert self.n == len(self.scale)
-        assert self.n == len(self.filtered)
         self.cut = cut
 
     def __del__(self):
@@ -191,11 +161,30 @@ class H5Dataset(torch.utils.data.Dataset):
         return self.n
 
     def __getitem__(self, index):
+        waveform = self.waveform[index]
+        filtered = self.filtered[index]
+
+        # normalize
+        scale = np.abs(filtered).max()
+        waveform = waveform / scale / 5
+        filtered = filtered / scale * 2
+
+        # add noise to filtered
+        filtered += np.random.randn(*filtered.shape) * self.sigma_in
+
+        # features
+        features = self.features[index]
+        # features = (features - self.features_means) / self.features_stds
+
         if self.cut:
-            return torch.tensor(self.filtered[index, :, : self.cut]), torch.tensor(
-                self.waveform[index, :, : self.cut]
-            )
+            high_res = waveform[:, : self.cut]
+            low_res = filtered[:, : self.cut]
         else:
-            return torch.tensor(self.filtered[index]), torch.tensor(
-                self.waveform[index]
-            )
+            high_res = waveform
+            low_res = filtered
+
+        return {
+            "high_res": torch.tensor(high_res, dtype=torch.float32),
+            "low_res": torch.tensor(low_res, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
+        }
