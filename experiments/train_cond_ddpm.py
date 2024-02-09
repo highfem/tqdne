@@ -10,13 +10,13 @@ from torch.utils.data import DataLoader
 
 from diffusers import DDPMScheduler
 from tqdne.conf import Config
-from tqdne.dataset import UpsamplingDataset
+from tqdne.dataset import EnvelopeDataset
 from tqdne.diffusion import LightningDDMP
 from tqdne.metric import (
     BinMetric,
     MeanSquaredError,
     PowerSpectralDensity,
-    UpsamplingSamplePlot,
+    SamplePlot,
 )
 from tqdne.training import get_pl_trainer
 from tqdne.unet_1d import UNet1DModel
@@ -25,47 +25,48 @@ from tqdne.utils import get_last_checkpoint
 if __name__ == "__main__":
     resume = False
     logging.info("Loading data...")
-    t = (5501 // 32) * 32
+    t = (5501 // 32) * 32 # TO ASK: why 5501? why 32?
     batch_size = 64
-    max_epochs = 100
+    max_epochs = 150
     prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
 
-    name = "COND-1D-UNET-UPSAMPLE-DDPM-noisy"
+    name = "COND-1D-UNET-DDPM-envelope"
     config = Config()
 
-    path_train = Path("datasets/data_upsample_train.h5")
-    path_test = Path("datasets/data_upsample_test.h5")
-    train_dataset = UpsamplingDataset(path_train, cut=t)
-    test_dataset = UpsamplingDataset(path_test, cut=t)
-
-    channels = train_dataset[0]["high_res"].shape[0]
+    path_train = Path("datasets") / config.data_upsample_train
+    path_test = Path("datasets") / config.data_upsample_test
+    train_dataset = EnvelopeDataset(path_train, cut=t) # to check
+    test_dataset = EnvelopeDataset(path_test, cut=t) # to check
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
-    # metrics
-    plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    mse = [MeanSquaredError(channel=c) for c in range(channels)]
+    channels = train_dataset[0]["signals"].shape[0]
+
+
+    # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)] 
+    #mse = [MeanSquaredError(channel=c) for c in range(channels)] # doesn't make sense here
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    bin_metrics = [BinMetric(metric) for metric in mse + psd]
+    bin_metrics = [BinMetric(metric) for metric in mse + psd] # to ask: why bin psd? it's a scalar (Wassertein-2) between the test-set mean PSD and generated mean PSD (batch)
     metrics = plots + mse + psd + bin_metrics
 
     logging.info("Set parameters...")
 
-    # Unet parameters
+    # Unet parameters # BLOCKS ALREADY FIXED
     unet_params = {
         "sample_size": t,
-        "in_channels": 2 * channels,
+        "in_channels": 2 * channels, # should be ok
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
-            "DownBlock1D",
-            "DownBlock1D",
-            "DownBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
             "AttnDownBlock1D",
         ),
-        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
-        "mid_block_type": "UNetMidBlock1D",
+        "up_block_types": ("AttnUpBlock1D", "UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
+        "mid_block_type": "MidResTemporalBlock1D",
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,
         "act_fn": "relu",

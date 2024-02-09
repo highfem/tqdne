@@ -63,12 +63,13 @@ def build_dataset(config=Config()):
     """Build the dataset."""
 
     # extract the config information
-    output_path = config.datasetdir
-    datapath = config.datapath
+    #output_path = config.datasetdir
+    output_path = Path("/store/sdsc/sd28/data/GM0-dataset-split/")
+    datapath = Path("/store/sdsc/sd28/wforms_GAN_input_v20220805.h5")
     features_keys = config.features_keys
 
     # Create the filter
-    sos = signal.butter(**config.params_filter, fs=config.fs, output="sos")
+    #sos = signal.butter(**config.params_filter, fs=config.fs, output="sos")
 
     with h5py.File(datapath, "r") as f:
         time = f["time_vector"][:]
@@ -90,18 +91,18 @@ def build_dataset(config=Config()):
                 fout.create_dataset("feature_means", data=means)
                 fout.create_dataset("feature_stds", data=stds)
                 waveforms = fout.create_dataset("waveform", (len(indices), 3, t))
-                filtered = fout.create_dataset("filtered", (len(indices), 3, t))
+                #filtered = fout.create_dataset("filtered", (len(indices), 3, t))
                 featuress = fout.create_dataset("features", (len(indices), nf))
                 for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
                     waveform, features = extract_sample_from_h5file(f, idx)
-                    filtered[i] = np.array(
-                        [signal.sosfilt(sos, channel) for channel in waveform]
-                    )
+                    #filtered[i] = np.array(
+                    #    [signal.sosfilt(sos, channel) for channel in waveform]
+                    #)
                     waveforms[i] = waveform
                     featuress[i] = features
 
-        create_dataset(config.data_upsample_train, train_indices)
-        create_dataset(config.data_upsample_test, test_indices)
+        create_dataset(config.data_upsample_train, train_indices) #TODO should have been data_gm0_train or data_train
+        create_dataset(config.data_upsample_test, test_indices) #TODO should have been data_gm0_test or data_test
 
 
 class RandomDataset(torch.utils.data.Dataset):
@@ -126,6 +127,8 @@ class RandomDataset(torch.utils.data.Dataset):
         }
 
 
+
+# TODO: to delete
 class WaveformDataset(torch.utils.data.Dataset):
     def __init__(self, h5_path, representation: Representation, cut=None):
         super().__init__()
@@ -218,5 +221,44 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         return {
             "high_res": torch.tensor(high_res, dtype=torch.float32),
             "low_res": torch.tensor(low_res, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
+        }
+
+class EnvelopeDataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, representation: Representation, cut=None):
+        super().__init__()
+        self.h5_path = h5_path
+        self.representation = representation
+
+        self.file = h5py.File(h5_path, "r")
+        self.features = self.file["features"]
+        self.waveforms = self.file["waveform"][:]
+        #self.envelope = self.representation # TODO: maybe compute here the mean and std of the envelope. NO, it doesn't load the entire DS 
+        self.time = self.file["time"][:]
+        self.features_means = self.file["feature_means"][:] # TO ASK: why do we need this? one should scale the features? # doesn't matter since embedding are sin/cos so periodic
+        self.features_stds = self.file["feature_stds"][:] # TO ASK: why do we need this? one should scale the features?
+
+        self.n = len(self.features)
+        assert self.n == len(self.waveforms)
+        self.cut = cut
+
+    def __del__(self):
+        if not self.in_memory:
+            self.file.close()
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, index):
+
+        signal = self.waveforms[index]
+        features = self.features[index]
+        # features = (features - self.features_means) / self.features_stds
+
+        if self.cut:
+            signal = signal[:, : self.cut]
+
+        return {
+            "representation": torch.tensor(self.representation.get_representation(signal), dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }

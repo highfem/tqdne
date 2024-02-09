@@ -52,22 +52,22 @@ class SamplePlot(AbstractMetric):
         super().__init__()
         self.fs = fs
         self.channel = channel
-        self.add_state("reconstructed", default=[], dist_reduce_fx=None)
+        self.add_state("Generated", default=[], dist_reduce_fx=None)
 
     @property
     def name(self):
         return f"Sample Plot - Channel {self.channel}"
 
     def _update(self, pred, target):
-        self.reconstructed = pred["high_res"][0, self.channel]
+        self.generated = pred["high_res"][0, self.channel] 
 
     def compute(self):
         return None
 
     def plot(self):
-        time = np.arange(0, self.reconstructed.shape[-1]) / self.fs
+        time = np.arange(0, self.generated.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, self.reconstructed, "g", label="Reconstructed")
+        ax.plot(time, self.generated, "g", label="Generated")
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)") 
         ax.set_ylabel("Amplitude") #TODO: unit of measure?
