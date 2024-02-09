@@ -23,33 +23,14 @@ def get_pl_trainer(
     else:
         wandb_logger = None
 
-<<<<<<< HEAD
-def get_pl_trainer(name, project=PROJECT_NAME, specific_callbacks = [], **trainer_params):
-=======
     # learning rate logger
     callbacks = [LearningRateMonitor()]
->>>>>>> main
 
     # log callback
     callbacks.append(LogCallback(val_loader, metrics, every=eval_every))
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
-<<<<<<< HEAD
-    # 4. saves checkpoints to 'model_path' whenever 'val_loss' has a new min
-    checkpoint_callback = ModelCheckpoint(dirpath=OUTPUTDIR / Path(name), filename='{name}_{epoch}-{val_loss:.2f}',
-                                        monitor='val_loss', mode='min', save_top_k=5)
-    # 5. My custom callback
-    lst_cbk = [lr_logger, checkpoint_callback, *specific_callbacks]
-    print(lst_cbk)
-    output_dir = (OUTPUTDIR/Path(name))
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Define Trainer
-    trainer = pl.Trainer(**trainer_params, logger=wandb_logger, callbacks=lst_cbk, 
-                        default_root_dir=output_dir ) 
-    
-=======
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
     if (
@@ -77,5 +58,4 @@ def get_pl_trainer(name, project=PROJECT_NAME, specific_callbacks = [], **traine
         default_root_dir=output_dir
     )
 
->>>>>>> main
     return trainer
