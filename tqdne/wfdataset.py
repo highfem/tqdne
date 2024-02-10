@@ -26,7 +26,7 @@ def centered_max(x, window_len):
     return out
 
 class WaveformDM(L.LightningDataModule):
-    def __init__(self, wfs_file, attr_file, wfs_expected_size, v_names, batch_size, train_ratio, envelope_type="pointwise"):
+    def __init__(self, wfs_file, attr_file, wfs_expected_size, v_names, batch_size, train_ratio, envelope_type="globalmax"):
         """
         Initialize the WFDataModule.
 
@@ -119,7 +119,7 @@ class WaveformDM(L.LightningDataModule):
 
 
 class WaveformDataset(Dataset):
-    def __init__(self, wfs, df_attr, v_names, envelope_type="pointwise"):
+    def __init__(self, wfs, df_attr, v_names, envelope_type="globalmax"):
         """
         Initialize the WaveformDataset.
 
@@ -127,13 +127,12 @@ class WaveformDataset(Dataset):
             wfs (np.array): Array of waveforms.
             df_attr (pd.DataFrame): DataFrame containing attribute data.
             v_names (list): List of attribute names.
-            envelope_type (str, optional): Type of envelope. Defaults to "max". Options: "max", "pointwise".
+            envelope_type (str, optional): Type of envelope. Defaults to "globalmax". Options: "max", "pointwise".
         """
-        #print("normalizing data ...")
         self.ws = wfs.copy()
         
         # Normalize wfs
-        if envelope_type == "max":
+        if envelope_type == "globalmax":
             wfs_norm = np.max(np.abs(wfs), axis=1)
             wfs_norm = wfs_norm[:, np.newaxis]
             wfs_norm = np.repeat(wfs_norm, wfs.shape[1], axis=1)
@@ -141,7 +140,7 @@ class WaveformDataset(Dataset):
         elif envelope_type == "pointwise":
             wfs_norm = centered_max(wfs, 7)
             wfs_norm = np.maximum(wfs_norm, 1e-10)
-            print(wfs_norm.shape)
+            # print(wfs_norm.shape)
 
         self.wfs = wfs / wfs_norm
         self.wfs = self.wfs[:, np.newaxis, :]
@@ -150,12 +149,8 @@ class WaveformDataset(Dataset):
         lc_m = np.log10(wfs_norm)
         self.max_lc_m = np.max(lc_m, axis=0, keepdims=True)
         self.min_lc_m = np.min(lc_m, axis=0, keepdims=True)
-        print(self.max_lc_m.shape, self.min_lc_m.shape, lc_m.shape)
         ln_cns = 2.0 * (lc_m - self.min_lc_m) / (self.max_lc_m - self.min_lc_m) - 1.0
-        print(ln_cns.shape)
         ln_cns = ln_cns.reshape(-1, 1, wfs.shape[1])
-        print(ln_cns.shape)
-        # ln_cns = np.repeat(ln_cns, wfs.shape[1], axis=1).reshape(-1, 1, wfs.shape[1])
 
         self.wfs = np.concatenate((self.wfs, ln_cns), axis=1)
 

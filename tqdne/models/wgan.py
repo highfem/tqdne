@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from tqdne.utils.positionalencoding import positional_encoding
+from tqdne.utils import positional_encoding
 
 
 class WGenerator(nn.Module):
-    def __init__(self, wave_size, latent_dim, encoding_L=4, num_vars=1, out_channels=1, dim=16):
+    def __init__(self, wave_size, latent_dim, encoding_L=4, num_cond_vars=1, out_channels=1, dim=16):
         super(WGenerator, self).__init__()
 
         self.dim = dim
@@ -16,7 +16,7 @@ class WGenerator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        latent_dim += 2 * encoding_L * num_vars
+        latent_dim += 2 * encoding_L * num_cond_vars
         # self.feature_sizes = (self.wave_size[0] / 16, self.wave_size[1] / 16)
         self.feature_size = int(wave_size / 16)
         self.latent_to_features = nn.Sequential(
@@ -56,7 +56,7 @@ class WGenerator(nn.Module):
 
 
 class WDiscriminator(nn.Module):
-    def __init__(self, wave_size, in_channels, encoding_L=4, num_vars=1, dim=16):
+    def __init__(self, wave_size, in_channels, encoding_L=4, num_cond_vars=1, dim=16):
         """
         wave_size : int E.g. 1024
         """
@@ -67,7 +67,7 @@ class WDiscriminator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.in_channels = in_channels # + 2 * encoding_L * num_vars
+        self.in_channels = in_channels # + 2 * encoding_L * num_cond_vars
 
         self.image_to_features = nn.Sequential(
             nn.Conv1d(self.in_channels, dim, 4, 2, 1),
@@ -82,8 +82,7 @@ class WDiscriminator(nn.Module):
         )
         
         # 4 convolutions of stride 2, i.e. halving of size everytime
-        # So output size will be 8 * (img_size / 2 ^ 4) * (img_size / 2 ^ 4)
-        output_size = 8 * dim * int(wave_size / 16) + 2 * encoding_L * num_vars
+        output_size = 8 * dim * int(wave_size / 16) + 2 * encoding_L * num_cond_vars
         self.features_to_prob = nn.Sequential(
             nn.Linear(output_size, 1),
             # nn.Sigmoid()
@@ -91,6 +90,7 @@ class WDiscriminator(nn.Module):
 
     def forward(self, input_data, cond=None):
         batch_size = input_data.size()[0]
+        print(input_data.shape)
         x = input_data.view(batch_size, self.in_channels, -1)
         x = self.image_to_features(x)
         x = x.view(batch_size, -1)

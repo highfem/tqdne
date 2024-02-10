@@ -3,7 +3,7 @@ from diffusers import DDPMScheduler
 from tqdne.diffusion_lightning import DiffusionL
 from tqdne.training import get_pl_trainer
 from pathlib import Path
-from tqdne.utils.model_utils import get_last_checkpoint
+from tqdne.utils import get_last_checkpoint
 from tqdne.simple_dataset import StationarySignalDM
 from tqdne.callbacks.sample_callback import SimplePlotCallback
 import logging

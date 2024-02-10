@@ -1,12 +1,10 @@
-from diffusers.commands import env
 from tqdne.wgan_lightning import WGAN
-from tqdne.utils.model_utils import get_last_checkpoint
+from tqdne.utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
 from tqdne.callbacks.sample_callback import SimplePlotCallback
 from tqdne.simple_dataset import StationarySignalDM
 from tqdne.wfdataset import WaveformDM
 
-# from pytorch_lightning.loggers import MLFlowLogger
 from tqdne.conf import Config
 from pathlib import Path
 
@@ -23,11 +21,11 @@ def main():
     max_epochs = 800
     batch_size = 64
     frac_train = 0.8
-    envelope_type = "pointwise"
+    envelope_type = "globalmax"
     wfs_expected_size = 1024
     latent_dim = 128
     encoding_L = 4
-    num_vars = 2
+    num_conditional_vars = 2
     
     # dataset_size = 10000
     # dm = StationarySignalDM(
@@ -56,14 +54,14 @@ def main():
         "wave_size": wfs_expected_size,
         "out_channels": 2,
         "encoding_L": encoding_L,
-        "num_vars": num_vars,
+        "num_cond_vars": num_conditional_vars,
         "dim": 32,
     }
     discriminator_parameters = {
         "wave_size": wfs_expected_size,
         "in_channels": 2,
         "encoding_L": encoding_L,
-        "num_vars": num_vars,
+        "num_cond_vars": num_conditional_vars,
         "dim": 32,
     }
     model_parameters = {
@@ -104,8 +102,11 @@ def main():
     model = WGAN(**model_parameters)
     trainer = get_pl_trainer(
         "WGAN",
-        project="tqdne",
-        specific_callbacks=specific_callbacks,
+        val_loader=dm.val_dataloader(),
+        metrics=[],
+        eval_every=10,
+        log_to_wandb=False,
+        config=config,
         **trainer_parameters
     )
     if resume:

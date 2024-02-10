@@ -1,8 +1,6 @@
-from email import generator
 from tqdne.gan_lightning import GAN
-# from tqdne.ganutils.data_utils import SeisData
 from tqdne.wfdataset import WaveformDM
-from tqdne.utils.model_utils import get_last_checkpoint
+from tqdne.utils import get_last_checkpoint
 from tqdne.models.gan import Discriminator
 from tqdne.training import get_pl_trainer
 from tqdne.callbacks.sample_callback import SimplePlotCallback
