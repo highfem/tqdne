@@ -132,7 +132,7 @@ class WaveformDataset(torch.utils.data.Dataset):
         self.h5_path = h5_path
         self.representation = representation
         with h5py.File(h5_path, "r") as file:
-            self.waveform = file["waveform"][:]
+            self.waveform = file["waveform"]
             self.features = file["features"][:]
             self.features_means = file["feature_means"][:]
             self.features_stds = file["feature_stds"][:]
