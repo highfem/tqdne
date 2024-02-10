@@ -30,7 +30,6 @@ class Representation(ABC):
 class Envelope(Representation):
     
     def _get_representation(self, signal):
-        signal = to_numpy(signal)
         envelope = np.zeros_like(signal) # TODO: just placeholder
 
         scaled_signal = signal / envelope
