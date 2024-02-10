@@ -7,6 +7,7 @@
 #SBATCH --error=wgan-%j.log
 #SBATCH --account=sd28
 
+export HDF5_USE_FILE_LOCKING=FALSE
 module load daint-gpu
 module load cray-python
 # module load TensorFlow

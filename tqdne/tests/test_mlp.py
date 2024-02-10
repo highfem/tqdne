@@ -1,5 +1,5 @@
 import torch
-from tqdne.models.model import MLP
+from tqdne.model import MLP
 
 
 def test_mlp():

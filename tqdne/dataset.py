@@ -127,16 +127,19 @@ class RandomDataset(torch.utils.data.Dataset):
 
 
 class WaveformDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None):
+    def __init__(self, h5_path, representation: Representation, cut=None, reduced=None):
         super().__init__()
         self.h5_path = h5_path
         self.representation = representation
         with h5py.File(h5_path, "r") as file:
-            self.waveform = file["waveform"]
+            self.waveform = file["waveform"][:]
             self.features = file["features"][:]
             self.features_means = file["feature_means"][:]
             self.features_stds = file["feature_stds"][:]
-
+        if reduced: 
+            skip = self.waveform.shape[-1] // reduced
+            self.waveform = self.waveform[:, 0:1, 0: skip * reduced: skip]
+            assert self.waveform.shape[-1] == reduced
         self.cut = cut
 
     def __len__(self):

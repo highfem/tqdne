@@ -1,47 +1,51 @@
-from tqdne.wgan_lightning import WGAN
-from tqdne.utils import get_last_checkpoint
-from tqdne.training import get_pl_trainer
-from tqdne.callbacks.sample_callback import SimplePlotCallback
-from tqdne.simple_dataset import StationarySignalDM
-from tqdne.wfdataset import WaveformDM
-
-from tqdne.conf import Config
+import logging
 from pathlib import Path
 
+
+from torch.utils.data import DataLoader
+
+from tqdne.dataset import WaveformDataset
+from tqdne.gan import WGAN
+from tqdne.utils import get_last_checkpoint
+from tqdne.training import get_pl_trainer
+from tqdne.metric import SamplePlot, RepresentationInversion
+from tqdne.representations import LogMaxEnvelope
+from tqdne.conf import Config
 
 def main():
     # Setting up Args
     config = Config()
-    data_file = config.datasetdir / Path(config.data_waveforms)
-    attr_file = config.datasetdir / Path(config.data_attributes)
-    condv_names = ["dist", "mag"]
-
     resume = False
     conditional = True
     max_epochs = 800
     batch_size = 64
-    frac_train = 0.8
-    envelope_type = "globalmax"
     wfs_expected_size = 1024
     latent_dim = 128
     encoding_L = 4
-    num_conditional_vars = 2
-    
-    # dataset_size = 10000
-    # dm = StationarySignalDM(
-    #     dataset_size, wfs_expected_size, batch_size, frac_train, conditional=conditional
-    # )
-    datamodule_parameters = {
-        "wfs_file": data_file,
-        "attr_file": attr_file,
-        "wfs_expected_size": wfs_expected_size,
-        "v_names": condv_names,
-        "batch_size": batch_size,
-        "train_ratio": frac_train,
-        "envelope_type": envelope_type,
-    }
-    print("Loading data...")
-    dm = WaveformDM(**datamodule_parameters)
+
+    logging.info("Loading data...")
+    train_path = config.datasetdir / Path(config.data_upsample_train)
+    test_path = config.datasetdir / Path(config.data_upsample_test)
+    envelope_representation = LogMaxEnvelope(config)
+    train_dataset = WaveformDataset(train_path, envelope_representation, reduced=wfs_expected_size)
+    test_dataset = WaveformDataset(test_path, envelope_representation, reduced=wfs_expected_size)
+
+    channels = train_dataset[0]["high_res"].shape[0]
+    logging.info(f"Channels: {channels}")
+    num_conditional_vars = train_dataset[0]["cond"].shape[0]
+    logging.info(f"Number of conditional variables: {num_conditional_vars}")
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
+    condv_names = ["dist", "mag"]
+
+    logging.info("Set parameters...")
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels // 2)]
+    plots = [
+        RepresentationInversion(metric, envelope_representation) for metric in plots
+    ]
+    logging.info("Set metrics...", plots)
+    metrics = plots
 
     optimizer_parameters = {
         "lr": 1e-4,
@@ -52,20 +56,19 @@ def main():
     generator_parameters = {
         "latent_dim": latent_dim,
         "wave_size": wfs_expected_size,
-        "out_channels": 2,
+        "out_channels": channels,
         "encoding_L": encoding_L,
         "num_cond_vars": num_conditional_vars,
         "dim": 32,
     }
     discriminator_parameters = {
         "wave_size": wfs_expected_size,
-        "in_channels": 2,
+        "in_channels": channels,
         "encoding_L": encoding_L,
         "num_cond_vars": num_conditional_vars,
         "dim": 32,
     }
     model_parameters = {
-        "waveform_size": wfs_expected_size,
         "reg_lambda": 10.0,
         "n_critics": 4,
         "optimizer_params": optimizer_parameters,
@@ -79,33 +82,15 @@ def main():
         "devices": "auto",
         "log_every_n_steps": 10,
     }
-    plot_callback_parameters = {
-        "dataset": dm,
-        "every": 1,
-        "n_waveforms": 1,
-        "conditional": conditional,
-    }
-    metrics_callback_parameters = {
-        "dataset": dm,
-        "every": 1,
-        "n_samples": 50,
-    }
-    # specific_callbacks = [
-    #     MetricsCallback(**metrics_callback_parameters),
-    #     PlotCallback(**plot_callback_parameters)
-    # ]
-    specific_callbacks = [
-        SimplePlotCallback(**plot_callback_parameters)
-    ]
 
     print("Loading Model")
     model = WGAN(**model_parameters)
     trainer = get_pl_trainer(
         "WGAN",
-        val_loader=dm.val_dataloader(),
-        metrics=[],
+        val_loader=test_loader,
+        metrics=metrics,
         eval_every=10,
-        log_to_wandb=False,
+        log_to_wandb=True,
         config=config,
         **trainer_parameters
     )
@@ -113,8 +98,14 @@ def main():
         checkpoint = get_last_checkpoint(trainer.default_root_dir)
     else:
         checkpoint = None
-
-    trainer.fit(model, dm, ckpt_path=checkpoint)
+    logging.info("Start training...")
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=test_loader,
+        ckpt_path=checkpoint,
+    )
+    logging.info("Training finished")
 
 
 if __name__ == "__main__":

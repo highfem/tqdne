@@ -60,6 +60,7 @@ class SamplePlot(AbstractMetric):
 
     def _update(self, pred, target):
         self.reconstructed = pred["high_res"][0, self.channel]
+        self.target = target["high_res"][0, self.channel]
 
     def compute(self):
         return None
@@ -68,6 +69,7 @@ class SamplePlot(AbstractMetric):
         time = np.arange(0, self.reconstructed.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, self.reconstructed, "g", label="Reconstructed")
+        ax.plot(time, self.target, "r", label="Target")
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -333,7 +335,16 @@ class RepresentationInversion(AbstractMetric):
     @property
     def name(self):
         return self.metric.name
+    
+    def reset(self):
+        self.metric.reset()   
 
-    def __getattr__(self, attr):
-        """Forward all other attributes to the wrapped metric."""
-        return getattr(self.metric, attr)
+    def compute(self):
+        return self.metric.compute()
+    
+    def plot(self):
+        return self.metric.plot()
+
+    # def __getattr__(self, attr):
+    #     """Forward all other attributes to the wrapped metric."""
+    #     return getattr(self.metric, attr)

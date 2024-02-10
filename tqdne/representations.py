@@ -26,7 +26,57 @@ class Representation(ABC):
     def _invert_representation(self, representation):
         pass
 
+class LogMaxEnvelope(Representation):
 
+    def _get_representation(self, signal):
+        norm = np.max(np.abs(signal), axis=-1, keepdims=True)
+        norm = np.repeat(norm, signal.shape[-1], axis=-1)
+        scaled_signal = (signal / norm)
+        envelope = np.log10(norm + 1e-7)
+        # self.min_norm, self.max_norm = np.min(envelope, axis=0, keepdims=True), np.max(envelope, axis=0, keepdims=True)
+        # envelope = 2.0 * (envelope - self.min_norm) / (self.max_norm - self.min_norm) - 1.0
+        return np.concatenate([envelope, scaled_signal], axis=-2)
+    
+    def _invert_representation(self, representation):
+        # envelope = (self.max_norm - self.max_norm) * (representation[:, 0, :] + 1.0) / 2.0 + self.min_norm
+        num_channels = representation.shape[0] // 2
+        envelope = representation[:num_channels]
+        norm = 10 ** envelope
+        return norm * representation[num_channels:]
+
+def _centered_window(x, window_len):
+    assert window_len % 2, "Centered Window has to have odd length"
+    mid = window_len // 2
+    pos = 0
+    while pos < x.shape[-1]:
+        yield x[..., max(pos - mid, 0) : min(pos + mid + 1, len(x))]
+        pos += 1
+
+def centered_max(x, window_len):
+    out = np.concatenate(
+        [
+            np.max(window, axis=-1, keepdims=True) if window.shape[-1] > 0 else np.zeros((*x.shape[:-1], 1))
+            for window in _centered_window(x, window_len)
+        ],
+        axis=-1,
+    )
+    return out
+
+class CenteredMaxEnvelope(Representation):
+    
+    def _get_representation(self, signal):
+        envelope = centered_max(signal, 7)
+        envelope = np.maximum(envelope, 1e-10)
+        scaled_signal = signal / envelope
+        envelope = np.log10(envelope)
+        return np.concatenate([envelope, scaled_signal], axis=0)
+
+    def _invert_representation(self, representation):
+        num_channels = representation.shape[0] // 2
+        norm = 10 ** representation[:num_channels]
+        scaled_signal = representation[num_channels:]
+        return norm * scaled_signal
+    
 class Envelope(Representation):
     
     def _get_representation(self, signal):
