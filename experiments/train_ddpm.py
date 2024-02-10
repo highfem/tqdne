@@ -12,7 +12,7 @@ from diffusers import DDPMScheduler, UNet1DModel
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
-from tqdne.metric import PowerSpectralDensity, SamplePlot
+from tqdne.metric import PowerSpectralDensity, SamplePlot, RepresentationInversion
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 
@@ -39,6 +39,7 @@ if __name__ == "__main__":
 
     # metrics
     plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    plots = [RepresentationInversion(metric, envelope_repesntation) for metric in plots]
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
     metrics = plots + psd
 
@@ -51,12 +52,12 @@ if __name__ == "__main__":
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
-            "DownBlock1D",
-            "DownBlock1D",
-            "DownBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
             "AttnDownBlock1D",
         ),
-        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
+        "up_block_types": ("AttnUpBlock1D", "UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
         "mid_block_type": "UNetMidBlock1D",
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,

@@ -6,9 +6,8 @@ import seaborn as sns
 from torch import Tensor
 from torchmetrics import Metric
 
-
-def to_numpy(x):
-    return x.numpy(force=True) if isinstance(x, Tensor) else x
+from tqdne.representations import Representation
+from tqdne.utils import to_numpy
 
 
 class AbstractMetric(Metric, ABC):
@@ -23,8 +22,20 @@ class AbstractMetric(Metric, ABC):
     def name(self):
         pass
 
-    @abstractmethod
     def update(self, pred, target):
+        """Update the metric with the predicted and target signals.
+
+        Args:
+            pred (dict): The predicted signals.
+            target (dict): The target signals.
+
+        """
+        pred = {k: to_numpy(v) for k, v in pred.items()}
+        target = {k: to_numpy(v) for k, v in target.items()}
+        self._update(pred, target)
+
+    @abstractmethod
+    def _update(self, pred, target):
         pass
 
     def compute(self):
@@ -47,8 +58,8 @@ class SamplePlot(AbstractMetric):
     def name(self):
         return f"Sample Plot - Channel {self.channel}"
 
-    def update(self, pred, target):
-        self.reconstructed = to_numpy(pred["high_res"][0, self.channel])
+    def _update(self, pred, target):
+        self.reconstructed = pred["high_res"][0, self.channel]
 
     def compute(self):
         return None
@@ -80,10 +91,10 @@ class UpsamplingSamplePlot(AbstractMetric):
     def name(self):
         return f"Upsampling Sample Plot - Channel {self.channel}"
 
-    def update(self, pred, target):
-        self.low_res = to_numpy(target["low_res"][0, self.channel])
-        self.high_res = to_numpy(target["high_res"][0, self.channel])
-        self.reconstructed = to_numpy(pred["high_res"][0, self.channel])
+    def _update(self, pred, target):
+        self.low_res = target["low_res"][0, self.channel]
+        self.high_res = target["high_res"][0, self.channel]
+        self.reconstructed = pred["high_res"][0, self.channel]
 
     def compute(self):
         return None
@@ -115,9 +126,9 @@ class MeanSquaredError(AbstractMetric):
     def name(self):
         return f"Mean Squared Error - Channel {self.channel}"
 
-    def update(self, pred, target):
-        self.pred.append(to_numpy(pred["high_res"][:, self.channel]))
-        self.target.append(to_numpy(target["high_res"][:, self.channel]))
+    def _update(self, pred, target):
+        self.pred.append(pred["high_res"][:, self.channel])
+        self.target.append(target["high_res"][:, self.channel])
 
     def compute(self):
         pred = np.concatenate(self.pred)
@@ -143,9 +154,9 @@ class PowerSpectralDensity(AbstractMetric):
     def name(self):
         return f"Power Spectral Density - Channel {self.channel}"
 
-    def update(self, pred, target):
-        pred = to_numpy(pred["high_res"][:, self.channel])
-        target = to_numpy(target["high_res"][:, self.channel])
+    def _update(self, pred, target):
+        pred = pred["high_res"][:, self.channel]
+        target = target["high_res"][:, self.channel]
         pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
         target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
         self.pred_psd.append(pred_psd)
@@ -231,10 +242,10 @@ class BinMetric(AbstractMetric):
     def name(self):
         return f"Bin {self.metric.name}"
 
-    def update(self, pred, target):
+    def _update(self, pred, target):
         # extract magnitude and distance (this is specific to the dataset)
-        mags = to_numpy(target["cond"][:, 3])
-        dists = to_numpy(target["cond"][:, 0])
+        mags = target["cond"][:, 3]
+        dists = target["cond"][:, 0]
 
         # update the corresponding metric
         for mag, dist in zip(mags, dists):
@@ -294,3 +305,35 @@ class BinMetric(AbstractMetric):
         for row in self.metrics:
             for metric in row:
                 metric.reset()
+
+
+class RepresentationInversion(AbstractMetric):
+    """Wrapper to invert the representation and compute a metric on the resulting signal."""
+
+    def __init__(self, metric: AbstractMetric, representation: Representation):
+        super().__init__()
+        self.metric = metric
+        self.representation = representation
+
+    def _update(self, pred, target):
+        pred["high_res"] = self.representation.invert_representation(pred["high_res"])
+        if "low_res" in pred:
+            pred["low_res"] = self.representation.invert_representation(pred["low_res"])
+
+        target["high_res"] = self.representation.invert_representation(
+            target["high_res"]
+        )
+        if "low_res" in target:
+            target["low_res"] = self.representation.invert_representation(
+                target["low_res"]
+            )
+
+        self.metric.update(pred, target)
+
+    @property
+    def name(self):
+        return self.metric.name
+
+    def __getattr__(self, attr):
+        """Forward all other attributes to the wrapped metric."""
+        return getattr(self.metric, attr)
