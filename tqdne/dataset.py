@@ -231,12 +231,11 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         self.representation = representation
 
         self.file = h5py.File(h5_path, "r")
-        self.features = self.file["features"]
+        self.features = self.file["features"][:]
         self.waveforms = self.file["waveform"][:]
-        #self.envelope = self.representation # TODO: maybe compute here the mean and std of the envelope. NO, it doesn't load the entire DS 
-        self.time = self.file["time"][:]
-        self.features_means = self.file["feature_means"][:] # TO ASK: why do we need this? one should scale the features? # doesn't matter since embedding are sin/cos so periodic
-        self.features_stds = self.file["feature_stds"][:] # TO ASK: why do we need this? one should scale the features?
+        #self.time = self.file["time"][:]
+        self.features_means = self.file["feature_means"][:] #  Not really needed. Scaling is meaningless since embedding are sin/cos so periodic
+        self.features_stds = self.file["feature_stds"][:] 
 
         self.n = len(self.features)
         assert self.n == len(self.waveforms)
@@ -253,7 +252,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         signal = self.waveforms[index]
         features = self.features[index]
-        # features = (features - self.features_means) / self.features_stds
+        features = (features - self.features_means) / (self.features_stds + 1e-6)
 
         if self.cut:
             signal = signal[:, : self.cut]

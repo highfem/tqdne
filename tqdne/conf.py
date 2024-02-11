@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Tuple, Type
@@ -55,7 +56,7 @@ PATH_ROOT = Path(__file__).parents[1]
 DATASETDIR = LazyEnv(
     "DATASET_DIR",
     #PATH_ROOT / Path("datasets"),
-    "/store/sdsc/sd28",
+    "/store/sdsc/sd28/data",
     return_type=Path,
 ).eval()
 
@@ -80,6 +81,9 @@ class Config:
     data_upsample_train: str = "data_upsample_train.h5"
     data_upsample_test: str = "data_upsample_test.h5"
 
+    data_train: str = "data_train.h5"
+    data_test: str = "data_test.h5"
+
 
     # Sampling frequency
     fs: int = 100
@@ -99,3 +103,5 @@ class Config:
         "vs30"
     )
 
+    # Train Dataset statistics
+    transformed_env_statistics = pickle.load(datapath / Path("GM0-dataset-split/transformed_env_statistics.pkl"))

@@ -59,7 +59,7 @@ class SamplePlot(AbstractMetric):
         return f"Sample Plot - Channel {self.channel}"
 
     def _update(self, pred, target):
-        self.generated = pred["high_res"][0, self.channel] 
+        self.generated = pred["generated"][0, self.channel] 
 
     def compute(self):
         return None
@@ -321,16 +321,8 @@ class RepresentationInversion(AbstractMetric):
 
     def _update(self, pred, target):
         pred["high_res"] = self.representation.invert_representation(pred["high_res"])
-        if "low_res" in pred:
-            pred["low_res"] = self.representation.invert_representation(pred["low_res"])
 
-        target["high_res"] = self.representation.invert_representation(
-            target["high_res"]
-        )
-        if "low_res" in target:
-            target["low_res"] = self.representation.invert_representation(
-                target["low_res"]
-            )
+        target["high_res"] = self.representation.invert_representation(target["high_res"])
 
         self.metric.update(pred, target)
 

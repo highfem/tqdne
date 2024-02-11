@@ -1,5 +1,7 @@
 import os
 
+from tqdne.representations import SignalWithEnvelope
+
 # select GPU 0
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -16,6 +18,7 @@ from tqdne.metric import (
     BinMetric,
     MeanSquaredError,
     PowerSpectralDensity,
+    RepresentationInversion,
     SamplePlot,
 )
 from tqdne.training import get_pl_trainer
@@ -33,8 +36,8 @@ if __name__ == "__main__":
     name = "COND-1D-UNET-DDPM-envelope"
     config = Config()
 
-    path_train = Path("datasets") / config.data_upsample_train
-    path_test = Path("datasets") / config.data_upsample_test
+    path_train = config.datapath / config.data_train
+    path_test = config.datapath / config.data_test
     train_dataset = EnvelopeDataset(path_train, cut=t) # to check
     test_dataset = EnvelopeDataset(path_test, cut=t) # to check
 
@@ -45,18 +48,24 @@ if __name__ == "__main__":
 
 
     # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
-    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)] 
+    #plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)] 
     #mse = [MeanSquaredError(channel=c) for c in range(channels)] # doesn't make sense here
+    #psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+    #bin_metrics = [BinMetric(metric) for metric in mse + psd] # to ask: why bin psd? it's a scalar (Wassertein-2) between the test-set mean PSD and generated mean PSD (batch)
+    #metrics = plots + mse + psd + bin_metrics
+
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    plots = [RepresentationInversion(metric, SignalWithEnvelope) for metric in plots]
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    bin_metrics = [BinMetric(metric) for metric in mse + psd] # to ask: why bin psd? it's a scalar (Wassertein-2) between the test-set mean PSD and generated mean PSD (batch)
-    metrics = plots + mse + psd + bin_metrics
+    bin_metrics = [BinMetric(metric) for metric in psd]
+    metrics = plots + psd + bin_metrics
 
     logging.info("Set parameters...")
 
     # Unet parameters # BLOCKS ALREADY FIXED
     unet_params = {
         "sample_size": t,
-        "in_channels": 2 * channels, # should be ok
+        "in_channels": 2 * channels, 
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
