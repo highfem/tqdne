@@ -53,6 +53,7 @@ class SamplePlot(AbstractMetric):
         self.fs = fs
         self.channel = channel
         self.add_state("reconstructed", default=[], dist_reduce_fx=None)
+        self.add_state("target", default=[], dist_reduce_fx=None)
 
     @property
     def name(self):

@@ -136,10 +136,19 @@ class WaveformDataset(torch.utils.data.Dataset):
             self.features = file["features"][:]
             self.features_means = file["feature_means"][:]
             self.features_stds = file["feature_stds"][:]
-        if reduced: 
+            
+        if reduced: # reduce the waveform
+            # Pick Distance and Magnitude Features Only
+            self.features = self.features[:, [0, 3]]
+            self.features_means = self.features_means[[0, 3]]
+            self.features_stds = self.features_stds[[0, 3]]
+            filter = np.any(np.isinf(self.features), axis=1)
+            self.waveform = self.waveform[~filter]
+            self.features = self.features[~filter]
             skip = self.waveform.shape[-1] // reduced
             self.waveform = self.waveform[:, 0:1, 0: skip * reduced: skip]
             assert self.waveform.shape[-1] == reduced
+            
         self.cut = cut
 
     def __len__(self):
@@ -151,7 +160,7 @@ class WaveformDataset(torch.utils.data.Dataset):
             waveform = waveform[:, : self.cut]
 
         features = self.features[index]
-        features = (features - self.features_means) / self.features_stds
+        features = (features - self.features_means) / (self.features_stds + 1e-5)
 
         waveform = self.representation.get_representation(waveform)
         return {

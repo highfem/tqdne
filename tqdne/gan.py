@@ -13,7 +13,7 @@ class WGAN(L.LightningModule):
         optimizer_params,
         generator_params,
         discriminator_params,
-        conditional=False,
+        conditional=True,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -49,7 +49,9 @@ class WGAN(L.LightningModule):
     def generator_step(self, data, cond=None):
         self.toggle_optimizer(self.g_opt)
         batch_size = data.size()[0]
+        # Generate a sample
         generated_data = self.sample_generator(batch_size, cond)
+        # Evaluate the sample
         d_generated = self.D(generated_data, cond)
         g_loss = - d_generated.mean()
         self.g_opt.zero_grad()
@@ -89,23 +91,25 @@ class WGAN(L.LightningModule):
     def discriminator_step(self, data, cond):
         batch_size = data.size()[0]
         
+        # Generate a sample
         generated_data = self.sample_generator(batch_size, cond)
         data = Variable(data).to(self.device)
+        # Evaluate the sample and the real data
         d_real = self.D(data, cond)
         d_generated = self.D(generated_data, cond)
 
         # Get gradient penalty
         gradient_penalty = self._gradient_penalty(data, generated_data, cond)
-        self.log("GP", gradient_penalty)
+        self.log("GP", gradient_penalty, prog_bar=True)
 
         self.toggle_optimizer(self.d_opt)
         self.d_opt.zero_grad()
         d_critic =  d_generated.mean() - d_real.mean()
-        self.log("negative-critic", -d_critic)
+        self.log("negative-critic", -d_critic, prog_bar=True)
         d_loss = d_critic + gradient_penalty
         self.manual_backward(d_loss)
         self.d_opt.step()
-        self.log("d_loss", d_loss)
+        self.log("d_loss", d_loss, prog_bar=True)
         self.untoggle_optimizer(self.d_opt)
 
     def training_step(self, batch, batch_idx):
@@ -114,7 +118,6 @@ class WGAN(L.LightningModule):
             data, cond = batch["high_res"], batch["cond"]
         else:
             data, cond = batch["high_res"], None
-
         self.discriminator_step(data, cond)
         if (batch_idx + 1) % self.critic_iterations == 0:
             self.generator_step(data, cond)
@@ -124,7 +127,6 @@ class WGAN(L.LightningModule):
             data, cond = batch["high_res"], batch["cond"]
         else:
             data, cond = batch["high_res"], None
-
         batch_size = data.size()[0]
         generated_data = self.sample_generator(batch_size, cond)
         data = Variable(data).to(self.device)

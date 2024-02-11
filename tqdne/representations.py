@@ -29,20 +29,21 @@ class Representation(ABC):
 class LogMaxEnvelope(Representation):
 
     def _get_representation(self, signal):
-        norm = np.max(np.abs(signal), axis=-1, keepdims=True)
+        norm = np.max(np.abs(signal), axis=-1, keepdims=True) + 1e-5
         norm = np.repeat(norm, signal.shape[-1], axis=-1)
         scaled_signal = (signal / norm)
-        envelope = np.log10(norm + 1e-7)
+        envelope = np.log10(norm)
         # self.min_norm, self.max_norm = np.min(envelope, axis=0, keepdims=True), np.max(envelope, axis=0, keepdims=True)
         # envelope = 2.0 * (envelope - self.min_norm) / (self.max_norm - self.min_norm) - 1.0
         return np.concatenate([envelope, scaled_signal], axis=-2)
     
     def _invert_representation(self, representation):
         # envelope = (self.max_norm - self.max_norm) * (representation[:, 0, :] + 1.0) / 2.0 + self.min_norm
-        num_channels = representation.shape[0] // 2
-        envelope = representation[:num_channels]
-        norm = 10 ** envelope
-        return norm * representation[num_channels:]
+        num_channels = representation.shape[-2] // 2
+        norm = 10 ** np.take(representation, np.arange(0, num_channels), axis=-2)
+        scaled_signal = np.take(representation, np.arange(num_channels, 2 * num_channels), axis=-2)
+        ans = norm * scaled_signal
+        return ans
 
 def _centered_window(x, window_len):
     assert window_len % 2, "Centered Window has to have odd length"
@@ -72,9 +73,9 @@ class CenteredMaxEnvelope(Representation):
         return np.concatenate([envelope, scaled_signal], axis=0)
 
     def _invert_representation(self, representation):
-        num_channels = representation.shape[0] // 2
-        norm = 10 ** representation[:num_channels]
-        scaled_signal = representation[num_channels:]
+        num_channels = representation.shape[-2] // 2
+        norm = 10 ** np.take(representation, np.arange(0, num_channels), axis=-2)
+        scaled_signal = np.take(representation, np.arange(num_channels, 2 * num_channels), axis=-2)
         return norm * scaled_signal
     
 class Envelope(Representation):

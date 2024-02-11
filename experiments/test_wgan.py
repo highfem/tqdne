@@ -44,7 +44,6 @@ def main():
     plots = [
         RepresentationInversion(metric, envelope_representation) for metric in plots
     ]
-    logging.info("Set metrics...", plots)
     metrics = plots
 
     optimizer_parameters = {
