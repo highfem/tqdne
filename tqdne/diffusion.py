@@ -87,7 +87,7 @@ class LightningDDMP(pl.LightningModule):
         low_res = batch["low_res"] if self.low_res_input else None  #TODO: fix it to be more general
         cond = batch["cond"] if self.cond_input else None
         sample = self.sample(shape, low_res, cond)
-        return {"high_res": sample}
+        return {"generated": sample}
 
     def step(self, batch, train):
         high_res_batch = batch["representation"]
@@ -102,10 +102,10 @@ class LightningDDMP(pl.LightningModule):
             (high_res_batch.shape[0],),
             device=high_res_batch.device,
         ).long()
-        noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
+        noisy_high_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch) # TOASK: prediction type? Is it already handled by the net? I guess it's because the NN will learn it
+        pred = self.forward(noisy_high_res, timesteps, low_res_batch , cond_batch) # TOASK: prediction type? Is it already handled by the net? I guess it's because the NN will learn it
         target = noise if self.prediction_type == "epsilon" else high_res_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)

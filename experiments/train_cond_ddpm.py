@@ -44,7 +44,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
-    channels = train_dataset[0]["representation"].shape[0]
+    channels = train_dataset[0]["representation"].shape[0] # aclready acounts for both envelope and signal (i.e. 6 channels in total)
 
 
     # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # Unet parameters # BLOCKS ALREADY FIXED
     unet_params = {
         "sample_size": t,
-        "in_channels": 2 * channels, 
+        "in_channels": channels, 
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
