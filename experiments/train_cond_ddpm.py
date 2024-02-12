@@ -129,7 +129,7 @@ if __name__ == "__main__":
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=True,
+        low_res_input=False,
         cond_input=True,
     )
 
