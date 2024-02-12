@@ -26,7 +26,7 @@ class Representation(ABC):
     def _invert_representation(self, representation):
         pass
 
-class LogMaxEnvelope(Representation):
+class GlobalMaxEnvelope(Representation):
 
     def _get_representation(self, signal):
         norm = np.max(np.abs(signal), axis=-1, keepdims=True) + 1e-5
@@ -64,13 +64,15 @@ def centered_max(x, window_len):
     return out
 
 class CenteredMaxEnvelope(Representation):
-    
+
     def _get_representation(self, signal):
-        envelope = centered_max(signal, 7)
+        signal = signal.reshape(-1)
+        envelope = centered_max(signal, 15)
         envelope = np.maximum(envelope, 1e-10)
         scaled_signal = signal / envelope
-        envelope = np.log10(envelope)
-        return np.concatenate([envelope, scaled_signal], axis=0)
+        envelope = np.log10(envelope).reshape(1, -1)
+        signal = scaled_signal.reshape(1, -1)
+        return np.concatenate([envelope, signal], axis=0)
 
     def _invert_representation(self, representation):
         num_channels = representation.shape[-2] // 2

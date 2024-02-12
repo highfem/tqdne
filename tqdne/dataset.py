@@ -127,7 +127,7 @@ class RandomDataset(torch.utils.data.Dataset):
 
 
 class WaveformDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None, reduced=None):
+    def __init__(self, h5_path, representation: Representation=None, cut=None, reduced=None):
         super().__init__()
         self.h5_path = h5_path
         self.representation = representation
@@ -162,7 +162,8 @@ class WaveformDataset(torch.utils.data.Dataset):
         features = self.features[index]
         features = (features - self.features_means) / (self.features_stds + 1e-5)
 
-        waveform = self.representation.get_representation(waveform)
+        if self.representation:
+            waveform = self.representation.get_representation(waveform)
         return {
             "high_res": torch.tensor(waveform, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),

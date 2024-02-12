@@ -5,7 +5,7 @@ from torch.autograd import Variable
 from tqdne.utils import positional_encoding
 
 class WGenerator(nn.Module):
-    def __init__(self, wave_size, latent_dim, encoding_L=4, num_cond_vars=1, out_channels=1, dim=16):
+    def __init__(self, wave_size, latent_dim, encoding_L=4, num_cond_vars=2, out_channels=1, dim=32):
         super(WGenerator, self).__init__()
 
         self.dim = dim
@@ -15,11 +15,10 @@ class WGenerator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        latent_dim += 2 * encoding_L * num_cond_vars
-        # self.feature_sizes = (self.wave_size[0] / 16, self.wave_size[1] / 16)
+        input_dim = latent_dim + 2 * encoding_L * num_cond_vars # Include the size of the positional encoding
         self.feature_size = int(wave_size / 16)
         self.latent_to_features = nn.Sequential(
-            nn.Linear(latent_dim, 8 * dim * self.feature_size), 
+            nn.Linear(input_dim, 8 * dim * self.feature_size), 
             nn.ReLU()
         )
 
@@ -37,21 +36,18 @@ class WGenerator(nn.Module):
         )
 
     def forward(self, input_data, cond=None):
-        # Map latent into appropriate size for transposed convolutions
+        # Append condition to input
         x = input_data
-        # print("Input Data:", "max:", torch.max(x), "min:", torch.min(x), "nan:", torch.sum(torch.isnan(x)))
-        # print("Input Cond:", "max:", torch.max(cond), "min:", torch.min(cond), "nan:", torch.sum(torch.isnan(cond)))
         if cond is not None:
             cond = self.label_embeddings(cond)
             x = torch.cat([x, cond], dim=1)
-        # print("Concatenated input:", torch.sum(torch.isnan(x)))
+
+        # Embed latent
         x = self.latent_to_features(x)
-        # print("Features:", torch.sum(torch.isnan(x)))
         # Reshape
         x = x.view(-1, 8 * self.dim, self.feature_size)
-        # Return generated image
+        # Return generated signal
         x = self.features_to_signal(x)
-        # print("Generated Signal:", torch.sum(torch.isnan(x)))
         return x
 
     def sample_latent(self, num_samples):
@@ -59,7 +55,7 @@ class WGenerator(nn.Module):
 
 
 class WDiscriminator(nn.Module):
-    def __init__(self, wave_size, in_channels, encoding_L=4, num_cond_vars=1, dim=16):
+    def __init__(self, wave_size, in_channels=1, encoding_L=4, num_cond_vars=2, dim=32):
         """
         wave_size : int E.g. 1024
         """
@@ -70,7 +66,7 @@ class WDiscriminator(nn.Module):
         self.label_embeddings = lambda x: torch.flatten(
             positional_encoding(x, encoding_L), start_dim=1
         )
-        self.in_channels = in_channels # + 2 * encoding_L * num_cond_vars
+        self.in_channels = in_channels
 
         self.image_to_features = nn.Sequential(
             nn.Conv1d(self.in_channels, dim, 4, 2, 1),
@@ -88,16 +84,20 @@ class WDiscriminator(nn.Module):
         output_size = 8 * dim * int(wave_size / 16) + 2 * encoding_L * num_cond_vars
         self.features_to_prob = nn.Sequential(
             nn.Linear(output_size, 1),
-            # nn.Sigmoid()
         )
 
     def forward(self, input_data, cond=None):
         batch_size = input_data.size()[0]
+        # Reshaping
         x = input_data.view(batch_size, self.in_channels, -1)
         x = self.image_to_features(x)
+
+        # Flatten and concatenate with condition
         x = x.view(batch_size, -1)
         if cond is not None:
             cond = self.label_embeddings(cond)
             x = torch.cat([x, cond], dim=1)        
         x = x.view(batch_size, -1)
+
+        # Return the scalar output
         return self.features_to_prob(x)

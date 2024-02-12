@@ -8,25 +8,26 @@ from tqdne.dataset import WaveformDataset
 from tqdne.gan import WGAN
 from tqdne.utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
-from tqdne.metric import SamplePlot, RepresentationInversion
-from tqdne.representations import LogMaxEnvelope
+from tqdne.metric import PowerSpectralDensity, SamplePlot, RepresentationInversion
+from tqdne.representations import CenteredMaxEnvelope, GlobalMaxEnvelope
 from tqdne.conf import Config
 
 def main():
     # Setting up Args
+    run_name = "WGAN"
     config = Config()
     resume = False
     conditional = True
-    max_epochs = 800
+    max_epochs = 100
     batch_size = 64
     wfs_expected_size = 1024
     latent_dim = 128
-    encoding_L = 4
+    encoding_L = 8
 
     logging.info("Loading data...")
     train_path = config.datasetdir / Path(config.data_upsample_train)
     test_path = config.datasetdir / Path(config.data_upsample_test)
-    envelope_representation = LogMaxEnvelope(config)
+    envelope_representation = GlobalMaxEnvelope(config)
     train_dataset = WaveformDataset(train_path, envelope_representation, reduced=wfs_expected_size)
     test_dataset = WaveformDataset(test_path, envelope_representation, reduced=wfs_expected_size)
 
@@ -40,7 +41,10 @@ def main():
     condv_names = ["dist", "mag"]
 
     logging.info("Set parameters...")
-    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels // 2)]
+    plots = [
+        SamplePlot(fs=config.fs, channel=0),
+        PowerSpectralDensity(config.fs, channel=0),
+    ]
     plots = [
         RepresentationInversion(metric, envelope_representation) for metric in plots
     ]
@@ -69,7 +73,7 @@ def main():
     }
     model_parameters = {
         "reg_lambda": 10.0,
-        "n_critics": 4,
+        "n_critics": 3,
         "optimizer_params": optimizer_parameters,
         "generator_params": generator_parameters,
         "discriminator_params": discriminator_parameters,
@@ -85,7 +89,7 @@ def main():
     print("Loading Model")
     model = WGAN(**model_parameters)
     trainer = get_pl_trainer(
-        "WGAN",
+        run_name,
         val_loader=test_loader,
         metrics=metrics,
         eval_every=10,

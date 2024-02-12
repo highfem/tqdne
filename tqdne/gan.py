@@ -25,7 +25,6 @@ class WGAN(L.LightningModule):
         self.critic_iterations = n_critics
         self.print_every = 5
         # networks
-        #TODO: Change num_variables to 2, out_channels to 2
         self.G = WGenerator(**generator_params)
         self.D = WDiscriminator(**discriminator_params)
 
@@ -37,7 +36,6 @@ class WGAN(L.LightningModule):
     def sample(self, num_samples, cond=None):
         generated_data = self.sample_generator(num_samples, cond)
         # Remove color channel
-        # TODO: Check this to fix the channel issue
         return generated_data.data.detach().cpu().numpy()
     
     def evaluate(self, batch):
@@ -77,7 +75,7 @@ class WGAN(L.LightningModule):
                                grad_outputs=torch.ones(prob_interpolated.size()).to(self.device),
                                create_graph=True, retain_graph=True)[0]
 
-        # Gradients have shape (batch_size, num_channels, img_width, img_height),
+        # Gradients have shape (batch_size, num_channels, len),
         # so flatten to easily take norm per example in batch
         gradients = gradients.view(batch_size, -1)
 
