@@ -22,7 +22,7 @@ from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.utils import BaseOutput
 from diffusers.models.embeddings import GaussianFourierProjection, TimestepEmbedding, Timesteps
 from diffusers.models.modeling_utils import ModelMixin
-from diffusers.models.unet_1d_blocks import get_down_block, get_mid_block, get_out_block, get_up_block
+from diffusers.models.unets.unet_1d_blocks import get_down_block, get_mid_block, get_out_block, get_up_block
 
 
 @dataclass
@@ -58,7 +58,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             Whether to flip sin to cos for Fourier time embedding.
         cond_dim (`int`, *optional*, defaults to 0): Dimension of conditional input. If 0, no conditional input is used.
         cond_embedding_type (`str`, *optional*, defaults to `"fourier"`): 
-            Type of cond embedding to use. One of `"fourier"` or `"linear"`.
+            Type of cond embedding to use. One of `"fourier"` or `"none"`.
         cond_concat (`bool`, *optional*, defaults to `False`): 
             Whether to concatenate cond embedding to time embedding. If `False`, they are added.
         down_block_types (`Tuple[str]`, *optional*, defaults to `("DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D")`):
@@ -80,13 +80,11 @@ class UNet1DModel(ModelMixin, ConfigMixin):
     def __init__(
         self,
         sample_size: int = 65536,
-        sample_rate: Optional[int] = None,
         in_channels: int = 2,
         out_channels: int = 2,
         extra_in_channels: int = 0,
         time_embedding_type: str = "fourier",
         flip_sin_to_cos: bool = True,
-        use_timestep_embedding: bool = False,
         freq_shift: float = 0.0,
         cond_dim: int = 0,
         cond_embedding_type: str = "fourier",
@@ -103,45 +101,35 @@ class UNet1DModel(ModelMixin, ConfigMixin):
     ):
         super().__init__()
         self.sample_size = sample_size
+        time_embed_dim = block_out_channels[0] * 4
 
         # time
         if time_embedding_type == "fourier":
-            self.time_proj = GaussianFourierProjection(
-                embedding_size=block_out_channels[0] // 2, set_W_to_weight=False, log=False, flip_sin_to_cos=flip_sin_to_cos
-            )
-            timestep_input_dim = block_out_channels[0]
+            self.time_proj = GaussianFourierProjection(embedding_size=block_out_channels[0], scale=16)
+            timestep_input_dim = 2 * block_out_channels[0]
         elif time_embedding_type == "positional":
-            self.time_proj = Timesteps(
-                block_out_channels[0], flip_sin_to_cos=flip_sin_to_cos, downscale_freq_shift=freq_shift
-            )
+            self.time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
             timestep_input_dim = block_out_channels[0]
 
-        if use_timestep_embedding:
-            time_embed_dim = block_out_channels[0] * 4
-            self.time_mlp = TimestepEmbedding(
-                in_channels=timestep_input_dim,
-                time_embed_dim=time_embed_dim,
-                act_fn=act_fn,
-                out_dim=time_embed_dim,
-            )
-        else:
-            time_embed_dim = timestep_input_dim
+        self.time_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim)
 
         # cond
         if cond_dim > 0:
             if cond_embedding_type == "fourier":
                 self.cond_proj = GaussianFourierProjection(
-                    embedding_size=block_out_channels[0] // 2, set_W_to_weight=False, log=False, flip_sin_to_cos=flip_sin_to_cos
+                    embedding_size=block_out_channels[0], set_W_to_weight=False, log=False, flip_sin_to_cos=flip_sin_to_cos
                 )
-                cond_embed_dim = block_out_channels[0] * cond_dim
-            elif cond_embedding_type == "linear":
-                self.cond_proj = nn.Linear(cond_dim, block_out_channels[0])
-                cond_embed_dim = block_out_channels[0]
+                cond_input_dim = 2 * block_out_channels[0] * cond_dim
+            elif cond_embedding_type == "none":
+                self.cond_proj = nn.Identity()
+                cond_input_dim = cond_dim
             else:
                 raise ValueError(f"Unknown cond embedding type {cond_embedding_type}")
             
+            self.cond_embedding = TimestepEmbedding(cond_input_dim, time_embed_dim)
+            
             if cond_concat:
-                time_embed_dim += cond_embed_dim
+                time_embed_dim *= 2
 
         self.down_blocks = nn.ModuleList([])
         self.mid_block = None
@@ -251,8 +239,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             timesteps = timesteps[None].to(sample.device).repeat(sample.shape[0])
 
         timestep_embed = self.time_proj(timesteps).to(sample.dtype)
-        if self.config.use_timestep_embedding:
-            timestep_embed = self.time_mlp(timestep_embed)
+        timestep_embed = self.time_embedding(timestep_embed)
 
         # cond
         if hasattr(self, "cond_proj"):
@@ -260,6 +247,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
                 raise ValueError("Model requires cond input")
             cond_embed = self.cond_proj(cond.reshape(-1)).reshape(cond.shape[0], -1)
             cond_embed = cond_embed.to(sample.dtype)
+            cond_embed = self.cond_embedding(cond_embed)
             if self.config.cond_concat:
                 timestep_embed = torch.cat((timestep_embed, cond_embed), dim=1)
             else:
