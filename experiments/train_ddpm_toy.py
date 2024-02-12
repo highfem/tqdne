@@ -2,6 +2,8 @@ import os
 # select GPU 0
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
+from tqdne.representations import Upsample
+
 from tqdne.dataset import RandomDataset
 from torch.utils.data import DataLoader
 from diffusers import UNet1DModel
@@ -9,6 +11,7 @@ from diffusers import DDPMScheduler
 from tqdne.conf import Config
 from tqdne.diffusion import LightningDDMP
 from tqdne.metric import PowerSpectralDensity, SamplePlot, MeanSquaredError, UpsamplingSamplePlot
+
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 import logging
@@ -17,7 +20,7 @@ import logging
 if __name__ == '__main__':
 
     logging.info("Loading data...")
-    resume = True
+    resume = False
     t = (5501 // 32) * 32
     batch_size = 64
     max_epochs = 1000
@@ -26,11 +29,11 @@ if __name__ == '__main__':
     name = '1D-UNET-TOY-DDPM'
     config = Config()
 
-    train_dataset = RandomDataset(1024*8, t=t)
-    test_dataset = RandomDataset(512, t=t)
+    train_dataset = RandomDataset(representation=Upsample(config), n=1024*8, t=t)
+    test_dataset = RandomDataset(representation=Upsample(config), n=512, t=t)
 
 
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["representation"]["high_res"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
@@ -48,13 +51,18 @@ if __name__ == '__main__':
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
-            "DownBlock1D",
-            "DownBlock1D",
-            "DownBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
+            "DownResnetBlock1D",
             "AttnDownBlock1D",
         ),
-        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
-        "mid_block_type": "UNetMidBlock1D",
+        "up_block_types": (
+            "AttnUpBlock1D", 
+            "UpResnetBlock1D", 
+            "UpResnetBlock1D", 
+            "UpResnetBlock1D",
+        ),
+        "mid_block_type": "MidResTemporalBlock1D",
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,
         "act_fn": "relu",

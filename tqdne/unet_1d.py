@@ -203,7 +203,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             embed_dim=block_out_channels[0],
             out_channels=out_channels,
             act_fn=act_fn,
-            fc_dim=block_out_channels[-1] // 4,
+            fc_dim=block_out_channels[-1] // 4, ## TODO: it is not used with OutConv1DBlock
         )
 
     def forward(
@@ -261,13 +261,16 @@ class UNet1DModel(ModelMixin, ConfigMixin):
 
         # 3. mid
         if self.mid_block:
-            sample = self.mid_block(sample, timestep_embed)
+            sample = self.mid_block(sample, timestep_embed) #sample: [10, 256, 342], timestep_embed: [10, 192]
+        
+        # now sample is [10, 256, 342]
+            
 
         # 4. up
         for i, upsample_block in enumerate(self.up_blocks):
             res_samples = down_block_res_samples[-1:]
             down_block_res_samples = down_block_res_samples[:-1]
-            sample = upsample_block(sample, res_hidden_states_tuple=res_samples, temb=timestep_embed)
+            sample = upsample_block(sample, res_hidden_states_tuple=res_samples, temb=timestep_embed) # It works only on the first iteration
 
         # 5. post-process
         if self.out_block:

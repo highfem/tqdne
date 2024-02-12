@@ -36,8 +36,10 @@ if __name__ == "__main__":
     name = "COND-1D-UNET-DDPM-envelope"
     config = Config()
 
-    path_train = config.datasetdir / config.data_train
-    path_test = config.datasetdir / config.data_test
+    #path_train = config.datasetdir / config.data_train
+    #path_test = config.datasetdir / config.data_test
+    path_train = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_train.h5")
+    path_test = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_test.h5")
     train_dataset = EnvelopeDataset(path_train, SignalWithEnvelope(config), cut=t) # to check
     test_dataset = EnvelopeDataset(path_test, SignalWithEnvelope(config), cut=t) # to check
 
@@ -45,6 +47,10 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     channels = train_dataset[0]["representation"].shape[0] # aclready acounts for both envelope and signal (i.e. 6 channels in total)
+
+    # train_dataset[0]['representation'].shape --> torch.Size([6, 5472])
+    # rain_dataset[0]['cond'].shape --> torch.Size([5])
+    
 
 
     # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
@@ -74,13 +80,18 @@ if __name__ == "__main__":
             "DownResnetBlock1D",
             "AttnDownBlock1D",
         ),
-        "up_block_types": ("AttnUpBlock1D", "UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
+        "up_block_types": (
+            "AttnUpBlock1D", 
+            "UpResnetBlock1D", 
+            "UpResnetBlock1D", 
+            "UpResnetBlock1D",
+            ),
         "mid_block_type": "MidResTemporalBlock1D",
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,
         "act_fn": "relu",
-        "cond_dim": len(config.features_keys),
-        "cond_concat": True,
+        #"cond_dim": len(config.features_keys),
+        #"cond_concat": True,
     }
 
     scheduler_params = {
@@ -130,7 +141,7 @@ if __name__ == "__main__":
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
         low_res_input=False,
-        cond_input=True,
+        cond_input=False,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")

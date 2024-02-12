@@ -330,6 +330,11 @@ class RepresentationInversion(AbstractMetric):
     def name(self):
         return self.metric.name
 
-    def __getattr__(self, attr):
-        """Forward all other attributes to the wrapped metric."""
-        return getattr(self.metric, attr)
+    def compute(self):
+        return self.metric.compute()
+
+    def plot(self):
+        return self.metric.plot()
+
+    def reset(self):
+        self.metric.reset()

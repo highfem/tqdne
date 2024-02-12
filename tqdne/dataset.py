@@ -106,10 +106,11 @@ def build_dataset(config=Config()):
         
 
 class RandomDataset(torch.utils.data.Dataset):
-    def __init__(self, n=1024 * 8, t=5472):
+    def __init__(self, representation: Representation, n=1024 * 8, t=5472):
         super().__init__()
         self.n = n
         self.t = t
+        self.representation = representation
         self.lp = signal.butter(10, 1, "hp", fs=100, output="sos")
         self.bp = signal.butter(2, [0.25, 10], "bp", fs=100, output="sos")
 
@@ -122,8 +123,9 @@ class RandomDataset(torch.utils.data.Dataset):
         lowpass = signal.sosfilt(self.lp, x)  # + 0.1 * x
 
         return {
-            "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
-            "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
+           # "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
+           # "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
+           "representation": self.representation.get_representation([x.reshape(1, -1), lowpass.reshape(1, -1)])
         }
 
 
@@ -161,11 +163,12 @@ class WaveformDataset(torch.utils.data.Dataset):
 
 
 class UpsamplingDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, cut=None, in_memory=False, config=Config()):
+    def __init__(self, h5_path, representation: Representation, cut=None, in_memory=False, config=Config()):
         super().__init__()
         self.h5_path = h5_path
         self.in_memory = in_memory
         self.sigma_in = config.sigma_in
+        self.representation = representation
         if in_memory:
             with h5py.File(h5_path, "r") as file:
                 self.features = file["features"][:]
@@ -219,8 +222,9 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             low_res = filtered
 
         return {
-            "high_res": torch.tensor(high_res, dtype=torch.float32),
-            "low_res": torch.tensor(low_res, dtype=torch.float32),
+            "representation": self.representation.get_representation([high_res, low_res]),
+            #"high_res": torch.tensor(high_res, dtype=torch.float32),
+            #"low_res": torch.tensor(low_res, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
 
@@ -232,7 +236,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         self.file = h5py.File(h5_path, "r")
         self.features = self.file["features"][:]
-        self.waveforms = self.file["waveform"][:]
+        self.waveforms = self.file["waveform"]
         #self.time = self.file["time"][:]
         self.features_means = self.file["feature_means"][:] #  Not really needed. Scaling is meaningless since embedding are sin/cos so periodic
         self.features_stds = self.file["feature_stds"][:] 

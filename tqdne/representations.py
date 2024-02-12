@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from scipy.signal import hilbert
+import torch
 
 from tqdne.conf import Config
 from tqdne.utils import to_numpy
@@ -85,3 +86,14 @@ class SignalWithEnvelope(Representation):
         signal = scaled_signal * inverse_log_transform(trans_envelope, offset=self.log_offset)
 
         return signal  
+    
+
+class Upsample(Representation):
+    def __init__(self, config=Config()):
+        super().__init__(config)
+
+    def _get_representation(self, signal):
+        return {"high_res": torch.tensor(signal[0], dtype=torch.float32), "low_res": torch.tensor(signal[1], dtype=torch.float32)} #wrong
+        
+    def _invert_representation(self, representation):
+        return representation["high_res"], representation["low_res"] 
