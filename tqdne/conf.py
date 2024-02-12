@@ -56,7 +56,7 @@ PATH_ROOT = Path(__file__).parents[1]
 DATASETDIR = LazyEnv(
     "DATASET_DIR",
     #PATH_ROOT / Path("datasets"),
-    "/store/sdsc/sd28/data",
+    "/store/sdsc/sd28/data/GM0-dataset-split",
     return_type=Path,
 ).eval()
 
@@ -104,4 +104,6 @@ class Config:
     )
 
     # Train Dataset statistics
-    transformed_env_statistics = pickle.load(datapath / Path("GM0-dataset-split/transformed_env_statistics.pkl"))
+    with open(datasetdir / Path("trans_env_statistics.pkl"), 'rb') as pickle_file:
+        transformed_env_statistics = pickle.load(pickle_file)
+

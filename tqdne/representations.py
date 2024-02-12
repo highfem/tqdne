@@ -37,19 +37,24 @@ class SignalWithEnvelope(Representation):
         # Statistics of the transformed envelope (computer over a subset of the training dataset)
         env_stats_per_channel = [self.config.transformed_env_statistics[f'ch{i+1}'] for i in range(3)]
         self.trans_env_mean = np.array([env_stats_per_channel[i]['mean'] for i in range(3)]) # shape: (num_channels, signal_length)
-        self.trans_env_std = np.array([env_stats_per_channel[i]['std'] for i in range(3)]) # shape: (num_channels, signal_length)
+        self.trans_env_std = np.array([env_stats_per_channel[i]['std_dev'] for i in range(3)]) # shape: (num_channels, signal_length)
 
         # Transform fucntion used 
-        self.env_transform_function = self.config.transformed_env_statistics["trans_function"]
-        self.inverse_env_transform_function = self.config.transformed_env_statistics["inv_trans_function"]
-
-        
-    def _compute_envelope(self, signal):
-        return np.abs(hilbert(signal)) 
+        # self.env_transform_function = self.config.transformed_env_statistics["trans_function"]
+        # self.inverse_env_transform_function = self.config.transformed_env_statistics["inv_trans_function"]
+        self.log_offset = self.config.transformed_env_statistics["trans_log_function_offset"]
+ 
     
     def _get_representation(self, signal):
+
+        def compute_envelope(signal):
+            return np.abs(hilbert(signal))
+
+        def log_transform(x, offset=1e-5):
+            return np.log10(x + offset)
+    
         signal = to_numpy(signal)
-        envelope = self._compute_envelope(signal)
+        envelope = compute_envelope(signal)
 
         scaled_signal = signal / envelope
 
@@ -60,7 +65,7 @@ class SignalWithEnvelope(Representation):
         # ....
 
         # Standardize the transformed envelope to get mean=0 and std=1
-        scaled_envelope = (self.env_transform_function(envelope) - self.trans_env_mean) / self.trans_env_std # shape: (num_channels, signal_length) (?)
+        scaled_envelope = (log_transform(envelope, offset=self.log_offset) - self.trans_env_mean[:, : envelope.shape[-1]]) / self.trans_env_std[:, : envelope.shape[-1]] # shape: (num_channels, signal_length) (?)
 
         # QUESTIIONS: 
         # train/val split or also train/val/test split?
@@ -72,8 +77,11 @@ class SignalWithEnvelope(Representation):
         num_channels = representation.shape[0] // 2
         trans_scaled_envelope = representation[:num_channels]
         scaled_signal = representation[num_channels:]
+
+        def inverse_log_transform(x, offset=1e-5):
+            return 10 ** x - offset
         
-        trans_envelope = trans_scaled_envelope * self.trans_env_std + self.trans_env_mean
-        signal = scaled_signal * self.inverse_env_transform_function(trans_envelope)
+        trans_envelope = trans_scaled_envelope * self.trans_env_std[:, : trans_scaled_envelope.shape[-1]] + self.trans_env_mean[:, : trans_scaled_envelope.shape[-1]]
+        signal = scaled_signal * inverse_log_transform(trans_envelope, offset=self.log_offset)
 
         return signal  

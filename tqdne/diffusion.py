@@ -83,15 +83,15 @@ class LightningDDMP(pl.LightningModule):
 
     def evaluate(self, batch):
         """Evaluate diffusion model."""
-        shape = batch["high_res"].shape
-        low_res = batch["low_res"] if self.low_res_input else None
+        shape = batch["representation"].shape
+        low_res = batch["low_res"] if self.low_res_input else None  #TODO: fix it to be more general
         cond = batch["cond"] if self.cond_input else None
         sample = self.sample(shape, low_res, cond)
         return {"high_res": sample}
 
     def step(self, batch, train):
-        high_res_batch = batch["high_res"]
-        low_res_batch = batch["low_res"]
+        high_res_batch = batch["representation"]
+        low_res_batch = batch["low_res"] if self.low_res_input else None #TODO: fix it to be more general
         cond_batch = batch["cond"] if self.cond_input else None
 
         # add noise

@@ -101,9 +101,9 @@ def build_dataset(config=Config()):
                     waveforms[i] = waveform
                     featuress[i] = features
 
-        create_dataset(config.data_upsample_train, train_indices) #TODO should have been data_gm0_train or data_train
-        create_dataset(config.data_upsample_test, test_indices) #TODO should have been data_gm0_test or data_test
-
+        create_dataset(config.data_train, train_indices) 
+        create_dataset(config.data_test, test_indices) 
+        
 
 class RandomDataset(torch.utils.data.Dataset):
     def __init__(self, n=1024 * 8, t=5472):
@@ -242,8 +242,9 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         self.cut = cut
 
     def __del__(self):
-        if not self.in_memory:
-            self.file.close()
+        pass
+        #if not self.in_memory:
+        #    self.file.close()
 
     def __len__(self):
         return self.n
@@ -257,7 +258,9 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         if self.cut:
             signal = signal[:, : self.cut]
 
+        repr = self.representation.get_representation(signal)    
+
         return {
-            "representation": torch.tensor(self.representation.get_representation(signal), dtype=torch.float32),
+            "representation": torch.tensor(repr, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }

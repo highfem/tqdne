@@ -36,15 +36,15 @@ if __name__ == "__main__":
     name = "COND-1D-UNET-DDPM-envelope"
     config = Config()
 
-    path_train = config.datapath / config.data_train
-    path_test = config.datapath / config.data_test
-    train_dataset = EnvelopeDataset(path_train, cut=t) # to check
-    test_dataset = EnvelopeDataset(path_test, cut=t) # to check
+    path_train = config.datasetdir / config.data_train
+    path_test = config.datasetdir / config.data_test
+    train_dataset = EnvelopeDataset(path_train, SignalWithEnvelope(config), cut=t) # to check
+    test_dataset = EnvelopeDataset(path_test, SignalWithEnvelope(config), cut=t) # to check
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
-    channels = train_dataset[0]["signals"].shape[0]
+    channels = train_dataset[0]["representation"].shape[0]
 
 
     # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
