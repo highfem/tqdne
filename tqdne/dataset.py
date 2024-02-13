@@ -257,7 +257,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         signal = self.waveforms[index]
         features = self.features[index]
-        features = (features - self.features_means) / (self.features_stds + 1e-6)
+        # features = (features - self.features_means) / (self.features_stds + 1e-6) # cannot be scaled because BinMetric uses non-scaled features
 
         if self.cut:
             signal = signal[:, : self.cut]

@@ -36,10 +36,13 @@ if __name__ == "__main__":
     name = "COND-1D-UNET-DDPM-envelope"
     config = Config()
 
-    #path_train = config.datasetdir / config.data_train
-    #path_test = config.datasetdir / config.data_test
-    path_train = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_train.h5")
-    path_test = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_test.h5")
+    path_train = config.datasetdir / config.data_train
+    path_test = config.datasetdir / config.data_test
+    
+    # DEBUG
+    #path_train = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_train.h5")
+    #path_test = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_test.h5")
+
     train_dataset = EnvelopeDataset(path_train, SignalWithEnvelope(config), cut=t) # to check
     test_dataset = EnvelopeDataset(path_test, SignalWithEnvelope(config), cut=t) # to check
 
@@ -51,20 +54,13 @@ if __name__ == "__main__":
     # train_dataset[0]['representation'].shape --> torch.Size([6, 5472])
     # rain_dataset[0]['cond'].shape --> torch.Size([5])
     
-
-
-    # metrics #TODO: use also the invertrepresentation metric thing. Plots: signal_scaled and envelope, signal_scaled*envelope, PSD of the signal_scaled*envelope, MSE for all, bin of cond for MSE  
-    #plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)] 
-    #mse = [MeanSquaredError(channel=c) for c in range(channels)] # doesn't make sense here
-    #psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    #bin_metrics = [BinMetric(metric) for metric in mse + psd] # to ask: why bin psd? it's a scalar (Wassertein-2) between the test-set mean PSD and generated mean PSD (batch)
-    #metrics = plots + mse + psd + bin_metrics
-
-    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    plots = [RepresentationInversion(metric, SignalWithEnvelope) for metric in plots]
-    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels//2)]
+    plots = [RepresentationInversion(metric, SignalWithEnvelope(config)) for metric in plots]
+    plots_debug = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels//2)]
+    psd = [RepresentationInversion(metric, SignalWithEnvelope(config)) for metric in psd]
     bin_metrics = [BinMetric(metric) for metric in psd]
-    metrics = plots + psd + bin_metrics
+    metrics = plots + plots_debug + psd + bin_metrics
 
     logging.info("Set parameters...")
 
@@ -75,23 +71,23 @@ if __name__ == "__main__":
         "out_channels": channels,
         "block_out_channels": (32, 64, 128, 256),
         "down_block_types": (
-            "DownResnetBlock1D",
-            "DownResnetBlock1D",
-            "DownResnetBlock1D",
+            "DownBlock1D",
+            "DownBlock1D",
+            "DownBlock1D",
             "AttnDownBlock1D",
         ),
         "up_block_types": (
             "AttnUpBlock1D", 
-            "UpResnetBlock1D", 
-            "UpResnetBlock1D", 
-            "UpResnetBlock1D",
-            ),
-        "mid_block_type": "MidResTemporalBlock1D",
+            "UpBlock1D", 
+            "UpBlock1D", 
+            "UpBlock1D",
+        ),
+        "mid_block_type": "UNetMidBlock1D",
         "out_block_type": "OutConv1DBlock",
         "extra_in_channels": 0,
         "act_fn": "relu",
-        #"cond_dim": len(config.features_keys),
-        #"cond_concat": True,
+        "cond_dim": len(config.features_keys),
+        "cond_concat": True,
     }
 
     scheduler_params = {
@@ -141,7 +137,7 @@ if __name__ == "__main__":
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
         low_res_input=False,
-        cond_input=False,
+        cond_input=True,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")

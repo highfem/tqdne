@@ -155,8 +155,8 @@ class PowerSpectralDensity(AbstractMetric):
         return f"Power Spectral Density - Channel {self.channel}"
 
     def _update(self, pred, target):
-        pred = pred["high_res"][:, self.channel]
-        target = target["high_res"][:, self.channel]
+        pred = pred["generated"][:, self.channel]
+        target = target["representation"][:, self.channel]
         pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
         target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
         self.pred_psd.append(pred_psd)
@@ -320,9 +320,9 @@ class RepresentationInversion(AbstractMetric):
         self.representation = representation
 
     def _update(self, pred, target):
-        pred["high_res"] = self.representation.invert_representation(pred["high_res"])
+        pred["generated"] = self.representation.invert_representation(pred["generated"])
 
-        target["high_res"] = self.representation.invert_representation(target["high_res"])
+        target["representation"] = self.representation.invert_representation(target["representation"])
 
         self.metric.update(pred, target)
 

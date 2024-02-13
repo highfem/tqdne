@@ -16,14 +16,14 @@ class Representation(ABC):
         self.config = config
 
     def get_representation(self, signal):
-        return self._get_representation(to_numpy(signal))
+        return self._get_representation(to_numpy(np.nan_to_num(signal, nan=0)))
 
     @abstractmethod
     def _get_representation(self, signal):
         pass
 
     def invert_representation(self, representation):
-        return self._invert_representation(to_numpy(representation))
+        return self._invert_representation(to_numpy(np.nan_to_num(representation, nan=0)))
 
     @abstractmethod
     def _invert_representation(self, representation):
@@ -57,7 +57,7 @@ class SignalWithEnvelope(Representation):
         signal = to_numpy(signal)
         envelope = compute_envelope(signal)
 
-        scaled_signal = signal / envelope
+        scaled_signal = np.divide(signal, envelope, out=np.zeros_like(signal), where=envelope!=0) # when envelope is 0, the signal is also 0. Hence, the scaled signal should also be 0.
 
         # Normalize NOT NEEDED BECAUSE ALREADY SCALED BY THE ENVELOPE
         #signal_mean = self.config.signal_mean
@@ -75,9 +75,9 @@ class SignalWithEnvelope(Representation):
         return np.concatenate([scaled_envelope, scaled_signal], axis=0) # The model will learn to associated channels of the envelope with the corresponding channels of the signal
     
     def _invert_representation(self, representation):
-        num_channels = representation.shape[0] // 2
-        trans_scaled_envelope = representation[:num_channels]
-        scaled_signal = representation[num_channels:]
+        num_channels = representation.shape[1] // 2
+        trans_scaled_envelope = representation[:, :num_channels, :]
+        scaled_signal = representation[:, num_channels:, :]
 
         def inverse_log_transform(x, offset=1e-5):
             return 10 ** x - offset
