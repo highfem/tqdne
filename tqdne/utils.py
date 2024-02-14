@@ -52,7 +52,6 @@ def fig2PIL(fig):
     return PIL.Image.frombytes(mode="RGB", size=(w, h), data=buf)
 
 
-
 def get_last_checkpoint(dirpath):
     checkpoints = sorted(list(Path(dirpath).glob("*.ckpt")))
     if len(checkpoints) == 0:

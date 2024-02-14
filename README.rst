@@ -11,9 +11,6 @@ To get started, make sure you have the necessary permissions and clone the repos
    git clone git@github.com:nperraud/tqdne.git
    cd tqdne
 
-
-You also need to install the submodule:
-
 Installation
 ------------
 
@@ -42,36 +39,14 @@ Change directory into `notebooks` and then run `jupyter`:
 .. code-block:: bash
 
     cd notebooks
-    jupyter notebooks
-
-Tests
------
-
-The tests are located in the folder tqdne/tests. The tests are run using pytest. To run the tests, use the following command:
-
-.. code-block:: bash
-
-    make test
+    jupyter lab
 
 
-Documentation
--------------
+Linting and unit tests
+----------------------
 
-Check the sphynx documentation in the folder doc. Update the documentation accordingly.
-
-You can compile the doc using the following command:
-
-.. code-block:: bash
-
-   make docs
-
-
-Style and linting
------------------
-
-The code is linted using flake8. To run the linter, use the following command:
-
+You can check lints and run unit tests using:
 
 .. code-block:: bash
    
-   make lint
+   tox
