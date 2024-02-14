@@ -7,7 +7,6 @@ from diffusers import DDPMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 
-
 class LightningDDMP(pl.LightningModule):
     """A PyTorch Lightning module for training a diffusion model
 
@@ -105,7 +104,7 @@ class LightningDDMP(pl.LightningModule):
         noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch)
+        pred = self.forward(noisy_hig_res, timesteps, low_res_batch, cond_batch)
         target = noise if self.prediction_type == "epsilon" else high_res_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)
@@ -130,4 +129,3 @@ class LightningDDMP(pl.LightningModule):
             ),
         )
         return [optimizer], [lr_scheduler]
-

@@ -15,7 +15,7 @@ def get_pl_trainer(
     eval_every,
     log_to_wandb=True,
     config=Config(),
-    **trainer_params
+    **trainer_params,
 ):
     # wandb logger
     if log_to_wandb:
@@ -55,7 +55,7 @@ def get_pl_trainer(
         **trainer_params,
         logger=wandb_logger,
         callbacks=callbacks,
-        default_root_dir=output_dir
+        default_root_dir=output_dir,
     )
 
     return trainer
