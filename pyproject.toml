@@ -9,6 +9,16 @@ readme = "README.rst"
 description = ""
 requires-python = ">=3.11"
 authors= [{name = "HighFEM team", email = "example@mail.com"}]
+dependencies = [
+    "python-dotenv>=1.0.1",
+    "pytorch-lightning>=2.1.3",
+    "scikit-image>=0.22.0",
+    "scikit-learn>=1.4.0",
+    "seaborn>=0.13.2",
+    "torch>=2.2.0",
+]
 
 [tool.setuptools]
 packages = ["tqdne"]
+
+
