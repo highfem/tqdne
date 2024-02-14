@@ -1,58 +1,14 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "tqdne"
 version = "0.1.0"
 readme = "README.rst"
 description = ""
-authors = ["Your Name <you@example.com>"]
+requires-python = ">=3.11"
+authors= [{name = "HighFEM team", email = "example@mail.com"}]
 
-
-[tool.poetry.dependencies]
-python = "^3.11.3"
-tqdm = "*"
-scikit-learn = "*"
-scikit-image = "*"
-numpy = "*"
-matplotlib = "*"
-seaborn = "*"
-python-dotenv = "*"
-setuptools = "*"
-wandb = "*"
-torch = "*"
-torchvision = "*"
-pytorch-lightning = ">=2.0.0"
-h5py = "*"
-diffusers = {path = "diffusers", extras = ["torch", "training"], develop = true}
-accelerate = "*"
-transformers = "*"
-plotly = "*"
-
-
-
-[tool.poetry.dev-dependencies]
-pytest = "*"
-jupyterlab = "*"
-ipywidgets = "*"
-twine = "*"
-setuptools = "*"
-wheel = "*"
-flake8 = "*"
-pylint = "*"
-sphinx = "<7.0.0"
-numpydoc = "*"
-sphinxcontrib-bibtex = "*"
-sphinx-gallery = "*"
-memory_profiler = "*"
-sphinx-rtd-theme = "*"
-sphinx-copybutton = "*"
-nbsphinx = "*"
-pandoc = "*"
-black = "*"
-
-[tool.poetry.group.dev.dependencies]
-notebook = "^6.5.4"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-
+[tool.setuptools]
+packages = ["tqdne"]
