@@ -1,8 +1,10 @@
-import random
+import torch
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as L
+
+from tqdne.representations import Representation
 
 def bandpass_filter(n, p):
     f = np.fft.fftfreq(n)
@@ -20,6 +22,7 @@ def random_stationary_signal(n = 1024, sigma = 1):
     sig = np.fft.ifft(sig_hat)
     sig = sig.real
     return p*16, sig
+
 
 class StationarySignalDM(L.LightningDataModule):
     def __init__(self, data_size, wfs_len, batch_size, train_ratio, conditional=False):

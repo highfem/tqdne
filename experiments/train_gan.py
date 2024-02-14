@@ -1,10 +1,14 @@
 import logging
+from math import e
 from pathlib import Path
+from re import S
+from diffusers.commands import env
+from numpy import test
 
 
 from torch.utils.data import DataLoader
 
-from tqdne.dataset import WaveformDataset
+from tqdne.dataset import StationarySignalDataset, WaveformDataset
 from tqdne.gan import WGAN
 from tqdne.utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
@@ -14,22 +18,28 @@ from tqdne.conf import Config
 
 def main():
     # Setting up Args
-    run_name = "WGAN"
+    run_name = "WGAN Dummy Data"
     config = Config()
     resume = False
     conditional = True
     max_epochs = 100
     batch_size = 64
-    wfs_expected_size = 1024
+    wfs_expected_size = 512
     latent_dim = 128
     encoding_L = 8
+    dim = 32
 
     logging.info("Loading data...")
-    train_path = config.datasetdir / Path(config.data_upsample_train)
-    test_path = config.datasetdir / Path(config.data_upsample_test)
-    envelope_representation = GlobalMaxEnvelope(config)
-    train_dataset = WaveformDataset(train_path, envelope_representation, reduced=wfs_expected_size)
-    test_dataset = WaveformDataset(test_path, envelope_representation, reduced=wfs_expected_size)
+    # train_path = config.datasetdir / Path(config.data_upsample_train)
+    # test_path = config.datasetdir / Path(config.data_upsample_test)
+    # envelope_representation = CenteredMaxEnvelope(config)
+    # train_dataset = WaveformDataset(train_path, envelope_representation, reduced=wfs_expected_size)
+    # test_dataset = WaveformDataset(test_path, envelope_representation, reduced=wfs_expected_size)
+    
+    # envelope_representation = GlobalMaxEnvelope(config)
+    envelope_representation = None
+    train_dataset = StationarySignalDataset(100000, envelope_representation, wfs_expected_size)
+    test_dataset = StationarySignalDataset(10000, envelope_representation, wfs_expected_size)
 
     channels = train_dataset[0]["high_res"].shape[0]
     logging.info(f"Channels: {channels}")
@@ -45,9 +55,9 @@ def main():
         SamplePlot(fs=config.fs, channel=0),
         PowerSpectralDensity(config.fs, channel=0),
     ]
-    plots = [
-        RepresentationInversion(metric, envelope_representation) for metric in plots
-    ]
+    # plots = [
+    #     RepresentationInversion(metric, envelope_representation) for metric in plots
+    # ]
     metrics = plots
 
     optimizer_parameters = {
@@ -62,14 +72,14 @@ def main():
         "out_channels": channels,
         "encoding_L": encoding_L,
         "num_cond_vars": num_conditional_vars,
-        "dim": 32,
+        "dim": dim,
     }
     discriminator_parameters = {
         "wave_size": wfs_expected_size,
         "in_channels": channels,
         "encoding_L": encoding_L,
         "num_cond_vars": num_conditional_vars,
-        "dim": 32,
+        "dim": dim,
     }
     model_parameters = {
         "reg_lambda": 10.0,

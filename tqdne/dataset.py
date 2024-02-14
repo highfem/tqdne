@@ -160,7 +160,7 @@ class WaveformDataset(torch.utils.data.Dataset):
             waveform = waveform[:, : self.cut]
 
         features = self.features[index]
-        features = (features - self.features_means) / (self.features_stds + 1e-5)
+        features = (features - self.features_means) / (self.features_stds + 1e-6)
 
         if self.representation:
             waveform = self.representation.get_representation(waveform)
@@ -232,4 +232,55 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             "high_res": torch.tensor(high_res, dtype=torch.float32),
             "low_res": torch.tensor(low_res, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
+        }
+
+
+
+class StationarySignalDataset(torch.utils.data.Dataset):
+    """
+    A simple dataset for testing purposes.
+    """
+    def __init__(self, data_size, representation: Representation=None, wave_size=1024):
+        super().__init__()
+        self.representation = representation
+        self.wave_size = wave_size
+        self.p = []
+        self.waveform = []
+
+        def random_stationary_signal(n = 1024, sigma = 1):
+            def bandpass_filter(n, p):
+                f = np.fft.fftfreq(n)
+                # f = np.fft.fftshift(f)
+                filt = np.exp(- (np.abs(f) - p)**2 / 0.0001)
+                return filt
+            noise = sigma * np.random.randn(n)
+            p = np.random.rand(1) / 16
+            # apply a bandpass filter
+            noise_hat = np.fft.fft(noise)
+            filt = bandpass_filter(n, p)
+            sig_hat = noise_hat * filt
+            sig = np.fft.ifft(sig_hat)
+            sig = sig.real
+            return p*16, sig
+
+        for _ in range(data_size):
+            p, sig = random_stationary_signal(wave_size)
+            self.p.append(p)
+            self.waveform.append(sig)
+        self.p = np.array(self.p)
+        self.p_mean = np.mean(self.p)
+        self.p_std = np.std(self.p)
+        self.waveform = np.array(self.waveform)[: , np.newaxis, :]
+
+    def __len__(self):
+        return len(self.waveform)
+    
+    def __getitem__(self, index):
+        waveform = self.waveform[index]
+        p = (self.p[index] - self.p_mean) / (self.p_std + 1e-6)
+        if self.representation:
+            waveform = self.representation.get_representation(waveform)
+        return {
+            "high_res": torch.tensor(waveform, dtype=torch.float32),
+            "cond": torch.tensor(p, dtype=torch.float32),
         }
