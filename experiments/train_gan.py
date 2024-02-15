@@ -13,7 +13,7 @@ from tqdne.gan import WGAN
 from tqdne.utils import get_last_checkpoint
 from tqdne.training import get_pl_trainer
 from tqdne.metric import PowerSpectralDensity, SamplePlot, RepresentationInversion
-from tqdne.representations import CenteredMaxEnvelope, GlobalMaxEnvelope
+from tqdne.representations import CenteredMaxEnvelope, CenteredPMeanEnvelope, GlobalMaxEnvelope
 from tqdne.conf import Config
 
 def main():
@@ -37,7 +37,7 @@ def main():
     # test_dataset = WaveformDataset(test_path, envelope_representation, reduced=wfs_expected_size)
     
     # envelope_representation = GlobalMaxEnvelope(config)
-    envelope_representation = None
+    envelope_representation = CenteredPMeanEnvelope(config, window_length=17, p=7)
     train_dataset = StationarySignalDataset(100000, envelope_representation, wfs_expected_size)
     test_dataset = StationarySignalDataset(10000, envelope_representation, wfs_expected_size)
 
