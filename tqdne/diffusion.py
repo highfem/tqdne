@@ -7,7 +7,6 @@ from diffusers import DDPMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 
-
 class LightningDDMP(pl.LightningModule):
     """A PyTorch Lightning module for training a diffusion model
 
@@ -63,11 +62,8 @@ class LightningDDMP(pl.LightningModule):
             input = torch.cat((low_res, input), dim=1)
 
         # predict
-        if self.cond_input:
-            assert cond is not None
-            return self.net(input, t, cond=cond)[0]
-        else:
-            return self.net(input, t)[0]
+        cond = cond if self.cond_input else None
+        return self.net(input, t, cond=cond)
 
     def sample(self, shape, low_res=None, cond=None):
         """Sample from the diffusion model."""
@@ -76,7 +72,9 @@ class LightningDDMP(pl.LightningModule):
 
         # sample iteratively
         for t in tqdm(self.noise_scheduler.timesteps):
-            pred = self.forward(sample, t, low_res, cond)
+            pred = self.forward(
+                sample, t * torch.ones(shape[0], device=self.device), low_res, cond
+            )
             sample = self.noise_scheduler.step(pred, t, sample).prev_sample
 
         return sample
@@ -105,7 +103,7 @@ class LightningDDMP(pl.LightningModule):
         noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, low_res_batch , cond_batch)
+        pred = self.forward(noisy_hig_res, timesteps, low_res_batch, cond_batch)
         target = noise if self.prediction_type == "epsilon" else high_res_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)
@@ -130,4 +128,3 @@ class LightningDDMP(pl.LightningModule):
             ),
         )
         return [optimizer], [lr_scheduler]
-
