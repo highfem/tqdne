@@ -11,12 +11,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .nn import (
+    GaussianFourierProjection,
+    append_dims,
     avg_pool_nd,
     checkpoint,
     conv_nd,
     linear,
     normalization,
-    timestep_embedding,
     zero_module,
 )
 
@@ -211,8 +212,7 @@ class ResBlock(TimestepBlock):
     def _forward(self, x, emb):
         h = self.in_layers(x)
         emb_out = self.emb_layers(emb).type(h.dtype)
-        while len(emb_out.shape) < len(h.shape):
-            emb_out = emb_out[..., None]
+        emb_out = append_dims(emb_out, h.dim())
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
@@ -360,8 +360,8 @@ class UNetModel(nn.Module):
     :param num_cond_features: if specified (as an int), then this model will use
         this number of features for conditioning.
         They will be embedded and added to timestep embeddings.
-    :param embed_cond: if True, embed conditioning features with timestep embeddings.
-        Use this if features are not normalized.
+    :param cond_emb_scale: if specified (as a float), conditional inputs will be
+        embedded with fourier embeddings of this scale.
     :param use_checkpoint: use gradient checkpointing to reduce memory usage.
     :param num_heads: the number of attention heads in each attention layer.
     :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
@@ -380,8 +380,8 @@ class UNetModel(nn.Module):
         conv_kernel_size=3,
         conv_resample=True,
         dims=2,
-        num_cond_features=None,
-        embed_cond=False,
+        cond_features=None,
+        cond_emb_scale=None,
         use_checkpoint=False,
         num_heads=1,
         use_scale_shift_norm=False,
@@ -389,31 +389,24 @@ class UNetModel(nn.Module):
     ):
         super().__init__()
 
-        self.in_channels = in_channels
-        self.model_channels = model_channels
-        self.out_channels = out_channels
-        self.num_res_blocks = num_res_blocks
-        self.attention_resolutions = attention_resolutions
-        self.dropout = dropout
-        self.channel_mult = channel_mult
-        self.conv_kernel_size = conv_kernel_size
-        self.conv_resample = conv_resample
-        self.num_cond_features = num_cond_features
-        self.embed_cond = embed_cond
-        self.use_checkpoint = use_checkpoint
-        self.num_heads = num_heads
-
         embed_dim = model_channels * 4
-        self.time_embed = nn.Sequential(
-            linear(model_channels, embed_dim),
-            nn.SiLU(),
-            linear(embed_dim, embed_dim),
+        self.time_embed = GaussianFourierProjection(model_channels)
+        self.time_mlp = nn.Sequential(
+            linear(model_channels, embed_dim), nn.SiLU(), linear(embed_dim, embed_dim)
         )
 
-        if self.num_cond_features is not None:
-            cond_feature_dim = model_channels if embed_cond else 1
-            self.cond_embed = nn.Sequential(
-                linear(cond_feature_dim * num_cond_features, embed_dim),
+        self.cond_features = cond_features
+        if cond_features is not None:
+            if cond_emb_scale is not None:
+                self.cond_embed = GaussianFourierProjection(
+                    model_channels, cond_emb_scale
+                )
+                cond_features *= model_channels
+            else:
+                self.cond_embed = None
+
+            self.cond_mlp = nn.Sequential(
+                linear(cond_features, embed_dim),
                 nn.SiLU(),
                 linear(embed_dim, embed_dim),
             )
@@ -554,21 +547,20 @@ class UNetModel(nn.Module):
 
         :param x: an [N x C x ...] Tensor of inputs.
         :param timesteps: a 1-D batch of timesteps.
-        :param cond: an [N x num_cond_features] Tensor of conditioning features.
+        :param cond: an [N x cond_features] Tensor of conditioning features.
         :return: an [N x C x ...] Tensor of outputs.
         """
         assert (cond is not None) == (
-            self.num_cond_features is not None
+            self.cond_features is not None
         ), "must specify cond if and only if the model is conditioned"
 
         hs = []
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+        emb = self.time_mlp(self.time_embed(timesteps))
 
-        if self.num_cond_features is not None:
-            assert cond.shape == (x.shape[0], self.num_cond_features)
-            if self.embed_cond:
-                cond = timestep_embedding(cond, self.model_channels)
-            emb = emb + self.cond_embed(cond)
+        if self.cond_features is not None:
+            if self.cond_embed is not None:
+                cond = self.cond_embed(cond).view(cond.shape[0], -1)
+            emb += self.cond_mlp(cond)
 
         h = x
         for module in self.input_blocks:
