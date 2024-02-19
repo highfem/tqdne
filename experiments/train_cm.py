@@ -52,6 +52,7 @@ if __name__ == "__main__":
         "model_channels": 32,
         "num_res_blocks": 2,
         "num_heads": 4,
+        "dropout": 0.2,
         "flash_attention": False,  # flash attention not tested (potentially faster)
     }
 
