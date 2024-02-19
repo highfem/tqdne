@@ -12,7 +12,8 @@ def get_pl_trainer(
     name,
     val_loader,
     metrics,
-    eval_every,
+    limit_eval_batches=1,
+    eval_every=1,
     log_to_wandb=True,
     config=Config(),
     **trainer_params
@@ -27,7 +28,11 @@ def get_pl_trainer(
     callbacks = [LearningRateMonitor()]
 
     # log callback
-    callbacks.append(LogCallback(val_loader, metrics, every=eval_every))
+    callbacks.append(
+        LogCallback(
+            val_loader, metrics, limit_batches=limit_eval_batches, every=eval_every
+        )
+    )
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
