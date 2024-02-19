@@ -1,6 +1,7 @@
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from pytorch_lightning.utilities.seed import isolate_rng
 
 from tqdne.nn import append_dims
 
@@ -105,7 +106,7 @@ class LithningConsistencyModel(pl.LightningModule):
             sample = self(sample, ones * sigma, low_res, cond)
 
         return sample
-    
+
     def evaluate(self, batch, sigmas=[1]):
         """Evaluate the model on a batch of data."""
         sample = batch["high_res"]
@@ -156,7 +157,9 @@ class LithningConsistencyModel(pl.LightningModule):
         teacher_sigma = sigmas[timesteps]
         teacher_sample = sample + epsilon * append_dims(teacher_sigma, sample.dim())
         with torch.no_grad():
-            target = self(teacher_sample, teacher_sigma, low_res, cond)
+            with isolate_rng():
+                # teacher and student using the same random seed (for dropout)
+                target = self(teacher_sample, teacher_sigma, low_res, cond)
 
         # make prediction with student
         student_sigma = sigmas[timesteps + 1]
