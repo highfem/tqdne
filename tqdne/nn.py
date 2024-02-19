@@ -178,3 +178,21 @@ class CheckpointFunction(th.autograd.Function):
         del ctx.input_params
         del output_tensors
         return (None, None) + input_grads
+
+
+class GaussianFourierProjection(nn.Module):
+    """Gaussian Fourier projection layer."""
+
+    def __init__(self, channels: int, scale: float = 0.02) -> None:
+        super().__init__()
+        self.W = nn.Parameter(th.randn(channels // 2) * scale, requires_grad=False)
+
+    def forward(self, x):
+        h = x[:, None] * self.W[None, :] * 2 * th.pi
+        h2 = x[:, None] * self.W * 2 * th.pi
+
+        assert h.shape == h2.shape
+        assert th.allclose(h, h2) 
+
+        h = th.cat([th.sin(h), th.cos(h)], dim=-1)
+        return h
