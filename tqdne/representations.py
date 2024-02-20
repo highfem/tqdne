@@ -7,7 +7,6 @@ from scipy.signal import hilbert
 import torch
 
 from tqdne.conf import Config
-from tqdne.utils import to_numpy
 
 
 class Representation(ABC):
@@ -16,18 +15,28 @@ class Representation(ABC):
         self.config = config
 
     def get_representation(self, signal):
-        return self._get_representation(to_numpy(np.nan_to_num(signal, nan=0)))
+        return self._get_representation(np.nan_to_num(self._to_numpy(signal), nan=0)) # TODO: fix. maybe put nan_to_num when loading the data (?)
 
     @abstractmethod
     def _get_representation(self, signal):
         pass
 
     def invert_representation(self, representation):
-        return self._invert_representation(to_numpy(np.nan_to_num(representation, nan=0)))
+        return self._invert_representation(np.nan_to_num(self._to_numpy(representation), nan=0)) #TODO: np.nan_to_num should not be needed 
 
     @abstractmethod
     def _invert_representation(self, representation):
         pass
+
+    @abstractmethod
+    def _get_input_shape(self, signal_input_shape):
+        pass
+
+    def get_input_shape(self, signal_input_shape):
+        return self._get_input_shape(signal_input_shape)
+    
+    def _to_numpy(x):
+        return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
 
 
 class SignalWithEnvelope(Representation):
@@ -54,7 +63,6 @@ class SignalWithEnvelope(Representation):
         def log_transform(x, offset=1e-5):
             return np.log10(x + offset)
     
-        signal = to_numpy(signal)
         envelope = compute_envelope(signal)
 
         scaled_signal = np.divide(signal, envelope, out=np.zeros_like(signal), where=envelope!=0) # when envelope is 0, the signal is also 0. Hence, the scaled signal should also be 0.
@@ -67,10 +75,6 @@ class SignalWithEnvelope(Representation):
 
         # Standardize the transformed envelope to get mean=0 and std=1
         scaled_envelope = (log_transform(envelope, offset=self.log_offset) - self.trans_env_mean[:, : envelope.shape[-1]]) / self.trans_env_std[:, : envelope.shape[-1]] # shape: (num_channels, signal_length) (?)
-
-        # QUESTIIONS: 
-        # train/val split or also train/val/test split?
-        # envelope_mean should be the mean of the envelopes generated for the training samples, right? 
 
         return np.concatenate([scaled_envelope, scaled_signal], axis=0) # The model will learn to associated channels of the envelope with the corresponding channels of the signal
     
@@ -86,6 +90,9 @@ class SignalWithEnvelope(Representation):
         signal = scaled_signal * inverse_log_transform(trans_envelope, offset=self.log_offset)
 
         return signal  
+    
+    def _get_input_shape(self, signal_input_shape):
+        return (signal_input_shape[0], 2 * signal_input_shape[1], signal_input_shape[2])
     
 
 class Upsample(Representation):

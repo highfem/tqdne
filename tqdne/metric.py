@@ -7,7 +7,7 @@ from torch import Tensor
 from torchmetrics import Metric
 
 from tqdne.representations import Representation
-from tqdne.utils import to_numpy
+#from tqdne.utils import to_numpy
 
 
 class AbstractMetric(Metric, ABC):
@@ -30,8 +30,8 @@ class AbstractMetric(Metric, ABC):
             target (dict): The target signals.
 
         """
-        pred = {k: to_numpy(v) for k, v in pred.items()}
-        target = {k: to_numpy(v) for k, v in target.items()}
+        pred = {k: Representation.to_numpy(v) for k, v in pred.items()} # TODO: don't know if Representation.to_numpy is the best way to do this
+        target = {k: Representation.to_numpy(v) for k, v in target.items()}
         self._update(pred, target)
 
     @abstractmethod
@@ -41,7 +41,7 @@ class AbstractMetric(Metric, ABC):
     def compute(self):
         pass
 
-    def plot(self):
+    def plot(self, prefix_name, title):
         pass
 
 
@@ -64,11 +64,13 @@ class SamplePlot(AbstractMetric):
     def compute(self):
         return None
 
-    def plot(self):
+    def plot(self, prefix_name="", title=None):
         time = np.arange(0, self.generated.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, self.generated, "g", label="Generated")
-        ax.set_title(self.name)
+        if title is None:
+            title = prefix_name + self.name
+        ax.set_title(title)
         ax.set_xlabel("Time (s)") 
         ax.set_ylabel("Amplitude") #TODO: unit of measure?
         ax.legend()
@@ -99,13 +101,15 @@ class UpsamplingSamplePlot(AbstractMetric):
     def compute(self):
         return None
 
-    def plot(self):
+    def plot(self, prefix_name="", title=None):
         time = np.arange(0, self.low_res.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, self.low_res, "b", label="Input")
         ax.plot(time, self.high_res, "r", label="Target")
         ax.plot(time, self.reconstructed, "g", label="Reconstructed")
-        ax.set_title(self.name)
+        if title is None:
+            title = prefix_name + self.name
+        ax.set_title(title)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
         ax.legend()
@@ -152,18 +156,25 @@ class PowerSpectralDensity(AbstractMetric):
 
     @property
     def name(self):
-        return f"Power Spectral Density - Channel {self.channel}"
+        return f"Power Spectral Density / Frechét Inception Distance - Channel {self.channel}"
 
     def _update(self, pred, target):
         pred = pred["generated"][:, self.channel]
-        target = target["representation"][:, self.channel]
         pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
-        target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
         self.pred_psd.append(pred_psd)
-        self.target_psd.append(target_psd)
+
+        if target is not None:
+            target = target["representation"][:, self.channel] if target is not None else target
+            target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
+            self.target_psd.append(target_psd)
+        else:
+            self.target_psd = None    
+
         self.sig_len = pred.shape[-1]
 
     def compute(self):
+        if self.target_psd is None:
+            raise ValueError("Target is None. This metric cannot be computed without a target dataset.")
         pred_psd = np.concatenate(self.pred_psd)
         target_psd = np.concatenate(self.target_psd)
 
@@ -180,15 +191,16 @@ class PowerSpectralDensity(AbstractMetric):
 
         return fid
 
-    def plot(self):
-        pred_psd = np.concatenate(self.pred_psd)
-        target_psd = np.concatenate(self.target_psd)
+    def plot(self, prefix_name="", title=None):
 
         # Compute mean and std of PSD in log scale
+        pred_psd = np.concatenate(self.pred_psd)
         pred_mean = np.log(pred_psd).mean(axis=0)
-        target_mean = np.log(target_psd).mean(axis=0)
         pred_std = np.log(pred_psd).std(axis=0)
-        target_std = np.log(target_psd).std(axis=0)
+        if self.target_psd is not None:
+            target_psd = np.concatenate(self.target_psd)
+            target_mean = np.log(target_psd).mean(axis=0)
+            target_std = np.log(target_psd).std(axis=0)
 
         # Frequency axis
         freqs = np.fft.rfftfreq(self.sig_len, 1 / self.fs)
@@ -203,17 +215,22 @@ class PowerSpectralDensity(AbstractMetric):
             color="g", 
             alpha=0.2,
         )
-        ax.plot(freqs, target_mean, "r", label="Target")
-        ax.fill_between(
-            freqs,
-            target_mean - target_std,
-            target_mean + target_std,
-            color="r",
-            alpha=0.2,
-        )
+        if self.target_psd is not None:
+            ax.plot(freqs, target_mean, "r", label="Target")
+            ax.fill_between(
+                freqs,
+                target_mean - target_std,
+                target_mean + target_std,
+                color="r",
+                alpha=0.2,
+            )
+            
+        ax.set_xscale("log")
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Log PSD")
-        ax.set_title(self.name)
+        if title is None:
+            title = prefix_name + self.name
+        ax.set_title(title)
         ax.legend()
         fig.tight_layout()
         return fig
@@ -247,6 +264,10 @@ class BinMetric(AbstractMetric):
         return f"Bin {self.metric.name}"
 
     def _update(self, pred, target):
+        if target is None: 
+            raise ValueError("Target is None. This metric cannot be computed without a target dataset.")
+        
+        
         # extract magnitude and distance (this is specific to the dataset)
         mags = target["cond"][:, 3]
         dists = target["cond"][:, 0]
@@ -269,7 +290,7 @@ class BinMetric(AbstractMetric):
             )
             self.metrics[dist_bin][mag_bin].update(pred, target)
 
-    def plot(self):
+    def plot(self, prefix_name="", title=None):
         values = []
         for row in self.metrics:
             row_values = []
@@ -301,7 +322,9 @@ class BinMetric(AbstractMetric):
 
         ax.set_xlabel("Magnitude Bin")
         ax.set_ylabel("Distance Bin (in km)")
-        ax.set_title(self.name)
+        if title is None:
+            title = prefix_name + self.name
+        ax.set_title(title)
         fig.tight_layout()
         return fig
 
@@ -328,13 +351,13 @@ class RepresentationInversion(AbstractMetric):
 
     @property
     def name(self):
-        return self.metric.name
+        return "Inverted " + self.metric.name
 
     def compute(self):
         return self.metric.compute()
 
-    def plot(self):
-        return self.metric.plot()
+    def plot(self, prefix_name, title=None):
+        return self.metric.plot(prefix_name=self.name, title=title)
 
     def reset(self):
         self.metric.reset()

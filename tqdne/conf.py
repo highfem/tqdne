@@ -84,7 +84,6 @@ class Config:
     data_train: str = "data_train.h5"
     data_test: str = "data_test.h5"
 
-
     # Sampling frequency
     fs: int = 100
     # Filter parameters
@@ -102,8 +101,11 @@ class Config:
         "magnitude",
         "vs30"
     )
+    num_channels: int = 3
+    signal_length: int = (5501 // 32) * 32 # is it something that one should change?
 
     # Train Dataset statistics
+    # TODO: this shouldn't be here. It should be a parameter of the class SignalWithEnvelope, that should be passed to the init method 
     with open(datasetdir / Path("trans_env_statistics.pkl"), 'rb') as pickle_file:
         transformed_env_statistics = pickle.load(pickle_file)
 
