@@ -30,8 +30,8 @@ class AbstractMetric(Metric, ABC):
             target (dict): The target signals.
 
         """
-        pred = {k: Representation.to_numpy(v) for k, v in pred.items()} # TODO: don't know if Representation.to_numpy is the best way to do this
-        target = {k: Representation.to_numpy(v) for k, v in target.items()}
+        pred = {k: Representation._to_numpy(v) for k, v in pred.items()} # TODO: don't know if Representation.to_numpy is the best way to do this
+        target = {k: Representation._to_numpy(v) for k, v in target.items()}
         self._update(pred, target)
 
     @abstractmethod
