@@ -93,9 +93,7 @@ def build_dataset(config=Config()):
                 featuress = fout.create_dataset("features", (len(indices), nf))
                 for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
                     waveform, features = extract_sample_from_h5file(f, idx)
-                    filtered[i] = np.array(
-                        [signal.sosfilt(sos, channel) for channel in waveform]
-                    )
+                    filtered[i] = np.array([signal.sosfilt(sos, channel) for channel in waveform])
                     waveforms[i] = waveform
                     featuress[i] = features
 

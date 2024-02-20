@@ -22,3 +22,26 @@ dependencies = [
 packages = ["tqdne"]
 
 
+[tool.flake8]
+max-line-length = 100
+per-file-ignores = [
+    '__init__.py:F401',
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

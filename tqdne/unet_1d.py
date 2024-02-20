@@ -103,7 +103,11 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             "DownBlock1D",
             "AttnDownBlock1D",
         ),
-        up_block_types: Tuple[str] = ("AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"),
+        up_block_types: Tuple[str] = (
+            "AttnUpBlock1D",
+            "UpBlock1D",
+            "UpBlock1DNoSkip",
+        ),
         mid_block_type: Tuple[str] = "UNetMidBlock1D",
         out_block_type: str = None,
         block_out_channels: Tuple[int] = (32, 32, 64),
@@ -123,9 +127,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             )
             timestep_input_dim = 2 * block_out_channels[0]
         elif time_embedding_type == "positional":
-            self.time_proj = Timesteps(
-                block_out_channels[0], flip_sin_to_cos, freq_shift
-            )
+            self.time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
             timestep_input_dim = block_out_channels[0]
 
         self.time_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim)
@@ -219,9 +221,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
 
         # out
         num_groups_out = (
-            norm_num_groups
-            if norm_num_groups is not None
-            else min(block_out_channels[0] // 4, 32)
+            norm_num_groups if norm_num_groups is not None else min(block_out_channels[0] // 4, 32)
         )
         self.out_block = get_out_block(
             out_block_type=out_block_type,
@@ -260,9 +260,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         # 1. time
         timesteps = timestep
         if not torch.is_tensor(timesteps):
-            timesteps = torch.tensor(
-                [timesteps], dtype=torch.long, device=sample.device
-            )
+            timesteps = torch.tensor([timesteps], dtype=torch.long, device=sample.device)
         elif torch.is_tensor(timesteps) and len(timesteps.shape) == 0:
             timesteps = timesteps[None].to(sample.device).repeat(sample.shape[0])
 
@@ -284,9 +282,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         # 2. down
         down_block_res_samples = ()
         for downsample_block in self.down_blocks:
-            sample, res_samples = downsample_block(
-                hidden_states=sample, temb=timestep_embed
-            )
+            sample, res_samples = downsample_block(hidden_states=sample, temb=timestep_embed)
             down_block_res_samples += res_samples
 
         # 3. mid
