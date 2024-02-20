@@ -45,8 +45,7 @@ class LogCallback(Callback):
             if self.limit_batches != -1 and i >= self.limit_batches:
                 break
             batch = {
-                k: v.to(pl_module.device) if isinstance(v, Tensor) else v
-                for k, v in batch.items()
+                k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
             for metric in self.metrics:
@@ -66,9 +65,7 @@ class LogCallback(Callback):
                 plot = metric.plot()
                 name = metric.name
                 try:
-                    trainer.logger.experiment.log(
-                        {f"{name} (Image)": wandb.Image(plot)}
-                    )
+                    trainer.logger.experiment.log({f"{name} (Image)": wandb.Image(plot)})
                     trainer.logger.experiment.log({f"{name} (Plot)": plot})
                 except:
                     pass

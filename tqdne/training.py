@@ -33,10 +33,7 @@ def get_pl_trainer(
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
-    if (
-        "enable_checkpointing" not in trainer_params
-        or trainer_params["enable_checkpointing"]
-    ):
+    if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),

@@ -83,9 +83,7 @@ class Config:
     # Sampling frequency
     fs: int = 100
     # Filter parameters
-    params_filter: dict = field(
-        default_factory=lambda: {"N": 2, "Wn": 1, "btype": "lp"}
-    )
+    params_filter: dict = field(default_factory=lambda: {"N": 2, "Wn": 1, "btype": "lp"})
 
     # Noise on the input
     sigma_in: float = 0.01

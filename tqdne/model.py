@@ -82,9 +82,7 @@ class CNN1D(nn.Module):
 
         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
         nconv_old = self.input_channel
-        for n_conv, kernel_size, stride in zip(
-            self.n_convs, self.kernel_sizes, self.strides
-        ):
+        for n_conv, kernel_size, stride in zip(self.n_convs, self.kernel_sizes, self.strides):
             self.conv.append(
                 nn.Conv1d(
                     in_channels=nconv_old,
@@ -143,9 +141,7 @@ class CNN2D(nn.Module):
 
         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
         nconv_old = self.input_channel
-        for n_conv, kernel_size, stride in zip(
-            self.convs, self.kernel_sizes, self.strides
-        ):
+        for n_conv, kernel_size, stride in zip(self.convs, self.kernel_sizes, self.strides):
             self.conv.append(
                 nn.Conv2d(
                     in_channels=nconv_old,
