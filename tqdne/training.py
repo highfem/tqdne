@@ -15,7 +15,7 @@ def get_pl_trainer(
     eval_every,
     log_to_wandb=True,
     config=Config(),
-    **trainer_params
+    **trainer_params,
 ):
     # wandb logger
     if log_to_wandb:
@@ -33,10 +33,7 @@ def get_pl_trainer(
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
-    if (
-        "enable_checkpointing" not in trainer_params
-        or trainer_params["enable_checkpointing"]
-    ):
+    if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),
@@ -55,7 +52,7 @@ def get_pl_trainer(
         **trainer_params,
         logger=wandb_logger,
         callbacks=callbacks,
-        default_root_dir=output_dir
+        default_root_dir=output_dir,
     )
 
     return trainer

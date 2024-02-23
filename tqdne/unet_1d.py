@@ -20,9 +20,18 @@ import torch.nn as nn
 
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.utils import BaseOutput
-from diffusers.models.embeddings import GaussianFourierProjection, TimestepEmbedding, Timesteps
+from diffusers.models.embeddings import (
+    GaussianFourierProjection,
+    TimestepEmbedding,
+    Timesteps,
+)
 from diffusers.models.modeling_utils import ModelMixin
-from diffusers.models.unets.unet_1d_blocks import get_down_block, get_mid_block, get_out_block, get_up_block
+from diffusers.models.unets.unet_1d_blocks import (
+    get_down_block,
+    get_mid_block,
+    get_out_block,
+    get_up_block,
+)
 
 
 @dataclass
@@ -57,9 +66,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         flip_sin_to_cos (`bool`, *optional*, defaults to `False`):
             Whether to flip sin to cos for Fourier time embedding.
         cond_dim (`int`, *optional*, defaults to 0): Dimension of conditional input. If 0, no conditional input is used.
-        cond_embedding_type (`str`, *optional*, defaults to `"fourier"`): 
+        cond_embedding_type (`str`, *optional*, defaults to `"fourier"`):
             Type of cond embedding to use. One of `"fourier"` or `"none"`.
-        cond_concat (`bool`, *optional*, defaults to `False`): 
+        cond_concat (`bool`, *optional*, defaults to `False`):
             Whether to concatenate cond embedding to time embedding. If `False`, they are added.
         down_block_types (`Tuple[str]`, *optional*, defaults to `("DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D")`):
             Tuple of downsample block types.
@@ -89,8 +98,16 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         cond_dim: int = 0,
         cond_embedding_type: str = "fourier",
         cond_concat: bool = False,
-        down_block_types: Tuple[str] = ("DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D"),
-        up_block_types: Tuple[str] = ("AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"),
+        down_block_types: Tuple[str] = (
+            "DownBlock1DNoSkip",
+            "DownBlock1D",
+            "AttnDownBlock1D",
+        ),
+        up_block_types: Tuple[str] = (
+            "AttnUpBlock1D",
+            "UpBlock1D",
+            "UpBlock1DNoSkip",
+        ),
         mid_block_type: Tuple[str] = "UNetMidBlock1D",
         out_block_type: str = None,
         block_out_channels: Tuple[int] = (32, 32, 64),
@@ -105,7 +122,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
 
         # time
         if time_embedding_type == "fourier":
-            self.time_proj = GaussianFourierProjection(embedding_size=block_out_channels[0], scale=16)
+            self.time_proj = GaussianFourierProjection(
+                embedding_size=block_out_channels[0], scale=16
+            )
             timestep_input_dim = 2 * block_out_channels[0]
         elif time_embedding_type == "positional":
             self.time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
@@ -117,7 +136,10 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         if cond_dim > 0:
             if cond_embedding_type == "fourier":
                 self.cond_proj = GaussianFourierProjection(
-                    embedding_size=block_out_channels[0], set_W_to_weight=False, log=False, flip_sin_to_cos=flip_sin_to_cos
+                    embedding_size=block_out_channels[0],
+                    set_W_to_weight=False,
+                    log=False,
+                    flip_sin_to_cos=flip_sin_to_cos,
                 )
                 cond_input_dim = 2 * block_out_channels[0] * cond_dim
             elif cond_embedding_type == "none":
@@ -125,9 +147,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
                 cond_input_dim = cond_dim
             else:
                 raise ValueError(f"Unknown cond embedding type {cond_embedding_type}")
-            
+
             self.cond_embedding = TimestepEmbedding(cond_input_dim, time_embed_dim)
-            
+
             if cond_concat:
                 time_embed_dim *= 2
 
@@ -179,7 +201,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         for i, up_block_type in enumerate(up_block_types):
             prev_output_channel = output_channel
             output_channel = (
-                reversed_block_out_channels[i + 1] if i < len(up_block_types) - 1 else final_upsample_channels
+                reversed_block_out_channels[i + 1]
+                if i < len(up_block_types) - 1
+                else final_upsample_channels
             )
 
             is_final_block = i == len(block_out_channels) - 1
@@ -196,7 +220,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             prev_output_channel = output_channel
 
         # out
-        num_groups_out = norm_num_groups if norm_num_groups is not None else min(block_out_channels[0] // 4, 32)
+        num_groups_out = (
+            norm_num_groups if norm_num_groups is not None else min(block_out_channels[0] // 4, 32)
+        )
         self.out_block = get_out_block(
             out_block_type=out_block_type,
             num_groups_out=num_groups_out,
@@ -220,7 +246,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             sample (`torch.FloatTensor`):
                 The noisy input tensor with the following shape `(batch_size, num_channels, sample_size)`.
             timestep (`torch.FloatTensor` or `float` or `int`): The number of timesteps to denoise an input.
-            cond (`torch.FloatTensor`, *optional*): 
+            cond (`torch.FloatTensor`, *optional*):
                 Conditional input tensor with the following shape `(batch_size, cond_dim)`.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~models.unet_1d.UNet1DOutput`] instead of a plain tuple.
@@ -267,7 +293,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         for i, upsample_block in enumerate(self.up_blocks):
             res_samples = down_block_res_samples[-1:]
             down_block_res_samples = down_block_res_samples[:-1]
-            sample = upsample_block(sample, res_hidden_states_tuple=res_samples, temb=timestep_embed)
+            sample = upsample_block(
+                sample, res_hidden_states_tuple=res_samples, temb=timestep_embed
+            )
 
         # 5. post-process
         if self.out_block:

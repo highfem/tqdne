@@ -126,7 +126,8 @@ class MeanSquaredError(AbstractMetric):
 
 
 class PowerSpectralDensity(AbstractMetric):
-    """Compute the Frechét Inception Distance between the power spectral density distributions of the predicted and target signals.
+    """Compute the Frechét Inception Distance between the power spectral
+     density distributions of the predicted and target signals.
 
     Args:
         fs (int): The sampling frequency of the signals.
@@ -186,7 +187,11 @@ class PowerSpectralDensity(AbstractMetric):
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(freqs, pred_mean, "g", label="Reconstructed")
         ax.fill_between(
-            freqs, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2
+            freqs,
+            pred_mean - pred_std,
+            pred_mean + pred_std,
+            color="g",
+            alpha=0.2,
         )
         ax.plot(freqs, target_mean, "r", label="Target")
         ax.fill_between(
@@ -217,9 +222,7 @@ class BinMetric(AbstractMetric):
     ):
         super().__init__()
         self.metric = metric
-        self.metrics = [
-            [metric.clone() for _ in range(num_mag_bins)] for _ in range(num_dist_bins)
-        ]
+        self.metrics = [[metric.clone() for _ in range(num_mag_bins)] for _ in range(num_dist_bins)]
         self.num_mag_bins = num_mag_bins
         self.num_dist_bins = num_dist_bins
         self.min_mag = min_mag
@@ -244,13 +247,9 @@ class BinMetric(AbstractMetric):
             assert (
                 self.min_dist <= dist <= self.max_dist
             ), f"{dist} not in range {self.min_dist} to {self.max_dist}"
-            mag_bin = int(
-                (mag - self.min_mag) / (self.max_mag - self.min_mag) * self.num_mag_bins
-            )
+            mag_bin = int((mag - self.min_mag) / (self.max_mag - self.min_mag) * self.num_mag_bins)
             dist_bin = int(
-                (dist - self.min_dist)
-                / (self.max_dist - self.min_dist)
-                * self.num_dist_bins
+                (dist - self.min_dist) / (self.max_dist - self.min_dist) * self.num_dist_bins
             )
             self.metrics[dist_bin][mag_bin].update(pred, target)
 
