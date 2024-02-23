@@ -7,8 +7,10 @@ from torch import Tensor
 from torchmetrics import Metric
 
 from tqdne.representations import Representation
-#from tqdne.utils import to_numpy
 
+# CIRCULAR IMPORTS
+#from tqdne.utils import to_numpy # TODO: maybe not anymore
+from tqdne.utils import _get_moving_avg_envelope, to_numpy
 
 class AbstractMetric(Metric, ABC):
     """Abstract metric class.
@@ -30,8 +32,8 @@ class AbstractMetric(Metric, ABC):
             target (dict): The target signals.
 
         """
-        pred = {k: Representation._to_numpy(v) for k, v in pred.items()} # TODO: don't know if Representation.to_numpy is the best way to do this
-        target = {k: Representation._to_numpy(v) for k, v in target.items()}
+        pred = {k: to_numpy(v) for k, v in pred.items()} # TODO: don't know if Representation.to_numpy is the best way to do this
+        target = {k: to_numpy(v) for k, v in target.items()}
         self._update(pred, target)
 
     @abstractmethod
@@ -139,12 +141,13 @@ class MeanSquaredError(AbstractMetric):
         target = np.concatenate(self.target)
         return ((pred - target) ** 2).mean()
 
-
+# TODO: we should maybe add the conditioning bin so that we can show that the two set are comparable
 class PowerSpectralDensity(AbstractMetric):
     """Compute the Frechét Inception Distance between the power spectral density distributions of the predicted and target signals.
 
     Args:
         fs (int): The sampling frequency of the signals.
+        channel (int): The channel to compute the metric on.
     """
 
     def __init__(self, fs, channel):
@@ -179,7 +182,7 @@ class PowerSpectralDensity(AbstractMetric):
         target_psd = np.concatenate(self.target_psd)
 
         # Compute mean and std of PSD in log scale
-        pred_mean = np.log(pred_psd).mean(axis=0)
+        pred_mean = np.log(pred_psd).mean(axis=0) # TODO: maybe switch to percentiles
         target_mean = np.log(target_psd).mean(axis=0)
         pred_std = np.log(pred_psd).std(axis=0)
         target_std = np.log(target_psd).std(axis=0)
@@ -234,6 +237,109 @@ class PowerSpectralDensity(AbstractMetric):
         ax.legend()
         fig.tight_layout()
         return fig
+    
+# TODO: we should maybe add the conditioning bin so that we can show that the two set are comparable
+class LogEnvelope(AbstractMetric):
+    """Compute the Frechét Inception Distance between the power log envelope distributions of the predicted and target signals.
+
+    Args:
+        fs (int): The sampling frequency of the signals.
+        channel (int): The channel to compute the metric on.
+    """
+
+    def __init__(self, fs, channel):
+        super().__init__()
+        self.fs = fs
+        self.channel = channel
+        self.add_state("pred_log_env", default=[], dist_reduce_fx=None)
+        self.add_state("target_log_env", default=[], dist_reduce_fx=None)
+
+    @property
+    def name(self):
+        return f"Log Envelope / Frechét Inception Distance - Channel {self.channel}"
+
+    def _update(self, pred, target):
+        pred = pred["generated"][:, self.channel]
+        pred_log_env = np.log(_get_moving_avg_envelope(pred) + 1e-10) 
+        self.pred_log_env.append(pred_log_env)
+
+        if target is not None:
+            target = target["representation"][:, self.channel] if target is not None else target
+            target_log_env = np.log(_get_moving_avg_envelope(target) + 1e-10) 
+            self.target_log_env.append(target_log_env)
+        else:
+            self.target_log_env = None    
+
+        self.sig_len = pred.shape[-1]
+        
+    # TODO: this should be a utility function, but in utils we have circular imports    
+    # def _get_envelope(self, a, window_size=50):
+    #     ret = np.cumsum(a, dtype=float)
+    #     ret[window_size:] = ret[window_size:] - ret[:-window_size]
+    #     return ret[window_size - 1:] / window_size  
+
+    def compute(self):
+        if self.target_log_env is None:
+            raise ValueError("Target is None. This metric cannot be computed without a target dataset.")
+        pred_log_env = np.concatenate(self.pred_log_env)
+        target_log_env = np.concatenate(self.target_log_env)
+
+        # Compute mean and std of the log envelopes
+        pred_mean = pred_log_env.mean(axis=0)
+        target_mean = target_log_env.mean(axis=0)
+        pred_std = pred_log_env.std(axis=0)
+        target_std = target_log_env.std(axis=0)
+
+        # Frechét distance between isotropic Gaussians (Wasserstein-2)
+        fid = np.sum((pred_mean - target_mean) ** 2, axis=-1) + np.sum(
+            pred_std**2 + target_std**2 - 2 * pred_std * target_std, axis=-1
+        )
+
+        return fid
+
+    def plot(self, prefix_name="", title=None):
+
+        # Compute mean and std of the log envelopes
+        pred_log_env = np.concatenate(self.pred_log_env)
+        pred_mean = pred_log_env.mean(axis=0)
+        pred_std = pred_log_env.std(axis=0)
+        if self.target_log_env is not None:
+            target_log_env = np.concatenate(self.target_log_env)
+            target_mean = target_log_env.mean(axis=0)
+            target_std = target_log_env.std(axis=0)
+
+        # Time axis
+        time_ax = np.arange(0, self.sig_len) / self.fs
+
+        # Plot
+        fig, ax = plt.subplots(figsize=(9, 6))
+        ax.plot(time_ax, pred_mean, "g", label="Reconstructed")
+        ax.fill_between(
+            time_ax, 
+            pred_mean - pred_std, 
+            pred_mean + pred_std, 
+            color="g", 
+            alpha=0.2,
+        )
+        if self.target_log_env is not None:
+            ax.plot(time_ax, target_mean, "r", label="Target")
+            ax.fill_between(
+                time_ax,
+                target_mean - target_std,
+                target_mean + target_std,
+                color="r",
+                alpha=0.2,
+            )
+            
+        #ax.set_xscale("log")
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Log Envelope")
+        if title is None:
+            title = prefix_name + self.name
+        ax.set_title(title)
+        ax.legend()
+        fig.tight_layout()
+        return fig    
 
 
 class BinMetric(AbstractMetric):

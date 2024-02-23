@@ -101,6 +101,14 @@ class Config:
         "magnitude",
         "vs30"
     )
+    # TODO: check if they are correct
+    conditional_params_range = {
+        "hypocentral_distance": (0., 200.),
+        "is_shallow_crustal": (0., 1.), # 0: False, 1: True
+        "log10snr": (0., 4.),
+        "magnitude": (3., 8.),
+        "vs30": (180., 760.)
+    }
     num_channels: int = 3
     signal_length: int = (5501 // 32) * 32 # is it something that one should change?
 

@@ -35,7 +35,7 @@ class Representation(ABC):
     def get_input_shape(self, signal_input_shape):
         return self._get_input_shape(signal_input_shape)
     
-    def _to_numpy(x):
+    def _to_numpy(self, x):
         return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
 
 
