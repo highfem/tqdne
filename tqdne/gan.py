@@ -14,10 +14,8 @@ class LightningGAN(pl.LightningModule):
         A dictionary of parameters for the optimizer.
     prediction_type : str, optional
         The type of prediction to make. One of "epsilon" or "sample".
-    low_res_input : bool, optional
+    cond_signal_input : bool, optional
         Whether low resolution input is provided.
     cond_input : bool, optional
         Whether conditional input is provided.
     """
-
-    pass

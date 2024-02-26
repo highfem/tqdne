@@ -6,18 +6,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import logging
 from pathlib import Path
 
+from diffusers import DDPMScheduler
 from torch.utils.data import DataLoader
 
-from diffusers import DDPMScheduler
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
-from tqdne.metric import (
-    BinMetric,
-    MeanSquaredError,
-    PowerSpectralDensity,
-    UpsamplingSamplePlot,
-)
+from tqdne.metric import MeanSquaredError, PowerSpectralDensity
+from tqdne.plot import BinPlot, UpsamplingSamplePlot
 from tqdne.training import get_pl_trainer
 from tqdne.unet_1d import UNet1DModel
 from tqdne.utils import get_last_checkpoint
@@ -38,21 +34,23 @@ if __name__ == "__main__":
     train_dataset = UpsamplingDataset(path_train, cut=t)
     test_dataset = UpsamplingDataset(path_test, cut=t)
 
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["signal"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # metrics
-    plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
     mse = [MeanSquaredError(channel=c) for c in range(channels)]
     psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    bin_metrics = [BinMetric(metric) for metric in mse + psd]
-    metrics = plots + mse + psd + bin_metrics
+    metrics = mse + psd
 
+    # plots
+    upsample_plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    bin_plots = [BinPlot(metric) for metric in metrics]
+    plots = upsample_plots + bin_plots
+
+    # parameters
     logging.info("Set parameters...")
-
-    # Unet parameters
     unet_params = {
         "sample_size": t,
         "in_channels": 2 * channels,
@@ -119,13 +117,15 @@ if __name__ == "__main__":
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=True,
+        cond_signal_input=True,
         cond_input=True,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
 
-    trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
+    trainer = get_pl_trainer(
+        name, test_loader, metrics, plots, eval_every=5, log_to_wandb=True, **trainer_params
+    )
 
     logging.info("Start training...")
 

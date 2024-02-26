@@ -118,8 +118,8 @@ class RandomDataset(torch.utils.data.Dataset):
         lowpass = signal.sosfilt(self.lp, x)  # + 0.1 * x
 
         return {
-            "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
-            "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
+            "signal": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
+            "cond_signal": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
         }
 
 
@@ -175,14 +175,14 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         # features = (features - self.features_means) / self.features_stds
 
         if self.cut:
-            high_res = waveform[:, : self.cut]
-            low_res = filtered[:, : self.cut]
+            signal = waveform[:, : self.cut]
+            cond_signal = filtered[:, : self.cut]
         else:
-            high_res = waveform
-            low_res = filtered
+            signal = waveform
+            cond_signal = filtered
 
         return {
-            "high_res": torch.tensor(high_res, dtype=torch.float32),
-            "low_res": torch.tensor(low_res, dtype=torch.float32),
+            "signal": torch.tensor(signal, dtype=torch.float32),
+            "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
