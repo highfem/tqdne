@@ -1,44 +1,46 @@
 import os
-# select GPU 0
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
-from tqdne.dataset import RandomDataset
-from torch.utils.data import DataLoader
-from diffusers import UNet1DModel
-from diffusers import DDPMScheduler
-from tqdne.conf import Config
-from tqdne.diffusion import LightningDDMP
-from tqdne.metric import PowerSpectralDensity, SamplePlot, MeanSquaredError, UpsamplingSamplePlot
-from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint
+# select GPU 0
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import logging
 
+from diffusers import DDPMScheduler, UNet1DModel
+from torch.utils.data import DataLoader
 
-if __name__ == '__main__':
+from tqdne.conf import Config
+from tqdne.dataset import RandomDataset
+from tqdne.diffusion import LightningDDMP
+from tqdne.metric import PowerSpectralDensity
+from tqdne.plot import SamplePlot
+from tqdne.training import get_pl_trainer
+from tqdne.utils import get_last_checkpoint
+
+if __name__ == "__main__":
 
     logging.info("Loading data...")
     resume = True
     t = (5501 // 32) * 32
-    batch_size = 64
+    batch_size = 2
     max_epochs = 1000
-    prediction_type = "sample" # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
+    prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample)
 
-    name = '1D-UNET-TOY-DDPM'
+    name = "1D-UNET-TOY-DDPM"
     config = Config()
 
-    train_dataset = RandomDataset(1024*8, t=t)
+    train_dataset = RandomDataset(1024 * 8, t=t)
     test_dataset = RandomDataset(512, t=t)
 
-
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["signal"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     # metrics
-    plots = [UpsamplingSamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    metrics = plots + psd
+    metrics = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+
+    # plots
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
 
     logging.info("Set parameters...")
     # Unet parameters
@@ -66,7 +68,7 @@ if __name__ == '__main__':
         "beta_end": 0.02,
         "num_train_timesteps": 1000,
         "clip_sample": False,
-        "prediction_type": prediction_type, 
+        "prediction_type": prediction_type,
     }
 
     optimizer_params = {
@@ -92,7 +94,6 @@ if __name__ == '__main__':
         "num_nodes": 1,
     }
 
-    
     logging.info("Build network...")
     net = UNet1DModel(**unet_params)
     logging.info(net.config)
@@ -107,14 +108,15 @@ if __name__ == '__main__':
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=False,
+        cond_signal_input=False,
         cond_input=False,
     )
 
-
     logging.info("Build Pytorch Lightning Trainer...")
-    trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
-    
+    trainer = get_pl_trainer(
+        name, test_loader, metrics, plots, eval_every=5, log_to_wandb=False, **trainer_params
+    )
+
     logging.info("Start training...")
     if resume:
         checkpoint = get_last_checkpoint(trainer.default_root_dir)

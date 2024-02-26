@@ -1,8 +1,37 @@
-from typing import Type
 import logging
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-import pytorch_lightning as pl
+from typing import Type
+
 import PIL
+import pytorch_lightning as pl
+import torch
+
+
+def to_numpy(x):
+    if isinstance(x, Sequence):
+        return x.__class__(to_numpy(v) for v in x)
+    elif isinstance(x, Mapping):
+        return x.__class__((k, to_numpy(v)) for k, v in x.items())
+    else:
+        return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
+
+
+class NumpyArgMixin:
+    """Mixin for automatic conversion of method arguments to numpy arrays."""
+
+    def __getattribute__(self, name):
+        """Return a function wrapper that converts method arguments to numpy arrays."""
+        attr = super().__getattribute__(name)
+        if not callable(attr):
+            return attr
+
+        def wrapper(*args, **kwargs):
+            args = to_numpy(args)
+            kwargs = to_numpy(kwargs)
+            return attr(*args, **kwargs)
+
+        return wrapper
 
 
 def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):

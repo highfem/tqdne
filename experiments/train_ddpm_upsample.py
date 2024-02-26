@@ -6,9 +6,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import logging
 from pathlib import Path
 
+from diffusers import DDPMScheduler, UNet1DModel
 from torch.utils.data import DataLoader
 
-from diffusers import DDPMScheduler, UNet1DModel
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     train_dataset = UpsamplingDataset(path_train, cut=t)
     test_dataset = UpsamplingDataset(path_test, cut=t)
 
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["signal"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=True,
+        cond_signal_input=True,
         cond_input=False,
     )
 

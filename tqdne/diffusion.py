@@ -20,7 +20,7 @@ class LightningDDMP(pl.LightningModule):
         A dictionary of parameters for the optimizer.
     prediction_type : str, optional
         The type of prediction to make. One of "epsilon" or "sample".
-    low_res_input : bool, optional
+    cond_signal_input : bool, optional
         Whether low resolution input is provided.
     cond_input : bool, optional
         Whether conditional input is provided.
@@ -32,7 +32,7 @@ class LightningDDMP(pl.LightningModule):
         noise_scheduler: DDPMScheduler,
         optimizer_params: dict,
         prediction_type: str = "epsilon",
-        low_res_input: bool = False,
+        cond_signal_input: bool = False,
         cond_input: bool = False,
     ):
         super().__init__()
@@ -43,7 +43,7 @@ class LightningDDMP(pl.LightningModule):
         if prediction_type not in ["epsilon", "sample"]:
             raise ValueError(f"Unknown prediction type {prediction_type}")
         self.prediction_type = prediction_type
-        self.low_res_input = low_res_input
+        self.cond_signal_input = cond_signal_input
         self.cond_input = cond_input
         self.save_hyperparameters()
 
@@ -53,13 +53,13 @@ class LightningDDMP(pl.LightningModule):
         else:
             self.log(f"val_{name}", value, prog_bar=prog_bar)
 
-    def forward(self, input, t, low_res=None, cond=None):
+    def forward(self, input, t, cond_signal=None, cond=None):
         """Make a forward pass through the network."""
 
         # input
-        if self.low_res_input:
-            assert low_res is not None
-            input = torch.cat((low_res, input), dim=1)
+        if self.cond_signal_input:
+            assert cond_signal is not None
+            input = torch.cat((cond_signal, input), dim=1)
 
         # predict
         if self.cond_input:
@@ -68,44 +68,43 @@ class LightningDDMP(pl.LightningModule):
         else:
             return self.net(input, t)[0]
 
-    def sample(self, shape, low_res=None, cond=None):
+    def sample(self, shape, cond_signal=None, cond=None):
         """Sample from the diffusion model."""
         # initialize noise
         sample = torch.randn(shape, device=self.device)
 
         # sample iteratively
         for t in tqdm(self.noise_scheduler.timesteps):
-            pred = self.forward(sample, t, low_res, cond)
+            pred = self.forward(sample, t, cond_signal, cond)
             sample = self.noise_scheduler.step(pred, t, sample).prev_sample
 
         return sample
 
     def evaluate(self, batch):
         """Evaluate diffusion model."""
-        shape = batch["high_res"].shape
-        low_res = batch["low_res"] if self.low_res_input else None
+        shape = batch["signal"].shape
+        cond_signal = batch["cond_signal"] if self.cond_signal_input else None
         cond = batch["cond"] if self.cond_input else None
-        sample = self.sample(shape, low_res, cond)
-        return {"high_res": sample}
+        return self.sample(shape, cond_signal, cond)
 
     def step(self, batch, train):
-        high_res_batch = batch["high_res"]
-        low_res_batch = batch["low_res"]
+        signal_batch = batch["signal"]
+        cond_signal_batch = batch["cond_signal"]
         cond_batch = batch["cond"] if self.cond_input else None
 
         # add noise
-        noise = torch.randn(high_res_batch.shape, device=high_res_batch.device)
+        noise = torch.randn(signal_batch.shape, device=signal_batch.device)
         timesteps = torch.randint(
             0,
             self.noise_scheduler.config.num_train_timesteps,
-            (high_res_batch.shape[0],),
-            device=high_res_batch.device,
+            (signal_batch.shape[0],),
+            device=signal_batch.device,
         ).long()
-        noisy_hig_res = self.noise_scheduler.add_noise(high_res_batch, noise, timesteps)
+        noisy_hig_res = self.noise_scheduler.add_noise(signal_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, low_res_batch, cond_batch)
-        target = noise if self.prediction_type == "epsilon" else high_res_batch
+        pred = self.forward(noisy_hig_res, timesteps, cond_signal_batch, cond_batch)
+        target = noise if self.prediction_type == "epsilon" else signal_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)
 

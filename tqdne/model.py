@@ -70,7 +70,6 @@ class CNN1D(nn.Module):
     """
 
     def __init__(self, input_channel, n_convs, kernel_sizes, strides):
-
         super(CNN1D, self).__init__()
         self.input_channel = input_channel
         self.n_convs = n_convs
