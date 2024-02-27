@@ -124,39 +124,27 @@ class RandomDataset(torch.utils.data.Dataset):
 
 
 class UpsamplingDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, cut=None, in_memory=False, config=Config()):
+    def __init__(self, h5_path, cut=None, cond=False, config=Config()):
         super().__init__()
         self.h5_path = h5_path
-        self.in_memory = in_memory
+        self.cut = cut
+        self.cond = cond
         self.sigma_in = config.sigma_in
-        if in_memory:
-            with h5py.File(h5_path, "r") as file:
-                self.features = file["features"][:]
-                self.waveform = file["waveform"][:]
-                self.filtered = file["filtered"][:]
-                self.time = file["time"][:]
-                self.features_means = file["feature_means"][:]
-                self.features_stds = file["feature_stds"][:]
 
-        else:
-            self.file = h5py.File(h5_path, "r")
-            self.features = self.file["features"]
-            self.waveform = self.file["waveform"]
-            self.filtered = self.file["filtered"]
-            self.time = self.file["time"][:]
+        self.file = h5py.File(h5_path, "r")
+        self.waveform = self.file["waveform"]
+        self.filtered = self.file["filtered"]
+        if cond:
+            self.features = self.file["features"][:]
             self.features_means = self.file["feature_means"][:]
             self.features_stds = self.file["feature_stds"][:]
-
-        self.n = len(self.features)
-        assert self.n == len(self.waveform)
-        self.cut = cut
 
     def __del__(self):
         if not self.in_memory:
             self.file.close()
 
     def __len__(self):
-        return self.n
+        return len(self.waveform)
 
     def __getitem__(self, index):
         waveform = self.waveform[index]
