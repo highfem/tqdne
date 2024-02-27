@@ -6,7 +6,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import logging
 from pathlib import Path
 
-from diffusers import DDPMScheduler, UNet1DModel
+from diffusers import DDPMScheduler
 from torch.utils.data import DataLoader
 
 from tqdne.conf import Config
@@ -15,12 +15,13 @@ from tqdne.diffusion import LightningDDMP
 from tqdne.metric import PowerSpectralDensity
 from tqdne.plot import SamplePlot
 from tqdne.training import get_pl_trainer
+from tqdne.unet import UNetModel
 from tqdne.utils import get_last_checkpoint
 
 if __name__ == "__main__":
     resume = False
     logging.info("Loading data...")
-    t = (5501 // 32) * 32
+    t = 4096
     batch_size = 64
     max_epochs = 100
     prediction_type = "sample"  # `epsilon` (predicts the noise of the diffusion process) or `sample` (directly predicts the noisy sample`
@@ -48,21 +49,13 @@ if __name__ == "__main__":
 
     # Unet parameters
     unet_params = {
-        "sample_size": t,
         "in_channels": channels,
         "out_channels": channels,
-        "block_out_channels": (32, 64, 128, 256),
-        "down_block_types": (
-            "DownBlock1D",
-            "DownBlock1D",
-            "DownBlock1D",
-            "AttnDownBlock1D",
-        ),
-        "up_block_types": ("AttnUpBlock1D", "UpBlock1D", "UpBlock1D", "UpBlock1D"),
-        "mid_block_type": "UNetMidBlock1D",
-        "out_block_type": "OutConv1DBlock",
-        "extra_in_channels": 0,
-        "act_fn": "relu",
+        "dims": 1,
+        "model_channels": 32,
+        "num_res_blocks": 2,
+        "num_heads": 4,
+        "flash_attention": False,
     }
 
     scheduler_params = {
@@ -98,8 +91,8 @@ if __name__ == "__main__":
     }
 
     logging.info("Build network...")
-    net = UNet1DModel(**unet_params)
-    logging.info(net.config)
+    net = UNetModel(**unet_params)
+    logging.info(unet_params)
 
     logging.info("Build scheduler...")
     scheduler = DDPMScheduler(**scheduler_params)

@@ -62,11 +62,8 @@ class LightningDDMP(pl.LightningModule):
             input = torch.cat((cond_signal, input), dim=1)
 
         # predict
-        if self.cond_input:
-            assert cond is not None
-            return self.net(input, t, cond=cond)[0]
-        else:
-            return self.net(input, t)[0]
+        cond = cond if self.cond_input else None
+        return self.net(input, t, cond=cond)
 
     def sample(self, shape, cond_signal=None, cond=None):
         """Sample from the diffusion model."""
@@ -75,7 +72,9 @@ class LightningDDMP(pl.LightningModule):
 
         # sample iteratively
         for t in tqdm(self.noise_scheduler.timesteps):
-            pred = self.forward(sample, t, cond_signal, cond)
+            pred = self.forward(
+                sample, t * torch.ones(shape[0], device=self.device), cond_signal, cond
+            )
             sample = self.noise_scheduler.step(pred, t, sample).prev_sample
 
         return sample
@@ -100,10 +99,10 @@ class LightningDDMP(pl.LightningModule):
             (signal_batch.shape[0],),
             device=signal_batch.device,
         ).long()
-        noisy_hig_res = self.noise_scheduler.add_noise(signal_batch, noise, timesteps)
+        noisy_signal = self.noise_scheduler.add_noise(signal_batch, noise, timesteps)
 
         # loss
-        pred = self.forward(noisy_hig_res, timesteps, cond_signal_batch, cond_batch)
+        pred = self.forward(noisy_signal, timesteps, cond_signal_batch, cond_batch)
         target = noise if self.prediction_type == "epsilon" else signal_batch
         loss = F.mse_loss(pred, target)
         self.log_value(loss, "loss", train=train, prog_bar=True)
