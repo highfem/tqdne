@@ -7,7 +7,7 @@ import tqdm
 from scipy import signal
 
 from tqdne.conf import Config
-from tqdne.representations import Representation
+from tqdne.representations import Representation, SignalWithEnvelope
 
 
 def compute_mean_std(array):
@@ -215,10 +215,10 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         }
 
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None):
+    def __init__(self, h5_path, data_repr_params, cut=None):
         super().__init__()
         self.h5_path = h5_path
-        self.representation = representation
+        self.representation = SignalWithEnvelope(**data_repr_params) # TODO: I guess that the EnvelopeDataset should always use SignalWithEnvelope
 
         self.file = h5py.File(h5_path, "r")
         self.features = self.file["features"][:]

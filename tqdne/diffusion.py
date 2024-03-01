@@ -3,18 +3,18 @@ import torch
 from torch.nn import functional as F
 from tqdm import tqdm
 
-from diffusers import DDPMScheduler
+from diffusers import ConfigMixin, SchedulerMixin
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 
-class LightningDDMP(pl.LightningModule):
+class LightningDiffusion(pl.LightningModule):
     """A PyTorch Lightning module for training a diffusion model
 
     Parameters
     ----------
     net : torch.nn.Module
         A PyTorch neural network.
-    noise_scheduler : DDPMScheduler
+    noise_scheduler : SchedulerMixin
         A scheduler for adding noise to the clean images.
     optimizer_params : dict
         A dictionary of parameters for the optimizer.
@@ -29,7 +29,7 @@ class LightningDDMP(pl.LightningModule):
     def __init__(
         self,
         net: torch.nn.Module,
-        noise_scheduler: DDPMScheduler,
+        noise_scheduler: SchedulerMixin,
         optimizer_params: dict,
         prediction_type: str = "epsilon",
         low_res_input: bool = False,

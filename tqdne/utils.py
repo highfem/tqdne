@@ -12,7 +12,7 @@ from tqdne.representations import *
 #from tqdne.metric import *
 from tqdne.conf import Config
 
-from tqdne.diffusion import LightningDDMP
+from tqdne.diffusion import LightningDiffusion
 
 from torchsummary import summary
 
@@ -57,7 +57,7 @@ def load_model_by_name(model_name: str, path: Path = None, **kwargs):
             # TODO: use on_save_checkpoint
             # to save and load the representation (thte model itself it's not safe to store)
         data_representation = SignalWithEnvelope(Config()) # TODO: not sure if it is the best design choice
-        model = load_model(LightningDDMP, path, **kwargs)
+        model = load_model(LightningDiffusion, path, **kwargs)
     
     elif model_name == "GAN":
         #if path is None:
@@ -191,10 +191,18 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
     signal_len = config.signal_length
     num_channels = config.num_channels
     if cond_input is None:
-        cond_input = generate_cond_inputs(batch_size, cond_input_params)     
-    with torch.no_grad():
-        model_output = model.sample(shape=model_data_representation._get_input_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(cond_input).to(device))
-    return {"waveforms": model_data_representation.invert_representation(model_output), "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
+        cond_input = generate_cond_inputs(batch_size, cond_input_params)
+        max_batch_size = 64
+        num_samples = batch_size
+        generated_waveforms = []
+        with torch.no_grad():
+            for i in range(0, num_samples, max_batch_size):
+                batch_cond_input = cond_input[i:i+max_batch_size]
+                batch_size = batch_cond_input.shape[0]
+                model_output = model.sample(shape=model_data_representation._get_input_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device))
+                generated_waveforms.append(model_data_representation.invert_representation(model_output))
+        generated_waveforms = np.concatenate(generated_waveforms, axis=0)
+    return {"waveforms": model_data_representation.invert_representation(generated_waveforms), "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
 
 def get_samples(data: dict[str, np.ndarray], num_samples = None, indexes: list = None) -> dict[str, np.ndarray]:
     assert num_samples is not None or indexes is not None, "Either num_samples or indexes must be provided."
@@ -440,12 +448,13 @@ def divide_data_by_bins(data: dict[str, np.ndarray], magnitude_bins: list[tuple]
         dict[str, dict[str, np.ndarray]]: A dictionary containing the divided data.
 
     """
-    divided_data = {f"({dist_bin}, {mag_bin})": [] for dist_bin in distance_bins for mag_bin in magnitude_bins}
+    divided_data = {}
     cond_input = data['cond']
     for i, dist_bin in enumerate(distance_bins):
         for j, mag_bin in enumerate(magnitude_bins):
             bins_indexes = (cond_input[:, 0] >= dist_bin[0]) & (cond_input[:, 0] < dist_bin[1]) & (cond_input[:, 3] >= mag_bin[0]) & (cond_input[:, 3] < mag_bin[1])
-            divided_data[f"({dist_bin}, {mag_bin})"] = {"waveforms": data['waveforms'][bins_indexes], "cond": cond_input[bins_indexes]}
+            if np.any(bins_indexes):
+                divided_data[f"({dist_bin}, {mag_bin})"] = {"waveforms": data['waveforms'][bins_indexes], "cond": cond_input[bins_indexes]}
     return divided_data
 
 

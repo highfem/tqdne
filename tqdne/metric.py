@@ -8,9 +8,9 @@ from torchmetrics import Metric
 
 from tqdne.representations import Representation
 
-# CIRCULAR IMPORTS
-#from tqdne.utils import to_numpy # TODO: maybe not anymore
 from tqdne.utils import _get_moving_avg_envelope, to_numpy
+
+# TODO: maybe rename into metrics.py
 
 class AbstractMetric(Metric, ABC):
     """Abstract metric class.

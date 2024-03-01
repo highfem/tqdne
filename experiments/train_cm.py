@@ -9,7 +9,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 
 from tqdne.conf import Config
-from tqdne.consistency_model import LithningConsistencyModel
+from tqdne.consistency_model import LightningConsistencyModel
 from tqdne.dataset import UpsamplingDataset
 from tqdne.metric import PowerSpectralDensity, SamplePlot
 from tqdne.training import get_pl_trainer
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     net = UNetModel(**unet_params)
 
     logging.info("Build lightning module...")
-    model = LithningConsistencyModel(net, lr=1e-4)
+    model = LightningConsistencyModel(net, lr=1e-4)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(

@@ -6,7 +6,7 @@ from pytorch_lightning.utilities.seed import isolate_rng
 from tqdne.nn import append_dims
 
 
-class LithningConsistencyModel(pl.LightningModule):
+class LightningConsistencyModel(pl.LightningModule):
     """A PyTorch Lightning module for training a consistency model.
 
     Implements Improved Techniques for Training Consistency Models (https://arxiv.org/abs/2310.14189).

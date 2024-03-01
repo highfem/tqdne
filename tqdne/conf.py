@@ -114,6 +114,9 @@ class Config:
 
     # Train Dataset statistics
     # TODO: this shouldn't be here. It should be a parameter of the class SignalWithEnvelope, that should be passed to the init method 
+    with open(datasetdir / Path("signal_statistics.pkl"), 'rb') as pickle_file:
+        signal_statistics = pickle.load(pickle_file)
+
     with open(datasetdir / Path("trans_env_statistics.pkl"), 'rb') as pickle_file:
-        transformed_env_statistics = pickle.load(pickle_file)
+        transformed_env_statistics = pickle.load(pickle_file)      
 

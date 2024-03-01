@@ -7,6 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import logging
 from pathlib import Path
+from pathlib import Path
 
 from torch.utils.data import DataLoader
 
@@ -22,7 +23,7 @@ from tqdne.metric import (
     SamplePlot,
 )
 from tqdne.training import get_pl_trainer
-from tqdne.unet_1d import UNet1DModel
+from tqdne.unet import UNet1DModel
 from tqdne.utils import get_last_checkpoint
 
 if __name__ == "__main__":
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # TODO: this should be done automatically by the representation 
-    channels = train_dataset[0]["representation"].shape[0] # already acounts for both envelope and signal (i.e. 6 channels in total)
+    channels = train_dataset[0]["representation"].shape[0] # already accounts for both envelope and signal (i.e. 6 channels in total)
 
     # train_dataset[0]['representation'].shape --> torch.Size([6, 5472])
     # train_dataset[0]['cond'].shape --> torch.Size([5])
@@ -145,7 +146,6 @@ if __name__ == "__main__":
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
-
     trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
 
     logging.info("Start training...")
