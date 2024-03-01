@@ -163,33 +163,23 @@ class WaveformDataset(torch.utils.data.Dataset):
 
 
 class UpsamplingDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None, in_memory=False, config=Config()):
+    def __init__(self, h5_path, representation: Representation, cut=None, cond=False, config=Config()):
         super().__init__()
         self.h5_path = h5_path
-        self.in_memory = in_memory
+        self.cut = cut
+        self.cond = cond
         self.sigma_in = config.sigma_in
         self.representation = representation
-        if in_memory:
-            with h5py.File(h5_path, "r") as file:
-                self.features = file["features"][:]
-                self.waveform = file["waveform"][:]
-                self.filtered = file["filtered"][:]
-                self.time = file["time"][:]
-                self.features_means = file["feature_means"][:]
-                self.features_stds = file["feature_stds"][:]
 
-        else:
-            self.file = h5py.File(h5_path, "r")
+        self.file = h5py.File(h5_path, "r")
+        self.waveform = self.file["waveform"]
+        self.filtered = self.file["filtered"]
+        if cond:
             self.features = self.file["features"]
-            self.waveform = self.file["waveform"]
-            self.filtered = self.file["filtered"]
-            self.time = self.file["time"][:]
             self.features_means = self.file["feature_means"][:]
             self.features_stds = self.file["feature_stds"][:]
 
-        self.n = len(self.features)
-        assert self.n == len(self.waveform)
-        self.cut = cut
+        self.n = len(self.waveform)
 
     def __del__(self):
         if not self.in_memory:
@@ -209,10 +199,6 @@ class UpsamplingDataset(torch.utils.data.Dataset):
 
         # add noise to filtered
         filtered += np.random.randn(*filtered.shape) * self.sigma_in
-
-        # features
-        features = self.features[index]
-        # features = (features - self.features_means) / self.features_stds
 
         if self.cut:
             high_res = waveform[:, : self.cut]
