@@ -11,6 +11,7 @@ from tqdne.logging import LogCallback
 def get_pl_trainer(
     name,
     val_loader,
+    representation,
     metrics,
     plots,
     eval_every=1,
@@ -30,14 +31,24 @@ def get_pl_trainer(
 
     # log callback
     callbacks.append(
-        LogCallback(val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
+        LogCallback(
+            val_loader,
+            representation,
+            metrics,
+            plots,
+            limit_batches=limit_eval_batches,
+            every=eval_every,
+        )
     )
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
-    if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:
+    if (
+        "enable_checkpointing" not in trainer_params
+        or trainer_params["enable_checkpointing"]
+    ):
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),

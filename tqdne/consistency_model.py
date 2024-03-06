@@ -60,10 +60,10 @@ class LithningConsistencyModel(pl.LightningModule):
         self.lognormal_std = lognormal_std
         self.lr = lr
 
-    def forward(self, sample, sigma, low_res=None, cond=None):
+    def forward(self, sample, sigma, cond_sample=None, cond=None):
         """Make a forward pass through the network with skip connection."""
         # concatenate optional low resolution input
-        input = sample if low_res is None else torch.cat((sample, low_res), dim=1)
+        input = sample if cond_sample is None else torch.cat((sample, cond_sample), dim=1)
 
         # skip coefficients
         c_skip = self.sigma_data**2 / (
@@ -81,7 +81,7 @@ class LithningConsistencyModel(pl.LightningModule):
         return out
 
     @torch.no_grad()
-    def sample(self, shape, sigmas=[1.0], low_res=None, cond=None):
+    def sample(self, shape, sigmas=[1.0], cond_sample=None, cond=None):
         """Sample from the consistency model.
 
         Parameters
@@ -90,7 +90,7 @@ class LithningConsistencyModel(pl.LightningModule):
             Shape of the sample.
         sigmas : list, optional
             List of standard deviations for optional refinements.
-        low_res : torch.Tensor, optional
+        cond_sample : torch.Tensor, optional
             Low resolution input.
         cond : torch.Tensor, optional
             Conditional input.
@@ -98,27 +98,26 @@ class LithningConsistencyModel(pl.LightningModule):
         """
         epsilon = torch.randn(shape, device=self.device)
         ones = torch.ones(shape[0], device=self.device)
-        sample = self(epsilon, ones * self.sigma_max, low_res, cond)
+        sample = self(epsilon, ones * self.sigma_max, cond_sample, cond)
 
         # optional refinements
         for sigma in sigmas:
             sample += torch.rand_like(sample) * sigma
-            sample = self(sample, ones * sigma, low_res, cond)
+            sample = self(sample, ones * sigma, cond_sample, cond)
 
         return sample
 
     def evaluate(self, batch, sigmas=[1]):
         """Evaluate the model on a batch of data."""
-        sample = batch["high_res"]
-        low_res = batch["low_res"] if "low_res" in batch else None
+        sample = batch["signal"]
+        cond_sample = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
-        # return self.sample(sample.shape, sigmas, low_res, cond) TODO: change interface
-        return {"high_res": self.sample(sample.shape, sigmas, low_res, cond)}
+        return self.sample(sample.shape, sigmas, cond_sample, cond)
 
     def step(self, batch):
         """A single step of training or validation."""
-        sample = batch["high_res"]
-        low_res = batch["low_res"] if "low_res" in batch else None
+        sample = batch["signal"]
+        cond_sample = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
 
         # calculate timesteps
@@ -159,12 +158,12 @@ class LithningConsistencyModel(pl.LightningModule):
         with torch.no_grad():
             with isolate_rng():
                 # teacher and student using the same random seed (for dropout)
-                target = self(teacher_sample, teacher_sigma, low_res, cond)
+                target = self(teacher_sample, teacher_sigma, cond_sample, cond)
 
         # make prediction with student
         student_sigma = sigmas[timesteps + 1]
         student_sample = sample + epsilon * append_dims(student_sigma, sample.dim())
-        prediction = self(student_sample, student_sigma, low_res, cond)
+        prediction = self(student_sample, student_sigma, cond_sample, cond)
 
         # compute pseudo huber loss
         sample_dim = np.prod(sample.shape[2:])  # assume (N, C, ...)
@@ -179,7 +178,7 @@ class LithningConsistencyModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx: int):
         loss = self.step(batch)
-        self.log("train_loss", loss.item())
+        self.log("train_loss", loss.item(), prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx: int):
