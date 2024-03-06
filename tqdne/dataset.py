@@ -93,7 +93,9 @@ def build_dataset(config=Config()):
                 featuress = fout.create_dataset("features", (len(indices), nf))
                 for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
                     waveform, features = extract_sample_from_h5file(f, idx)
-                    filtered[i] = np.array([signal.sosfilt(sos, channel) for channel in waveform])
+                    filtered[i] = np.array(
+                        [signal.sosfilt(sos, channel) for channel in waveform]
+                    )
                     waveforms[i] = waveform
                     featuress[i] = features
 
@@ -123,6 +125,50 @@ class RandomDataset(torch.utils.data.Dataset):
         }
 
 
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, representaion, cut=None, cond=False, config=Config()):
+        super().__init__()
+        self.h5_path = h5_path
+        self.cut = cut
+        self.cond = cond
+        self.representation = representaion
+        self.sigma_in = config.sigma_in
+
+        self.file = h5py.File(h5_path, "r")
+        self.waveform = self.file["waveform"]
+        if cond:
+            self.features = self.file["features"][:]
+            self.features_means = self.file["feature_means"][:]
+            self.features_stds = self.file["feature_stds"][:]
+
+    def __del__(self):
+        self.file.close()
+
+    def __len__(self):
+        return len(self.waveform)
+
+    def __getitem__(self, index):
+        waveform = self.waveform[index]
+
+        # normalize
+        scale = np.abs(waveform).max()
+        waveform = waveform / scale / 5
+
+        # features
+        features = self.features[index]
+        features = (features - self.features_means) / self.features_stds
+
+        if self.cut:
+            waveform = waveform[:, : self.cut]
+
+        signal = self.representation.get_representation(waveform)
+
+        return {
+            "signal": torch.tensor(signal, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
+        }
+
+
 class UpsamplingDataset(torch.utils.data.Dataset):
     def __init__(self, h5_path, cut=None, cond=False, config=Config()):
         super().__init__()
@@ -140,8 +186,7 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             self.features_stds = self.file["feature_stds"][:]
 
     def __del__(self):
-        if not self.in_memory:
-            self.file.close()
+        self.file.close()
 
     def __len__(self):
         return len(self.waveform)
@@ -160,7 +205,7 @@ class UpsamplingDataset(torch.utils.data.Dataset):
 
         # features
         features = self.features[index]
-        # features = (features - self.features_means) / self.features_stds
+        features = (features - self.features_means) / self.features_stds
 
         if self.cut:
             signal = waveform[:, : self.cut]

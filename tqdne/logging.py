@@ -14,14 +14,18 @@ class LogCallback(Callback):
 
     Args:
         val_loader (torch.utils.data.DataLoader): Validation data loader.
+        representation (tqdne.representation.Representation): Representation object.
         metrics (list): List of metrics to compute and log.
         limit_batches (int): Limit the number of validation batches to process (-1 for all).
         every (int): Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(self, val_loader, metrics, plots, limit_batches=1, every=1):
+    def __init__(
+        self, val_loader, representation, metrics, plots, limit_batches=1, every=1
+    ):
         super().__init__()
         self.val_loader = val_loader
+        self.representation = representation
         self.metrics = metrics
         self.plots = plots
         self.limit_batches = limit_batches
@@ -47,29 +51,43 @@ class LogCallback(Callback):
                 break
             batches.append(batch)
             batch = {
-                k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
+                k: v.to(pl_module.device) if isinstance(v, Tensor) else v
+                for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
             preds.append(pred)
 
-        batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
+        batch = {
+            k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()
+        }
         pred = torch.cat(preds, dim=0)
+
+        # Get signal from representation
+        signal = self.representation.invert_representation(batch["signal"])
+        cond_signal = (
+            self.representation.invert_representation(batch["cond_signal"])
+            if "cond_signal" in batch
+            else None
+        )
+        pred = self.representation.invert_representation(pred)
 
         # Log metrics
         for metric in self.metrics:
-            result = metric(pred=pred, target=batch["signal"])
+            result = metric(pred=pred, target=signal)
             pl_module.log(metric.name, result)
 
         # Log plots
         for plot in self.plots:
             fig = plot(
                 pred=pred,
-                target=batch["signal"],
-                cond_signal=batch["cond_signal"] if "cond_signal" in batch else None,
+                target=signal,
+                cond_signal=cond_signal,
                 cond=batch["cond"] if "cond" in batch else None,
             )
             try:
-                trainer.logger.experiment.log({f"{plot.name} (Image)": wandb.Image(fig)})
+                trainer.logger.experiment.log(
+                    {f"{plot.name} (Image)": wandb.Image(fig)}
+                )
                 trainer.logger.experiment.log({f"{plot.name} (Plot)": fig})
             except Exception as e:
                 warnings.warn(f"Failed to log plot: {e}")

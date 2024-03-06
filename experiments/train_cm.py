@@ -10,8 +10,10 @@ from torch.utils.data import DataLoader
 
 from tqdne.conf import Config
 from tqdne.consistency_model import LithningConsistencyModel
-from tqdne.dataset import UpsamplingDataset
-from tqdne.metric import PowerSpectralDensity, SamplePlot
+from tqdne.dataset import Dataset
+from tqdne.metric import PowerSpectralDensity
+from tqdne.plot import BinPlot, SamplePlot
+from tqdne.representation import LogSpectrogram
 from tqdne.training import get_pl_trainer
 from tqdne.unet import UNetModel
 from tqdne.utils import get_last_checkpoint
@@ -22,15 +24,17 @@ if __name__ == "__main__":
     t = 4096
     batch_size = 64
 
-    name = "CM-Unet1D-Upsample"
+    name = "CM-LogSpectrogram"
     config = Config()
+
+    representation = LogSpectrogram()
 
     path_train = config.datasetdir / Path(config.data_upsample_train)
     path_test = config.datasetdir / Path(config.data_upsample_test)
-    train_dataset = UpsamplingDataset(path_train, cut=t, cond=False)
-    test_dataset = UpsamplingDataset(path_test, cut=t, cond=False)
+    train_dataset = Dataset(path_train, representation, cut=t, cond=True)
+    test_dataset = Dataset(path_test, representation, cut=t, cond=True)
 
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["signal"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
@@ -39,17 +43,19 @@ if __name__ == "__main__":
     metrics = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
 
     # plots
-    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
+    plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)] + [
+        BinPlot(metric, num_mag_bins=4, num_dist_bins=4) for metric in metrics
+    ]
 
     logging.info("Set parameters...")
 
     # Unet parameters
     unet_params = {
-        "in_channels": channels * 2,  # high_res and low_res
+        "in_channels": channels,
         "out_channels": channels,
-        "cond_features": None,  # set to 5 if cond=True
-        "dims": 1,
-        "conv_kernel_size": 3,  # might want to change to 5
+        "cond_features": 5,  # set to 5 if cond=True
+        "dims": 2,
+        "conv_kernel_size": 3,
         "model_channels": 32,
         "num_res_blocks": 2,
         "num_heads": 4,
@@ -76,6 +82,7 @@ if __name__ == "__main__":
     trainer = get_pl_trainer(
         name,
         test_loader,
+        representation,
         metrics,
         plots,
         eval_every=5,

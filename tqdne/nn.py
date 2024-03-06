@@ -189,10 +189,6 @@ class GaussianFourierProjection(nn.Module):
 
     def forward(self, x):
         h = x[:, None] * self.W[None, :] * 2 * th.pi
-        h2 = x[:, None] * self.W * 2 * th.pi
-
-        assert h.shape == h2.shape
-        assert th.allclose(h, h2) 
 
         h = th.cat([th.sin(h), th.cos(h)], dim=-1)
         return h
