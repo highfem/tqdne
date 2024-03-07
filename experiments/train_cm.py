@@ -27,7 +27,7 @@ if __name__ == "__main__":
     name = "CM-LogSpectrogram"
     config = Config()
 
-    representation = LogSpectrogram()
+    representation = LogSpectrogram(output_shape=(256, 256))
 
     path_train = config.datasetdir / Path(config.data_upsample_train)
     path_test = config.datasetdir / Path(config.data_upsample_test)
@@ -57,6 +57,7 @@ if __name__ == "__main__":
         "dims": 2,
         "conv_kernel_size": 3,
         "model_channels": 32,
+        "channel_mult": (1, 2, 4, 4),  # might want to change to (1, 2, 4, 8)
         "num_res_blocks": 2,
         "num_heads": 4,
         "dropout": 0.2,
