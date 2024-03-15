@@ -1,45 +1,27 @@
 name: tqdne
 channels:
-  - defaults
   - pytorch
   - nvidia
+  - conda-forge
 dependencies:
-  - python=3.11
-  - tqdm
-  - scikit-learn
-  - scikit-image
-  - numpy
-  - matplotlib
-  - seaborn
-  - python-dotenv
-  - setuptools
-  - wandb
+  - h5py=3.10.0
+  - jupyterlab=4.1.1
+  - jupytext=1.16.1
+  - matplotlib=3.8.2
+  - ml-collections=0.1.1
+  - obspy=1.4.0
+  - diffusers=0.26.3
+  - python=3.11.7
+  - python-dotenv=1.0.1
   - pytorch::pytorch>=2.1
   - pytorch-cuda=11.8
   - torchvision>=0.17
   - pytorch-lightning>=2.0.0
-  - h5py
-  - accelerate
-  - transformers
-  - plotly
-  - pytest
-  - jupyterlab
-  - ipywidgets
-  - twine
-  - wheel
-  - flake8
-  - pylint
-  - sphinx<7.0.0
-  - numpydoc
-  - sphinxcontrib-bibtex
-  - sphinx-gallery
-  - memory_profiler
-  - sphinx-rtd-theme
-  - sphinx-copybutton
-  - nbsphinx
-  - pandoc
-  - black
-  - notebook=6.5.4
-  - pip
+  - scikit-image=0.22.0
+  - scikit-learn=1.4.0
+  - tox=4.12.1
+  - seaborn=0.13.2
+  - wandb=0.16.3
+  - pip=24.0
   - pip:
-    - -e .
+      - -e .

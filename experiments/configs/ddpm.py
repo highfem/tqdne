@@ -24,7 +24,7 @@ def get_config():
         net_params=new_dict(
             cond_features=5, 
             dims=1,
-            conv_kernel_size=3,  # might want to change to 5
+            conv_kernel_size=5,  # might want to change to 5
             model_channels=32,
             num_res_blocks=2,
             num_heads=4,
@@ -32,26 +32,32 @@ def get_config():
             flash_attention=False,  # flash attention not tested (potentially faster)
         ),
         optimizer_params=new_dict(
-            learning_rate=1e-4,
+            learning_rate=1e-3,
             lr_warmup_steps=500,
-            n_train=1000,
             batch_size=32,
-            max_epochs=100,
-            seed=0,
         ),
     )
 
     config.trainer_params = new_dict(
-        precision=32,
+        accumulate_grad_batches=1,
+        gradient_clip_val=1,
+        precision="32-true",
         accelerator="auto",
-        devices="1",
+        devices="auto",
         num_nodes=1,
+        max_epochs=100,
+        eval_every=5,
+        log_to_wandb=True,
+        num_sanity_val_steps=0,
+        fast_dev_run=False,
+        detect_anomaly=False,
     )
 
     config.data_repr = new_dict(
         name="SignalWithEnvelope",
         params=new_dict(
             env_function="hilbert",
+            env_function_params=new_dict(),
             env_transform="log",
             env_transform_params=new_dict(
                 log_offset=1e-5,
@@ -70,11 +76,12 @@ def get_config():
     config.plots = new_dict(
         sample=-1,
         psd=-1,
-        bin=new_dict(
-            num_mag_bins=4,
-            num_dist_bins=4,
-            metrics="all",
-        )
+        logenv=-1,
+        # bin=new_dict(
+        #     num_mag_bins=4,
+        #     num_dist_bins=4,
+        #     metrics="all",
+        # )
     )
 
     return config

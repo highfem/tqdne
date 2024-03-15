@@ -1,5 +1,7 @@
 import time
+import warnings
 
+import torch
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
 
@@ -17,10 +19,11 @@ class LogCallback(Callback):
         every (int): Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(self, val_loader, metrics, limit_batches=1, every=1):
+    def __init__(self, val_loader, metrics, plots, limit_batches=1, every=1):
         super().__init__()
-        self.metrics = metrics
         self.val_loader = val_loader
+        self.metrics = metrics
+        self.plots = plots
         self.limit_batches = limit_batches
         self.total_time = 0
         self.every = every
@@ -36,44 +39,40 @@ class LogCallback(Callback):
         if pl_module.current_epoch % self.every != 0:
             return
 
-        # Reset metrics
-        for metric in self.metrics:
-            metric.reset()
-
-        # Make predictions and update metrics
+        # Make predictions
+        batches = []
+        preds = []
         for i, batch in enumerate(self.val_loader):
             if self.limit_batches != -1 and i >= self.limit_batches:
                 break
+            batches.append(batch)
             batch = {
-                k: v.to(pl_module.device) if isinstance(v, Tensor) else v
-                for k, v in batch.items()
+                k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
-            for metric in self.metrics:
-                metric.update(pred, batch)
+            preds.append(pred)
+
+        batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
+        pred = torch.cat(preds, dim=0)
 
         # Log metrics
         for metric in self.metrics:
-            result = metric.compute()
-            if isinstance(result, dict):
-                pl_module.log_dict(result)
-            elif result is not None:
-                pl_module.log(metric.name, result)
+            result = metric(pred=pred, target=batch["representation"])
+            pl_module.log(metric.name, result)
 
-        # Log metric plots
-        for metric in self.metrics:
+        # Log plots
+        for plot in self.plots:
+            fig = plot(
+                pred=pred,
+                target=batch["representation"],
+                cond_signal=batch["cond_signal"] if "cond_signal" in batch else None,
+                cond=batch["cond"] if "cond" in batch else None,
+            )
             try:
-                plot = metric.plot()
-                name = metric.name
-                try:
-                    trainer.logger.experiment.log(
-                        {f"{name} (Image)": wandb.Image(plot)}
-                    )
-                    trainer.logger.experiment.log({f"{name} (Plot)": plot})
-                except:
-                    pass
-            except NotImplementedError:
-                pass
+                trainer.logger.experiment.log({f"{plot.name} (Image)": wandb.Image(fig)})
+                trainer.logger.experiment.log({f"{plot.name} (Plot)": fig})
+            except Exception as e:
+                warnings.warn(f"Failed to log plot: {e}")
 
     def on_train_batch_start(self, *args, **kwargs):
         """

@@ -7,11 +7,14 @@ build
 **#
 **~
 .DS_Store
-doc/_build/
-doc/backrefs/
-doc/examples/
+docs/_build/
+docs/backrefs/
+docs/examples/
 datasets/
 outputs/
 **/wandb/
 .venv
 .env
+.idea/
+
+notebooks/*ipynb

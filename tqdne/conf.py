@@ -68,6 +68,7 @@ OUTPUTDIR = LazyEnv(
 
 PROJECT_NAME = "tqdne"
 
+
 @dataclass
 class Config:
     """Configuration class for the project."""
@@ -76,7 +77,7 @@ class Config:
     datasetdir: Path = DATASETDIR
     outputdir: Path = OUTPUTDIR
     project_name: str = PROJECT_NAME
-    
+
     # dataset_files:
     data_upsample_train: str = "data_upsample_train.h5"
     data_upsample_test: str = "data_upsample_test.h5"
@@ -87,7 +88,7 @@ class Config:
     # Sampling frequency
     fs: int = 100
     # Filter parameters
-    params_filter: dict = field(default_factory= lambda: {"N": 2, "Wn": 1, "btype":'lp'})
+    params_filter: dict = field(default_factory=lambda: {"N": 2, "Wn": 1, "btype": "lp"})
 
     # Noise on the input
     sigma_in: float = 0.01
@@ -99,7 +100,7 @@ class Config:
         "is_shallow_crustal",
         "log10snr",
         "magnitude",
-        "vs30"
+        "vs30",
     )
     # TODO: check if they are correct
     conditional_params_range = {

@@ -5,10 +5,9 @@ import numpy as np
 import torch
 import tqdm
 from scipy import signal
+from typing import Type
 
 from tqdne.conf import Config
-from tqdne.representations import Representation, SignalWithEnvelope
-
 
 def compute_mean_std(array):
     """Compute mean and std of an array.
@@ -106,7 +105,7 @@ def build_dataset(config=Config()):
         
 
 class RandomDataset(torch.utils.data.Dataset):
-    def __init__(self, representation: Representation, n=1024 * 8, t=5472):
+    def __init__(self, representation, n = 1024 * 8, t = 5472):
         super().__init__()
         self.n = n
         self.t = t
@@ -123,70 +122,33 @@ class RandomDataset(torch.utils.data.Dataset):
         lowpass = signal.sosfilt(self.lp, x)  # + 0.1 * x
 
         return {
-           # "high_res": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
-           # "low_res": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
-           "representation": self.representation.get_representation([x.reshape(1, -1), lowpass.reshape(1, -1)])
-        }
-
-
-
-# TODO: to delete
-class WaveformDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None):
-        super().__init__()
-        self.h5_path = h5_path
-        self.representation = representation
-        with h5py.File(h5_path, "r") as file:
-            self.waveform = file["waveform"][:]
-            self.features = file["features"][:]
-            self.features_means = file["feature_means"][:]
-            self.features_stds = file["feature_stds"][:]
-
-        self.cut = cut
-
-    def __len__(self):
-        return len(self.features)
-
-    def __getitem__(self, index):
-        waveform = self.waveform[index]
-        if self.cut:
-            waveform = waveform[:, : self.cut]
-
-        features = self.features[index]
-        features = (features - self.features_means) / self.features_stds
-
-        waveform = self.representation.get_representation(waveform)
-        return {
-            "high_res": torch.tensor(waveform, dtype=torch.float32),
-            "cond": torch.tensor(features, dtype=torch.float32),
+            "signal": torch.tensor(x.reshape(1, -1), dtype=torch.float32),
+            "cond_signal": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
         }
 
 
 class UpsamplingDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representation: Representation, cut=None, cond=False, config=Config()):
+    def __init__(self, h5_path, cut=None, cond=False, config=Config()):
         super().__init__()
         self.h5_path = h5_path
         self.cut = cut
         self.cond = cond
         self.sigma_in = config.sigma_in
-        self.representation = representation
 
         self.file = h5py.File(h5_path, "r")
         self.waveform = self.file["waveform"]
         self.filtered = self.file["filtered"]
         if cond:
-            self.features = self.file["features"]
+            self.features = self.file["features"][:]
             self.features_means = self.file["feature_means"][:]
             self.features_stds = self.file["feature_stds"][:]
-
-        self.n = len(self.waveform)
 
     def __del__(self):
         if not self.in_memory:
             self.file.close()
 
     def __len__(self):
-        return self.n
+        return len(self.waveform)
 
     def __getitem__(self, index):
         waveform = self.waveform[index]
@@ -200,32 +162,41 @@ class UpsamplingDataset(torch.utils.data.Dataset):
         # add noise to filtered
         filtered += np.random.randn(*filtered.shape) * self.sigma_in
 
+        # features
+        features = self.features[index]
+        # features = (features - self.features_means) / self.features_stds
+
         if self.cut:
-            high_res = waveform[:, : self.cut]
-            low_res = filtered[:, : self.cut]
+            signal = waveform[:, : self.cut]
+            cond_signal = filtered[:, : self.cut]
         else:
-            high_res = waveform
-            low_res = filtered
+            signal = waveform
+            cond_signal = filtered
 
         return {
-            "representation": self.representation.get_representation([high_res, low_res]),
-            #"high_res": torch.tensor(high_res, dtype=torch.float32),
-            #"low_res": torch.tensor(low_res, dtype=torch.float32),
+            "signal": torch.tensor(signal, dtype=torch.float32),
+            "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
 
+
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_repr_params, cut=None):
+    def __init__(self, h5_path, data_repr, cut=None):
         super().__init__()
         self.h5_path = h5_path
-        self.representation = SignalWithEnvelope(**data_repr_params) # TODO: I guess that the EnvelopeDataset should always use SignalWithEnvelope
+        self.representation = data_repr
 
-        self.file = h5py.File(h5_path, "r")
+        self.file = h5py.File(h5_path, "r", locking=False)
         self.features = self.file["features"][:]
         self.waveforms = self.file["waveform"]
         #self.time = self.file["time"][:]
         self.features_means = self.file["feature_means"][:] #  Not really needed. Scaling is meaningless since embedding are sin/cos so periodic
         self.features_stds = self.file["feature_stds"][:] 
+        
+        # TODO: temporary fix for log10snr being inf
+        log10snr = self.features[:, 2]
+        log10snr[log10snr == np.inf] = 40  # since max(log10snr)=17
+        self.features[:, 2] = log10snr
 
         self.n = len(self.features)
         assert self.n == len(self.waveforms)

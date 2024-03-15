@@ -55,7 +55,7 @@ class MLP(nn.Module):
 
 
 class CNN1D(nn.Module):
-    """ Fully convolutional neural network for 1D data.
+    """Fully convolutional neural network for 1D data.
 
     Parameters
     ----------
@@ -68,8 +68,8 @@ class CNN1D(nn.Module):
     strides : list of int
         Strides per layer.
     """
-    def __init__(self, input_channel, n_convs, kernel_sizes, strides):
 
+    def __init__(self, input_channel, n_convs, kernel_sizes, strides):
         super(CNN1D, self).__init__()
         self.input_channel = input_channel
         self.n_convs = n_convs
@@ -82,13 +82,16 @@ class CNN1D(nn.Module):
         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
         nconv_old = self.input_channel
         for n_conv, kernel_size, stride in zip(self.n_convs, self.kernel_sizes, self.strides):
-            self.conv.append(nn.Conv1d(in_channels=nconv_old,
-                                       out_channels=n_conv,
-                                       kernel_size=kernel_size,
-                                       stride=stride,
-                                       padding=kernel_size//2))
+            self.conv.append(
+                nn.Conv1d(
+                    in_channels=nconv_old,
+                    out_channels=n_conv,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=kernel_size // 2,
+                )
+            )
             nconv_old = n_conv
-
 
     def forward(self, x):
         squeeze = False
@@ -137,9 +140,7 @@ class CNN2D(nn.Module):
 
         # Append a list of convolutional neural network, starting with the number of input channels specified in the model.
         nconv_old = self.input_channel
-        for n_conv, kernel_size, stride in zip(
-            self.convs, self.kernel_sizes, self.strides
-        ):
+        for n_conv, kernel_size, stride in zip(self.convs, self.kernel_sizes, self.strides):
             self.conv.append(
                 nn.Conv2d(
                     in_channels=nconv_old,

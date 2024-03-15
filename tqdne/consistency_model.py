@@ -33,6 +33,8 @@ class LightningConsistencyModel(pl.LightningModule):
         Standard deviation of the lognormal timestep distribution.
     lr : float, default=1e-4
         Learning rate.
+    example_input_array : torch.Tensor, optional
+        An example input array for the network.
     """
 
     def __init__(
@@ -47,6 +49,7 @@ class LightningConsistencyModel(pl.LightningModule):
         lognormal_mean: float = -1.1,
         lognormal_std: float = 2.0,
         lr: float = 1e-4,
+        example_input_array: torch.Tensor = None,
     ) -> None:
         super().__init__()
         self.net = net
@@ -59,11 +62,12 @@ class LightningConsistencyModel(pl.LightningModule):
         self.lognormal_mean = lognormal_mean
         self.lognormal_std = lognormal_std
         self.lr = lr
+        self.example_input_array = example_input_array
 
-    def forward(self, sample, sigma, low_res=None, cond=None):
+    def forward(self, sample, sigma, cond_signal=None, cond=None):
         """Make a forward pass through the network with skip connection."""
-        # concatenate optional low resolution input
-        input = sample if low_res is None else torch.cat((sample, low_res), dim=1)
+        # concatenate optional conditioning input signal
+        input = sample if cond_signal is None else torch.cat((sample, cond_signal), dim=1)
 
         # skip coefficients
         c_skip = self.sigma_data**2 / (
@@ -81,7 +85,7 @@ class LightningConsistencyModel(pl.LightningModule):
         return out
 
     @torch.no_grad()
-    def sample(self, shape, sigmas=[1.0], low_res=None, cond=None):
+    def sample(self, shape, sigmas=[1.0], cond_signal=None, cond=None):
         """Sample from the consistency model.
 
         Parameters
@@ -90,35 +94,35 @@ class LightningConsistencyModel(pl.LightningModule):
             Shape of the sample.
         sigmas : list, optional
             List of standard deviations for optional refinements.
-        low_res : torch.Tensor, optional
-            Low resolution input.
+        cond_signal : torch.Tensor, optional
+            Conditioning input signal.
         cond : torch.Tensor, optional
             Conditional input.
 
         """
         epsilon = torch.randn(shape, device=self.device)
         ones = torch.ones(shape[0], device=self.device)
-        sample = self(epsilon, ones * self.sigma_max, low_res, cond)
+        sample = self(epsilon, ones * self.sigma_max, cond_signal, cond)
 
         # optional refinements
         for sigma in sigmas:
             sample += torch.rand_like(sample) * sigma
-            sample = self(sample, ones * sigma, low_res, cond)
+            sample = self(sample, ones * sigma, cond_signal, cond)
 
         return sample
 
     def evaluate(self, batch, sigmas=[1]):
         """Evaluate the model on a batch of data."""
-        sample = batch["high_res"]
-        low_res = batch["low_res"] if "low_res" in batch else None
+        sample = batch["representation"]
+        cond_signal = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
-        # return self.sample(sample.shape, sigmas, low_res, cond) TODO: change interface
-        return {"high_res": self.sample(sample.shape, sigmas, low_res, cond)}
+        return self.sample(sample.shape, sigmas, cond_signal, cond) 
+        #return {"representation": self.sample(sample.shape, sigmas, cond_signal, cond)} old interface
 
     def step(self, batch):
         """A single step of training or validation."""
-        sample = batch["high_res"]
-        low_res = batch["low_res"] if "low_res" in batch else None
+        sample = batch["representation"]
+        cond_signal = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
 
         # calculate timesteps
@@ -159,12 +163,12 @@ class LightningConsistencyModel(pl.LightningModule):
         with torch.no_grad():
             with isolate_rng():
                 # teacher and student using the same random seed (for dropout)
-                target = self(teacher_sample, teacher_sigma, low_res, cond)
+                target = self(teacher_sample, teacher_sigma, cond_signal, cond)
 
         # make prediction with student
         student_sigma = sigmas[timesteps + 1]
         student_sample = sample + epsilon * append_dims(student_sigma, sample.dim())
-        prediction = self(student_sample, student_sigma, low_res, cond)
+        prediction = self(student_sample, student_sigma, cond_signal, cond)
 
         # compute pseudo huber loss
         sample_dim = np.prod(sample.shape[2:])  # assume (N, C, ...)

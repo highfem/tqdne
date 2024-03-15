@@ -1,27 +1,80 @@
 import logging
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Type
 
 import PIL
+import os
 import pytorch_lightning as pl
 from scipy import signal
 import torch
 import matplotlib.pyplot as plt
 
-from tqdne.representations import *
 #from tqdne.metric import *
 from tqdne.conf import Config
 
 from tqdne.diffusion import LightningDiffusion
-
-from torchsummary import summary
-
-
 import torch
+from tqdne.metric import *
+from tqdne.plot import *
 
-def to_numpy(x):
-    return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
+from tqdne.representations import *
 
+general_config = Config()
+
+def get_metrics_list(metrics_config, data_representation=None):
+    metrics = []
+    for metric, v in metrics_config.items():
+        if v == -1:
+            channels = [c for c in range(general_config.num_channels)]
+        else:
+            channels = [v]    
+        if metric == "psd":
+            for c in channels:
+                metrics.append(PowerSpectralDensity(fs=general_config.fs, channel=c, data_representation=data_representation))
+        elif metric == "mse":
+            for c in channels:
+                metrics.append(MeanSquaredError(channel=c, data_representation=data_representation))
+        else:
+            raise ValueError(f"Unknown metric name: {metric}")
+    return metrics    
+
+def get_plots_list(plots_config, metrics, data_representation=None):
+    plots = []
+    for plot, v_plot in plots_config.items():
+        if plot == "bin":
+            if v_plot.metrics == "all":
+                for m in metrics:
+                    plots.append(BinPlot(metric=m, num_mag_bins=v_plot.num_mag_bins, num_dist_bins=v_plot.num_dist_bins, data_representation=None)) # data_representation=None since the metric is already using it
+            elif v_plot.metrics == "channels-avg":
+                #for i in range(0, len(metrics), general_config.num_channels):
+                #    metric_avg = np.mean(metrics[i:i+general_config.num_channels])
+                #    plots.append(BinPlot())
+                # TODO: it should be handled by BinPlot itself 
+                raise NotImplementedError("channels-avg not implemented yet")
+        else:
+            if v_plot == -1:
+                channels = [c for c in range(general_config.num_channels)]
+            else:
+                channels = [v_plot]    
+            if plot == "psd":
+                for c in channels:
+                    plots.append(PowerSpectralDensityPlot(fs=general_config.fs, channel=c, data_representation=data_representation))
+            elif plot == "sample":
+                for c in channels:
+                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation))
+            elif plot == "logenv":
+                for c in channels:
+                    plots.append(LogEnvelopePlot(fs=general_config.fs, channel=c, data_representation=data_representation))        
+            else:
+                raise ValueError(f"Unknown metric name: {plot}")
+    return plots    
+
+def get_data_representation(repr_name, repr_params, signal_stats_dict):
+    if repr_name == "SignalWithEnvelope":
+        return SignalWithEnvelope(repr_params, dataset_stats_dict=signal_stats_dict)
+    else:
+        raise ValueError(f"Unknown representation name: {repr_name}")
 
 def load_model_by_name(model_name: str, path: Path = None, **kwargs):
     """Load the model from the outputs directory given the name of the model. 
@@ -53,10 +106,10 @@ def load_model_by_name(model_name: str, path: Path = None, **kwargs):
     
     if model_name == "diffusion_1d":
         if path is None:
-            path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/COND-1D-UNET-DDPM-envelope") # TODO: channge to CSCS path
+            path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/COND-1D-UNET-DDPM-envelope") # TODO: change to CSCS path
             # TODO: use on_save_checkpoint
             # to save and load the representation (thte model itself it's not safe to store)
-        data_representation = SignalWithEnvelope(Config()) # TODO: not sure if it is the best design choice
+        data_representation = SignalWithEnvelope(general_config) # TODO: not sure if it is the best design choice
         model = load_model(LightningDiffusion, path, **kwargs)
     
     elif model_name == "GAN":
@@ -72,6 +125,32 @@ def load_model_by_name(model_name: str, path: Path = None, **kwargs):
     #model = getattr(pl.LightningModule, f"load_from_checkpoint")(path, **kwargs)
     
     return model, data_representation
+
+
+# def to_numpy(x):
+#     if isinstance(x, Sequence):
+#         return x.__class__(to_numpy(v) for v in x)
+#     elif isinstance(x, Mapping):
+#         return x.__class__((k, to_numpy(v)) for k, v in x.items())
+#     else:
+#         return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
+
+
+# class NumpyArgMixin:
+#     """Mixin for automatic conversion of method arguments to numpy arrays."""
+
+#     def __getattribute__(self, name):
+#         """Return a function wrapper that converts method arguments to numpy arrays."""
+#         attr = super().__getattribute__(name)
+#         if not callable(attr):
+#             return attr
+
+#         def wrapper(*args, **kwargs):
+#             args = to_numpy(args)
+#             kwargs = to_numpy(kwargs)
+#             return attr(*args, **kwargs)
+
+#         return wrapper
 
 
 def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
@@ -121,9 +200,8 @@ def fig2PIL(fig):
     return PIL.Image.frombytes(mode="RGB", size=(w, h), data=buf)
 
 
-
 def get_last_checkpoint(dirpath):
-    checkpoints = sorted(list(Path(dirpath).glob("*.ckpt")))
+    checkpoints = sorted(list(Path(dirpath).glob("*.ckpt")), key=lambda x: os.path.getmtime(x))
     if len(checkpoints) == 0:
         logging.info("No checkpoint found. Returning None.")
         return None
@@ -186,10 +264,8 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
         np.ndarray: A dictionary containing the generated waveforms and the conditional inputs ("waveforms" and "cond").
     """
     assert cond_input_params is not None or cond_input is not None, "Either cond_input_params or cond_input must be provided."
-    config = Config()
-    conditional_params_range = config.conditional_params_range
-    signal_len = config.signal_length
-    num_channels = config.num_channels
+    signal_len = general_config.signal_length
+    num_channels = general_config.num_channels
     if cond_input is None:
         cond_input = generate_cond_inputs(batch_size, cond_input_params)
         max_batch_size = 64
@@ -232,7 +308,7 @@ def generate_cond_inputs(batch_size: int, cond_input_params: dict[str, list]) ->
             if param == "is_shallow_crustal":
                 cond_inputs.append(np.random.randint(0, 2, (batch_size,)))
             else:
-                cond_params_range = Config().conditional_params_range
+                cond_params_range = general_config.conditional_params_range
                 cond_inputs.append(np.random.uniform(cond_params_range[param][0], cond_params_range[param][1], size=batch_size))
     return np.stack(cond_inputs, axis=1)
 
@@ -255,8 +331,8 @@ def generate_cond_inputs(batch_size: int, cond_input_params: dict[str, list]) ->
     #     metric.update(data, target)
     #     metric.plot().show()
 
-def _get_cond_params_dict(cond_input: np.ndarray) -> dict[str, float]:
-    return {key: cond_input[i] for i, key in enumerate(Config().features_keys)}    
+def get_cond_params_dict(cond_input: np.ndarray) -> dict[str, float]:
+    return {key: cond_input[i] for i, key in enumerate(general_config.features_keys)}    
 
 
 def plot_waveform_and_psd(data: dict[str, np.ndarray]) -> None:
@@ -269,15 +345,15 @@ def plot_waveform_and_psd(data: dict[str, np.ndarray]) -> None:
     Returns:
         None
     """
-    config = Config()
-    fs = config.fs
-    signal_length = config.signal_length
+    fs = general_config.fs
+    signal_length = general_config.signal_length
+    num_channels = general_config.num_channels
 
     waveform = data['waveforms'][0]
     cond_input = data['cond'][0]
 
     # Plotting the three channels over time
-    fig, axs = plt.subplots(waveform.shape[0], 2, figsize=(18, 22), constrained_layout=True)
+    fig, axs = plt.subplots(waveform.shape[0], 2, figsize=(18, 12), constrained_layout=True)
 
     channels = ['channel1', 'channel2', 'channel3']  # TODO: Replace with actual channel names
     time_ax = np.arange(0, signal_length) / fs
@@ -294,7 +370,7 @@ def plot_waveform_and_psd(data: dict[str, np.ndarray]) -> None:
         axs[i, 1].set_ylabel('Power Spectral Density (dB/Hz)')
         axs[i, 1].legend()
     
-    fig.suptitle(f"Cond. params: {_get_cond_params_dict(cond_input)}")
+    fig.suptitle(f"Cond. params: {get_cond_params_dict(cond_input)}")
     #plt.tight_layout()
     plt.show()
         
@@ -312,9 +388,8 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
     Returns:
         None
     """
-    config = Config()
-    fs = config.fs
-    signal_length = config.signal_length
+    fs = general_config.fs
+    signal_length = general_config.signal_length
 
     waveforms = data['waveforms']
     cond_input = data['cond']
@@ -329,7 +404,7 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
     # create 3x1 subfigs
     subfigs = fig.subfigures(nrows=n, ncols=1)
     for row, subfig in enumerate(subfigs):
-        subfig.suptitle(f'Sample {row} - Cond. Input: {_get_cond_params_dict(cond_input[row])}')
+        subfig.suptitle(f'Sample {row} - Cond. Input: {get_cond_params_dict(cond_input[row])}')
 
         # create 1x3 subplots per subfig
         axs = subfig.subplots(nrows=1, ncols=m)
@@ -337,37 +412,39 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
             axs = [axs]
         axs[0].plot(time_ax, waveforms[row, channel_index], label=f"Gen. Signal")
         if plot_envelope:
-            env = _get_moving_avg_envelope(waveforms[row, channel_index].reshape(1, -1), window_len=int(1*fs))[0]
+            env = _get_moving_avg_envelope(waveforms[row, channel_index].reshape(1, -1))[0]
             axs[0].plot(time_ax, env, label=f"Envelope")
         axs[0].set_xlabel('Time (s)')  
         axs[0].set_ylabel('Amplitude')  # TODO: insert correct unit of measurement  
         axs[0].legend()
         if plot_log_envelope:
             assert(plot_envelope), "If plot_log_envelope is True, plot_envelope must be True as well."
-            axs[1].plot(time_ax, np.log(env + 1e-10), label=f"Log Envelope")    
+            axs[1].plot(time_ax, get_log_envelope(waveforms[row, channel_index].reshape(1, -1), env_function=_get_moving_avg_envelope), label=f"Log Envelope")    
             axs[1].set_xlabel('Time (s)')  
             axs[1].legend()
 
     plt.show()
 
-# def _get_moving_avg_envelope(a, window_len=50, step_length=50):
-#     def _rolling_window(x, window_len, step_length):
-#         pos = 0
-#         while pos < len(x) - window_len:
-#             yield x[pos : pos+window_len]
-#             pos += step_length
-
-#     a_pad = np.pad(a, (window_len//2, window_len//2), mode='edge')
-#     rw = _rolling_window(a_pad, window_len, step_length)
-#     rolling_mean = []
-#     for i, window in enumerate(rw):
-#         rolling_mean.append(window.mean())
-#     return np.array(rolling_mean)
-    
 def _get_moving_avg_envelope(a, window_len=50):
-    return signal.convolve(np.abs(a), np.ones((a.shape[0], window_len)), mode='same') / window_len
+    return signal.convolve(np.abs(a), np.ones((a.shape[0], window_len)), mode='same') / window_len    
+
+def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, env_function_params={}, eps=1e-7):
+    """
+    Get the log envelope of the given data.
+
+    Args:
+        data (np.ndarray): The input data.
+        env_function (str): The envelope function to use.
+        env_function_params (dict, optional): The parameters for the envelope function. Defaults to None.
+        eps (float, optional): A small value to add to the envelope before taking the logarithm. Defaults to 1e-7.
+
+    Returns:
+        np.ndarray: The log envelope of the input data.
+    """
+    return np.log(env_function(data, **env_function_params) + eps)    
+    
           
-def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distance_bins: int, channel_index: int = 0, plot: str = 'waveform'):                  
+def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distance_bins: int, channel_index: int = 0, plot_type: str = 'waveform'):                  
     """
     Plot the data by dividing it into bins based on conditional parameters.
 
@@ -376,17 +453,16 @@ def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distan
         num_magnitude_bins (int): The number of magnitude bins.
         num_distance_bins (int): The number of distance bins.
         channel_index (int, optional): The index of the channel to plot. Defaults to 0.
-        plot (str, optional): The type of plot. Can be 'waveform' or 'log_envelope'. Defaults to 'waveform'.
+        plot_type (str, optional): The type of plot. Can be 'waveform' or 'log_envelope'. Defaults to 'waveform'.
 
     Returns:
         None
     """
-    config = Config()
-    fs = config.fs
-    signal_length = config.signal_length
-    conditional_params_range = config.conditional_params_range
+    fs = general_config.fs
+    signal_length = general_config.signal_length
+    conditional_params_range = general_config.conditional_params_range
 
-    waveforms = data['waveforms']
+    waveforms = data['waveforms'][:, channel_index, :] if channel_index is not None else data['waveforms']  
     cond_input = data['cond']
 
     plots = [[list() for _ in range(num_distance_bins)] for _ in range(num_magnitude_bins)]  
@@ -410,10 +486,11 @@ def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distan
         dist_bin = int(
             (dist - min_dist) / (max_dist - min_dist) * num_distance_bins
         )
-        to_plot = waveforms[i, channel_index] if plot == 'waveform' else np.log(_get_moving_avg_envelope(waveforms[i, channel_index].reshape(1, -1))[0] + 1e-10)
+        to_plot = waveforms[i] if plot_type == 'waveform' else get_log_envelope(waveforms[i].reshape(1, -1)[0], env_function=_get_moving_avg_envelope)
         plots[mag_bin][dist_bin].append(to_plot)
 
-    fig, axs = plt.subplots(num_distance_bins, num_magnitude_bins, figsize=(18, 22), constrained_layout=True) 
+    fig, axs = plt.subplots(num_distance_bins, num_magnitude_bins, figsize=(12, 5*num_distance_bins), constrained_layout=True) 
+    axs = np.atleast_2d(axs)  # Adjust dimensions to ensure axs can be indexed with axs[i, j]
     time_ax = np.arange(0, signal_length) / fs
     for i in range(num_distance_bins):
         for j in range(num_magnitude_bins):
@@ -429,7 +506,7 @@ def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distan
             axs[i, j].fill_between(time_ax, p75, p25, alpha=0.5, label='IQR (25-75%)')
             axs[i, j].set_title(f"Mag. Bin: [{min_mag + (max_mag - min_mag) / num_magnitude_bins * i:.2f}, {min_mag + (max_mag - min_mag) / num_magnitude_bins * (i+1):.2f}] - Dist Bin: [{min_dist + (max_dist - min_dist) / num_distance_bins * j:.2f}, {min_dist + (max_dist - min_dist) / num_distance_bins * (j+1):.2f}] - Num. Samples: {len(plots[j][i])}")
             axs[i, j].set_xlabel('Time (s)')
-            ylabel = 'Amplitude' if plot == 'waveform' else 'Log Envelope' 
+            ylabel = 'Amplitude' if plot_type == 'waveform' else 'Log Envelope' 
             axs[i, j].set_ylabel(ylabel) 
             axs[i, j].legend()
 
@@ -468,17 +545,22 @@ def plot_log_envelope_bins(distance_bins: list[tuple], magnitude_bins: list[tupl
         data = generate_data(model, model_data_representation, len(test_sample_by_bins), cond_input=cond_inputs)
     data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
 
-    config = Config()
-    signal_length = config.signal_length
-    fs = config.fs
+    signal_length = general_config.signal_length
+    fs = general_config.fs
 
 
     time_ax = np.arange(0, signal_length) / fs
-    fig, axs = plt.subplots(len(distance_bins), 2, figsize=(18, 22))
+    fig, axs = plt.subplots(len(distance_bins), 2)
     for i, dist_bin in enumerate(distance_bins):
         for j, mag_bin in enumerate(magnitude_bins):
-            axs[i, 0].plot(np.log(_get_moving_avg_envelope(data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0] + 1e-10))[channel_index, :], label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
-            axs[i, 1].plot(np.log(_get_moving_avg_envelope(test_sample_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0] + 1e-10))[channel_index, :], label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
+            axs[i, 0].plot(
+                get_log_envelope(data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0], env_function=_get_moving_avg_envelope)[channel_index, :],
+                label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}"
+            )
+            axs[i, 1].plot(
+                get_log_envelope(test_sample_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0], env_function=_get_moving_avg_envelope)[channel_index, :], 
+                label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}"
+            )
             axs[i, 0].set_title('Generated')
             axs[i, 1].set_title('Real')
             axs[i, 0].set_xlabel('Time (s)')

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, ModelSummary
 from pytorch_lightning.loggers import WandbLogger
 
 from tqdne.conf import Config
@@ -12,11 +12,12 @@ def get_pl_trainer(
     name,
     val_loader,
     metrics,
-    limit_eval_batches=1,
+    plots,
     eval_every=1,
+    limit_eval_batches=1,
     log_to_wandb=True,
     config=Config(),
-    **trainer_params
+    **trainer_params,
 ):
     # wandb logger
     if log_to_wandb:
@@ -29,19 +30,14 @@ def get_pl_trainer(
 
     # log callback
     callbacks.append(
-        LogCallback(
-            val_loader, metrics, limit_batches=limit_eval_batches, every=eval_every
-        )
+        LogCallback(val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
     )
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
-    if (
-        "enable_checkpointing" not in trainer_params
-        or trainer_params["enable_checkpointing"]
-    ):
+    if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),
@@ -51,6 +47,9 @@ def get_pl_trainer(
                 save_top_k=5,
             )
         )
+        
+    # model summary
+    callbacks.append(ModelSummary(max_depth=-1))    
 
     output_dir = config.outputdir / Path(name)
     output_dir.mkdir(parents=True, exist_ok=True)

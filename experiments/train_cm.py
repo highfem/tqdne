@@ -9,7 +9,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 
 from tqdne.conf import Config
-from tqdne.consistency_model import LightningConsistencyModel
+from tqdne.consistency_model import LithningConsistencyModel
 from tqdne.dataset import UpsamplingDataset
 from tqdne.metric import PowerSpectralDensity, SamplePlot
 from tqdne.training import get_pl_trainer
@@ -36,9 +36,10 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # metrics
+    metrics = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+
+    # plots
     plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    metrics = plots + psd
 
     logging.info("Set parameters...")
 
@@ -69,17 +70,18 @@ if __name__ == "__main__":
     net = UNetModel(**unet_params)
 
     logging.info("Build lightning module...")
-    model = LightningConsistencyModel(net, lr=1e-4)
+    model = LithningConsistencyModel(net, lr=1e-4)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
         name,
         test_loader,
         metrics,
+        plots,
         eval_every=5,
         limit_eval_batches=-1,
         log_to_wandb=True,
-        **trainer_params
+        **trainer_params,
     )
 
     logging.info("Start training...")

@@ -20,6 +20,8 @@ from .nn import (
     normalization,
     zero_module,
 )
+from diffusers.configuration_utils import ConfigMixin, register_to_config
+from diffusers.models.modeling_utils import ModelMixin
 
 
 class TimestepBlock(nn.Module):
@@ -147,7 +149,7 @@ class ResBlock(TimestepBlock):
         out_channels=None,
         kernel_size=3,
         use_conv=False,
-        use_scale_shift_norm=False,
+        use_scale_shift_norm=False, #TODO: what's that?
         dims=2,
         use_checkpoint=False,
     ):
@@ -210,17 +212,19 @@ class ResBlock(TimestepBlock):
         )
 
     def _forward(self, x, emb):
-        h = self.in_layers(x)
-        emb_out = self.emb_layers(emb).type(h.dtype)
-        emb_out = append_dims(emb_out, h.dim())
+        # shapes at the first iteration
+        # x.shape -> torch.Size([8, 32, 5472]) 
+        h = self.in_layers(x) # h.shape -> torch.Size([8, 32, 5472])
+        emb_out = self.emb_layers(emb).type(h.dtype) # emb_out.shape -> torch.Size([8, 32]) (batch_size := 8)
+        emb_out = append_dims(emb_out, h.dim()) # emb_out.shape -> torch.Size([8, 32, 1])
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
             h = out_norm(h) * (1 + scale) + shift
             h = out_rest(h)
         else:
-            h = h + emb_out
-            h = self.out_layers(h)
+            h = h + emb_out # h.shape -> torch.Size([8, 32, 5472])
+            h = self.out_layers(h) # h.shape -> torch.Size([8, 32, 5472]) # TODO: return all 0s
         return self.skip_connection(x) + h
 
 
@@ -244,9 +248,7 @@ class AttentionBlock(nn.Module):
         self.norm = normalization(channels)
         self.qkv = conv_nd(dims, channels, channels * 3, 1)
         if flash_attention:
-            # TODO
-            pass 
-            #self.attention = QKVFlashAttention(channels, self.num_heads)
+            self.attention = QKVFlashAttention(channels, self.num_heads)
         else:
             self.attention = QKVAttention(self.num_heads)
 
@@ -263,51 +265,51 @@ class AttentionBlock(nn.Module):
         h = self.proj_out(h)
         return x + h
 
-# TODO: not in the tqdne env (import error)
-# class QKVFlashAttention(nn.Module):
-#     def __init__(
-#         self,
-#         embed_dim,
-#         num_heads,
-#         batch_first=True,
-#         attention_dropout=0.0,
-#         causal=False,
-#         device=None,
-#         dtype=None,
-#         **kwargs,
-#     ) -> None:
-#         from einops import rearrange
-#         from flash_attn.flash_attention import FlashAttention
 
-#         assert batch_first
-#         factory_kwargs = {"device": device, "dtype": dtype}
-#         super().__init__()
-#         self.embed_dim = embed_dim
-#         self.num_heads = num_heads
-#         self.causal = causal
+class QKVFlashAttention(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        batch_first=True,
+        attention_dropout=0.0,
+        causal=False,
+        device=None,
+        dtype=None,
+        **kwargs,
+    ) -> None:
+        from einops import rearrange
+        #from flash_attn.flash_attention import FlashAttention # TODO: requires CUDA 11.6
 
-#         assert (
-#             self.embed_dim % num_heads == 0
-#         ), "self.kdim must be divisible by num_heads"
-#         self.head_dim = self.embed_dim // num_heads
-#         assert self.head_dim in [16, 32, 64], "Only support head_dim == 16, 32, or 64"
+        assert batch_first
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.causal = causal
 
-#         self.inner_attn = FlashAttention(
-#             attention_dropout=attention_dropout, **factory_kwargs
-#         )
-#         self.rearrange = rearrange
+        assert (
+            self.embed_dim % num_heads == 0
+        ), "self.kdim must be divisible by num_heads"
+        self.head_dim = self.embed_dim // num_heads
+        assert self.head_dim in [16, 32, 64], "Only support head_dim == 16, 32, or 64"
 
-#     def forward(self, qkv, attn_mask=None, key_padding_mask=None, need_weights=False):
-#         qkv = self.rearrange(
-#             qkv, "b (three h d) s -> b s three h d", three=3, h=self.num_heads
-#         )
-#         qkv, _ = self.inner_attn(
-#             qkv,
-#             key_padding_mask=key_padding_mask,
-#             need_weights=need_weights,
-#             causal=self.causal,
-#         )
-#         return self.rearrange(qkv, "b s h d -> b (h d) s")
+        #self.inner_attn = FlashAttention(
+        #    attention_dropout=attention_dropout, **factory_kwargs
+        #)
+        self.rearrange = rearrange
+
+    def forward(self, qkv, attn_mask=None, key_padding_mask=None, need_weights=False):
+        qkv = self.rearrange(
+            qkv, "b (three h d) s -> b s three h d", three=3, h=self.num_heads
+        )
+        qkv, _ = self.inner_attn(
+            qkv,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            causal=self.causal,
+        )
+        return self.rearrange(qkv, "b s h d -> b (h d) s")
 
 
 class QKVAttention(nn.Module):
@@ -341,7 +343,7 @@ class QKVAttention(nn.Module):
         return a.reshape(bs, -1, length)
 
 
-class UNetModel(nn.Module):
+class UNetModel(ModelMixin, ConfigMixin):
     """
     The full UNet model with attention and timestep embedding.
 
@@ -369,7 +371,7 @@ class UNetModel(nn.Module):
     :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
     :param flash_attention: use the flash attention implementation.
     """
-
+    @register_to_config
     def __init__(
         self,
         in_channels,
@@ -558,11 +560,12 @@ class UNetModel(nn.Module):
 
         hs = []
         emb = self.time_mlp(self.time_embed(timesteps))
+        # emb.shape shape: torch.Size([8, 128]) (batch_size := 8)
 
         if self.cond_features is not None:
             if self.cond_embed is not None:
                 cond = self.cond_embed(cond).view(cond.shape[0], -1)
-            emb += self.cond_mlp(cond)
+            emb += self.cond_mlp(cond) # emb.shape -> torch.Size([8, 128]) (batch_size := 8)
 
         h = x
         for module in self.input_blocks:
@@ -570,6 +573,6 @@ class UNetModel(nn.Module):
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            h = th.cat([h, hs.pop()], dim=1)
-            h = module(h, emb)
-        return self.out(h)
+            h = th.cat([h, hs.pop()], dim=1) # TODO: is it correct to do the skip connection here?
+            h = module(h, emb)  
+        return self.out(h) # TODO: out are all 0s

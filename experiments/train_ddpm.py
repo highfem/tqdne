@@ -6,6 +6,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import logging
 from pathlib import Path
 
+from diffusers import DDPMScheduler
 from torch.utils.data import DataLoader
 
 from diffusers import DDPMScheduler
@@ -13,13 +14,16 @@ from tqdne.unet import UNetModel
 from tqdne.conf import Config
 from tqdne.dataset import UpsamplingDataset
 from tqdne.diffusion import LightningDDMP
-from tqdne.metric import PowerSpectralDensity, SamplePlot
+from tqdne.metric import PowerSpectralDensity
+from tqdne.plot import SamplePlot
 from tqdne.training import get_pl_trainer
+from tqdne.unet import UNetModel
 from tqdne.utils import get_last_checkpoint
 
 if __name__ == "__main__":
     resume = False
     logging.info("Loading data...")
+    t = 4096
     t = 4096
     batch_size = 64
     max_epochs = 100
@@ -33,15 +37,16 @@ if __name__ == "__main__":
     train_dataset = UpsamplingDataset(path_train, cut=t)
     test_dataset = UpsamplingDataset(path_test, cut=t)
 
-    channels = train_dataset[0]["high_res"].shape[0]
+    channels = train_dataset[0]["signal"].shape[0]
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # metrics
+    metrics = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
+
+    # plots
     plots = [SamplePlot(fs=config.fs, channel=c) for c in range(channels)]
-    psd = [PowerSpectralDensity(fs=config.fs, channel=c) for c in range(channels)]
-    metrics = plots + psd
 
     logging.info("Set parameters...")
 
@@ -49,6 +54,11 @@ if __name__ == "__main__":
     unet_params = {
         "in_channels": channels,
         "out_channels": channels,
+        "dims": 1,
+        "model_channels": 32,
+        "num_res_blocks": 2,
+        "num_heads": 4,
+        "flash_attention": False,
         "dims": 1,
         "model_channels": 32,
         "num_res_blocks": 2,
@@ -91,6 +101,8 @@ if __name__ == "__main__":
     logging.info("Build network...")
     net = UNetModel(**unet_params)
     logging.info(unet_params)
+    net = UNetModel(**unet_params)
+    logging.info(unet_params)
 
     logging.info("Build scheduler...")
     scheduler = DDPMScheduler(**scheduler_params)
@@ -102,13 +114,13 @@ if __name__ == "__main__":
         scheduler,
         prediction_type=prediction_type,
         optimizer_params=optimizer_params,
-        low_res_input=False,
+        cond_signal_input=False,
         cond_input=False,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
 
-    trainer = get_pl_trainer(name, test_loader, metrics, eval_every=5, **trainer_params)
+    trainer = get_pl_trainer(name, test_loader, metrics, plots, eval_every=5, **trainer_params)
 
     logging.info("Start training...")
 
