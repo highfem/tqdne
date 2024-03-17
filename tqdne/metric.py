@@ -10,22 +10,21 @@ class Metric(ABC):
     All metrics should inherit from this class.
     """
 
-    def __init__(self, channel=None, data_representation=None):
+    def __init__(self, channel=None, data_representation=None, invert_representation=True):
         self.channel = channel
         self.data_representation = data_representation
+        self.invert_representation = invert_representation
+        self.invert_representation_fun = data_representation.invert_representation if invert_representation else data_representation.to_numpy  
 
     @property
     def name(self):
-        # TODO: fix the bug that for channel 0 is like self.channel is None (no channel name is displayed)
         name = self.__class__.__name__
-        return f"{name} - Channel {self.channel}" if self.channel else name
+        return f"{name} - Channel {self.channel}" if self.channel is not None else name
 
     def __call__(self, pred, target):
-        #pred = to_numpy(pred)
-        #target = to_numpy(target)
         if self.data_representation is not None:
-            pred = self.data_representation.invert_representation(pred)
-            target = self.data_representation.invert_representation(target)
+            pred = self.invert_representation_fun(pred)
+            target = self.invert_representation_fun(target) 
         if self.channel is not None:
             pred = pred[:, self.channel]
             target = target[:, self.channel]
@@ -42,7 +41,7 @@ class MeanSquaredError(Metric):
 
 
 class PowerSpectralDensity(Metric):
-    def __init__(self, fs, channel=0, data_representation=None):
+    def __init__(self, fs, channel=0, data_representation=None, invert_representation=True):
         super().__init__(channel, data_representation)
         self.fs = fs
 

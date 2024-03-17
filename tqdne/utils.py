@@ -13,12 +13,13 @@ import matplotlib.pyplot as plt
 #from tqdne.metric import *
 from tqdne.conf import Config
 
+from tqdne.consistency_model import LightningConsistencyModel
 from tqdne.diffusion import LightningDiffusion
-import torch
 from tqdne.metric import *
 from tqdne.plot import *
-
+from tqdne.configs import ddpm, ddim, consistency_model
 from tqdne.representations import *
+from diffusers import DDPMScheduler, DDIMScheduler
 
 general_config = Config()
 
@@ -65,66 +66,120 @@ def get_plots_list(plots_config, metrics, data_representation=None):
                     plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation))
             elif plot == "logenv":
                 for c in channels:
-                    plots.append(LogEnvelopePlot(fs=general_config.fs, channel=c, data_representation=data_representation))        
+                    plots.append(LogEnvelopePlot(fs=general_config.fs, channel=c, data_representation=data_representation)) 
+            elif plot == "debug":
+                data_repr_channels = data_representation.get_shape((None, general_config.num_channels, None))[1]
+                channels = [c for c in range(data_repr_channels)]
+                for c in channels:
+                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation, invert_representation=False))              
             else:
                 raise ValueError(f"Unknown metric name: {plot}")
     return plots    
 
-def get_data_representation(repr_name, repr_params, signal_stats_dict):
+def get_data_representation(repr_name, repr_params, config):
     if repr_name == "SignalWithEnvelope":
-        return SignalWithEnvelope(repr_params, dataset_stats_dict=signal_stats_dict)
+        return SignalWithEnvelope(repr_params, config)
     else:
         raise ValueError(f"Unknown representation name: {repr_name}")
 
-def load_model_by_name(model_name: str, path: Path = None, **kwargs):
-    """Load the model from the outputs directory given the name of the model. 
-    If a path is specified, return the specific model from that path.
+# def load_model_by_name(model_name: str, path: Path = None, **kwargs):
+#     """Load the model from the outputs directory given the name of the model. 
+#     If a path is specified, return the specific model from that path.
 
-    Parameters
-    ----------
-    model_name : str
-        The name of the model to load. Only available options are "diffusion_1d" and "GAN".
-    path : Path
-        The checkpoint path.
-    **kwargs : dict
-        The keyword arguments to pass to the load_from_checkpoint method.
-        Instead one can add `self.save_hyperparameters()` to the init method
-        of the model.
+#     Parameters
+#     ----------
+#     model_name : str
+#         The name of the model to load. Only available options are "diffusion_1d" and "GAN".
+#     path : Path
+#         The checkpoint path.
+#     **kwargs : dict
+#         The keyword arguments to pass to the load_from_checkpoint method.
+#         Instead one can add `self.save_hyperparameters()` to the init method
+#         of the model.
 
-    Returns
-    -------
-    model : pl.LightningModule
-        The trained model.
-    data_representation : tqdne.representations.Representation
-        The data representation used by the model.
+#     Returns
+#     -------
+#     model : pl.LightningModule
+#         The trained model.
+#     data_representation : tqdne.representations.Representation
+#         The data representation used by the model.
 
+#     """
+
+#     available_models = ["diffusion_1d", "GAN"]
+#     if model_name not in available_models:
+#         raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")
+    
+#     if model_name == "diffusion_1d":
+#         if path is None:
+#             path = get_last_checkpoint(path) # TODO: change to CSCS path
+#             # TODO: use on_save_checkpoint
+#             # to save and load the representation (thte model itself it's not safe to store)
+#         #data_representation = SignalWithEnvelope(general_config, ) # TODO: not sure if it is the best design choice
+#         data_representation = get_data_representation(FLAGS.config.data_repr.name, FLAGS.config.data_repr.params, general_config.signal_statistics)
+#         model = load_model(LightningDiffusion, path, **kwargs)
+    
+#     elif model_name == "GAN":
+#         #if path is None:
+#         #    path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/GAN") # TODO: ask Francisco (or Robins(?))
+#         data_representation = None
+#         model = None
+
+#     else:
+#         raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")        
+
+
+#     #model = getattr(pl.LightningModule, f"load_from_checkpoint")(path, **kwargs)
+    
+#     return model, data_representation
+
+
+def load_model(model_ckpt_path: Path, use_ddim: bool = True):
     """
+    Loads a model from a given checkpoint directory path.
 
-    available_models = ["diffusion_1d", "GAN"]
-    if model_name not in available_models:
-        raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")
-    
-    if model_name == "diffusion_1d":
-        if path is None:
-            path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/COND-1D-UNET-DDPM-envelope") # TODO: change to CSCS path
-            # TODO: use on_save_checkpoint
-            # to save and load the representation (thte model itself it's not safe to store)
-        data_representation = SignalWithEnvelope(general_config) # TODO: not sure if it is the best design choice
-        model = load_model(LightningDiffusion, path, **kwargs)
-    
-    elif model_name == "GAN":
-        #if path is None:
-        #    path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/GAN") # TODO: ask Francisco (or Robins(?))
-        data_representation = None
-        model = None
+    Args:
+        model_ckpt_path (Path): The path of the directory containing the model checkpoints or a checkpoint file.
+        use_ddim (bool, optional): Whether to use the DDIM scheduler. Defaults to True.
 
+    Returns:
+        Tuple: A tuple containing the loaded model and the data representation used by the model.
+
+    Raises:
+        FileNotFoundError: If the model checkpoint file is not found.
+    """
+    if not model_ckpt_path.exists():
+        raise FileNotFoundError(f"Model checkpoint not found at {model_ckpt_path}.")
+    
+    model_ckpt_path = str(model_ckpt_path)
+    if model_ckpt_path.split(".")[-1] == "ckpt":
+        ckpt = model_ckpt_path
+        model_dir_name = model_ckpt_path.split("/")[-2]
     else:
-        raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")        
-
-
-    #model = getattr(pl.LightningModule, f"load_from_checkpoint")(path, **kwargs)
+        ckpt = get_last_checkpoint(model_ckpt_path)
+        model_dir_name = model_ckpt_path.split("/")[-1]
     
-    return model, data_representation
+    if "ddpm" in model_dir_name:
+        config_file = ddpm.get_config()
+        model = LightningDiffusion.load_from_checkpoint(ckpt)
+        noise_scheduler = DDIMScheduler(**config_file.model.scheduler_params)
+        noise_scheduler.set_timesteps(num_inference_steps=config_file.model.scheduler_params.num_train_timesteps // 20)
+        model.noise_scheduler = noise_scheduler
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], config_file.data_repr.params, general_config.signal_statistics)
+        return model, data_repr
+    
+    if "ddim" in model_dir_name:
+        model = LightningDiffusion.load_from_checkpoint(ckpt)
+        data_repr_config = ddim.get_config().data_repr
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config.signal_statistics)
+        return model, data_repr
+    
+    if "consistency-model" in model_dir_name:
+        model = LightningConsistencyModel.load_from_checkpoint(ckpt)
+        data_repr_config = consistency_model.get_config().data_repr
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config.signal_statistics)
+        return model, data_repr
+
 
 
 # def to_numpy(x):
@@ -153,31 +208,31 @@ def load_model_by_name(model_name: str, path: Path = None, **kwargs):
 #         return wrapper
 
 
-def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
-    """Load the model from the outputs directory.
+# def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
+#     """Load the model from the outputs directory.
 
-    Parameters
-    ----------
-    type : Type[pl.LightningModule]
-        The type of the model to load.
-    path : Path
-        The checkpoint path.
-    **kwargs : dict
-        The keyword arguments to pass to the load_from_checkpoint method.
-        Instead one can add `self.save_hyperparameters()` to the init method
-        of the model.
+#     Parameters
+#     ----------
+#     type : Type[pl.LightningModule]
+#         The type of the model to load.
+#     path : Path
+#         The checkpoint path.
+#     **kwargs : dict
+#         The keyword arguments to pass to the load_from_checkpoint method.
+#         Instead one can add `self.save_hyperparameters()` to the init method
+#         of the model.
 
-    Returns
-    -------
-    model : pl.LightningModule
-        The trained model.
+#     Returns
+#     -------
+#     model : pl.LightningModule
+#         The trained model.
 
-    """
-    if not path.exists():
-        logging.info("Model not found. Returning None.")
-        return None
-    model = type.load_from_checkpoint(path, **kwargs)
-    return model
+#     """
+#     if not path.exists():
+#         logging.info("Model not found. Returning None.")
+#         return None
+#     model = type.load_from_checkpoint(path, **kwargs)
+#     return model
 
 
 def fig2PIL(fig):
@@ -275,10 +330,10 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
             for i in range(0, num_samples, max_batch_size):
                 batch_cond_input = cond_input[i:i+max_batch_size]
                 batch_size = batch_cond_input.shape[0]
-                model_output = model.sample(shape=model_data_representation._get_input_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device))
+                model_output = model.sample(shape=model_data_representation._get_input_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
                 generated_waveforms.append(model_data_representation.invert_representation(model_output))
         generated_waveforms = np.concatenate(generated_waveforms, axis=0)
-    return {"waveforms": model_data_representation.invert_representation(generated_waveforms), "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
+    return {"waveforms": generated_waveforms, "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
 
 def get_samples(data: dict[str, np.ndarray], num_samples = None, indexes: list = None) -> dict[str, np.ndarray]:
     assert num_samples is not None or indexes is not None, "Either num_samples or indexes must be provided."

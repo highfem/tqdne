@@ -12,4 +12,4 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 mamba activate tqdne
 
-python experiments/train_gm0_diffusion.py --config=experiments/configs/consistency-model.py  --use_last_checkpoint=false
+python experiments/train_gm0_diffusion.py --config=tqdne/configs/ddim.py --config.optimizer_params.batch_size=32 --use_last_checkpoint=false 

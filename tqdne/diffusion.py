@@ -60,24 +60,23 @@ class LightningDiffusion(pl.LightningModule):
     def forward(self, input, t, cond_signal=None, cond=None):
         """Make a forward pass through the network."""
         
-        # TODO: maybe remove assertion to speed up training
+        # TODO: maybe remove isfinite assertion to speed up training
 
         # input
         if self.cond_signal_input:
             assert cond_signal is not None
-            assert torch.isfinite(cond_signal).all().item()
             input = torch.cat((cond_signal, input), dim=1)
 
         # predict
         if self.cond_input:
-            assert torch.isfinite(cond).all().item()
             cond = cond 
         else:
             cond = None
 
-        assert torch.isfinite(input).all().item()
+        #assert torch.isfinite(input).all().item()
         out = self.net(input, t, cond=cond)
         #assert torch.isfinite(out).all().item() 
+        #print(out.min(), out.max())
         #print("Model outputs all 0s: ", torch.all(out == 0).item())
         return out
 
@@ -135,6 +134,10 @@ class LightningDiffusion(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             self.net.parameters(), lr=self.optimizer_params["learning_rate"]
         )
+        
+        if self.optimizer_params["lr_warmup_steps"] is None:
+            return optimizer
+        
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=self.optimizer_params["lr_warmup_steps"],

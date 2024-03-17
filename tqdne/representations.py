@@ -63,11 +63,11 @@ class Representation(ABC):
         pass
 
     @abstractmethod
-    def _get_input_shape(self, signal_input_shape):
+    def _get_shape(self, signal_input_shape):
         pass
 
-    def get_input_shape(self, signal_input_shape):
-        return self._get_input_shape(signal_input_shape)
+    def get_shape(self, signal_input_shape):
+        return self._get_shape(signal_input_shape)
     
     def update_stats(self, config: Config):
         return self._update_stats(config)
@@ -80,19 +80,42 @@ class Representation(ABC):
 
 class SignalWithEnvelope(Representation):
 
-    def __init__(self, repr_params, dataset_stats_dict: dict):
+    def __init__(self, repr_params, config: Config):
         self.env_function = self._get_env_function_by_name(repr_params.env_function)
         self.env_function_params = repr_params.env_function_params
 
         self.trans_function, self.inv_trans_function = self._get_trans_function_by_name(repr_params.env_transform)
         self.trans_function_params = repr_params.env_transform_params
 
-        # Signal statistics for normalization
-        # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0. 
-        max_env_peak_per_channel = np.array([dataset_stats_dict[ch]['max'] for ch in dataset_stats_dict.keys()])[:, np.newaxis]
-        min_env_peak_per_channel = np.array([0 for _ in max_env_peak_per_channel])[:, np.newaxis]
-        self.max_trans_env_peak_per_channel = self.trans_function(max_env_peak_per_channel, **self.trans_function_params)
-        self.min_trans_env_peak_per_channel = self.trans_function(min_env_peak_per_channel, **self.trans_function_params)
+        self.scaling = repr_params.scaling
+
+        if self.scaling.type == "normalize":
+            if self.scaling.scalar:
+                # Signal statistics for normalization
+                # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0.
+                dataset_stats_dict = config.signal_statistics 
+                max_env_peak_per_channel = np.array([dataset_stats_dict[ch]['max'] for ch in dataset_stats_dict.keys()])[:, np.newaxis]
+                min_env_peak_per_channel = np.array([0 for _ in max_env_peak_per_channel])[:, np.newaxis]
+                max_trans_env_peak_per_channel = self.trans_function(max_env_peak_per_channel, **self.trans_function_params)
+                min_trans_env_peak_per_channel = self.trans_function(min_env_peak_per_channel, **self.trans_function_params)
+                #Normalize the transformed envelope to the range [-1, 1]
+                self.scaling_function = lambda trans_env: 2 * (trans_env - min_trans_env_peak_per_channel) / (max_trans_env_peak_per_channel - min_trans_env_peak_per_channel) - 1
+                self.inv_scaling_function = lambda norm_trans_env: (norm_trans_env + 1) * (max_trans_env_peak_per_channel - min_trans_env_peak_per_channel) / 2 + min_trans_env_peak_per_channel
+            else:
+                raise NotImplementedError("Channel-wise normalization is not implemented yet -- missing statistics")
+
+        elif self.scaling_type == "standardize":
+            if self.scaling.scalar:
+                raise NotImplementedError("Scalar standardization is not implemented yet -- missing statistics")
+            else:
+                # Statistics of the transformed envelope (computer over a subset of the training dataset)
+                env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
+                trans_env_mean_per_channel = np.array([env_stats['mean'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+                trans_env_std_per_channel = np.array([env_stats['std_dev'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+                # Standardize the transformed envelope 
+                self.scaling_function = lambda trans_env: (trans_env - self.trans_env_mean[:, : trans_env.shape[-1]]) / self.trans_env_std[:, : trans_env.shape[-1]] 
+                self.inv_scaling_function = lambda std_trans_env: std_trans_env * self.trans_env_std[:, : std_trans_env.shape[-1]] + self.trans_env_mean[:, : std_trans_env.shape[-1]]
+
 
     def _get_trans_function_by_name(self, name):
         if name == "log":
@@ -110,34 +133,26 @@ class SignalWithEnvelope(Representation):
     
     def _get_representation(self, signal):
         envelope = self.env_function(signal)
-
         scaled_signal = np.divide(signal, envelope, out=np.zeros_like(signal), where=envelope!=0) # when envelope is 0, the signal is also 0. Hence, the scaled signal should also be 0.
+        
+        trans_envelope = self.trans_function(envelope, **self.trans_function_params) 
+        scaled_envelope = self.scaling_function(trans_envelope)
 
-        # Normalize NOT NEEDED BECAUSE ALREADY SCALED BY THE ENVELOPE
-        #signal_mean = self.config.signal_mean
-        #signal_std = self.config.signal_std
-        #scaled_signal = (scaled_signal - signal_mean) / signal_std
-        # ....
+        return np.concatenate([scaled_envelope, scaled_signal], axis=0) # The model will learn to associated channels of the envelope with the corresponding channels of the signal
 
-        # Normalize the transformed envelope to the range [-1, 1]
-        trans_envelope = self.trans_function(envelope, **self.trans_function_params)
-        norm_trans_envelope = 2 * (trans_envelope - self.min_trans_env_peak_per_channel) / (self.max_trans_env_peak_per_channel - self.min_trans_env_peak_per_channel) - 1
-        #scaled_envelope = (trans_envelope - self.trans_env_mean[:, : envelope.shape[-1]]) / self.trans_env_std[:, : envelope.shape[-1]] # shape: (num_channels, signal_length) (?)
-
-        return np.concatenate([norm_trans_envelope, scaled_signal], axis=0) # The model will learn to associated channels of the envelope with the corresponding channels of the signal
+    
     
     def _invert_representation(self, representation):
         num_channels = representation.shape[1] // 2
-        norm_trans_envelope = representation[:, :num_channels, :]
         scaled_signal = representation[:, num_channels:, :]
-        
-        # Denormalize the transformed envelope
-        trans_envelope = (norm_trans_envelope + 1) * (self.max_trans_env_peak_per_channel - self.min_trans_env_peak_per_channel) / 2 + self.min_trans_env_peak_per_channel
-        signal = scaled_signal * self.inv_trans_function(trans_envelope, **self.trans_function_params)
+        scaled_trans_envelope = representation[:, :num_channels, :]
 
-        return signal  
+        trans_envelope = self.inv_scaling_function(scaled_trans_envelope)
+        
+        signal = scaled_signal * self.inv_trans_function(trans_envelope, **self.trans_function_params)
+        return signal
     
-    def _get_input_shape(self, signal_input_shape):
+    def _get_shape(self, signal_input_shape):
         return (signal_input_shape[0], 2 * signal_input_shape[1], signal_input_shape[2])
 
     def _update_stats(self, config: Config):

@@ -188,8 +188,8 @@ class GaussianFourierProjection(nn.Module):
         self.W = nn.Parameter(th.randn(channels // 2) * scale, requires_grad=False)
 
     def forward(self, x):
-        h = x[:, None] * self.W[None, :] * 2 * th.pi
-        h2 = x[:, None] * self.W * 2 * th.pi
+        h = x[..., None] * self.W[None, :] * 2 * th.pi
+        h2 = x[..., None] * self.W * 2 * th.pi
 
         assert h.shape == h2.shape
         assert th.allclose(h, h2) 

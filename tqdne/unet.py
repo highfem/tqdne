@@ -379,7 +379,7 @@ class UNetModel(ModelMixin, ConfigMixin):
         out_channels,
         num_res_blocks,
         attention_resolutions=(8, 16, 32),
-        dropout=0,
+        dropout=0.1,
         channel_mult=(1, 2, 4, 8),
         conv_kernel_size=3,
         conv_resample=True,
@@ -564,7 +564,7 @@ class UNetModel(ModelMixin, ConfigMixin):
 
         if self.cond_features is not None:
             if self.cond_embed is not None:
-                cond = self.cond_embed(cond).view(cond.shape[0], -1)
+                cond = self.cond_embed(cond).view(cond.shape[0], -1)  
             emb += self.cond_mlp(cond) # emb.shape -> torch.Size([8, 128]) (batch_size := 8)
 
         h = x

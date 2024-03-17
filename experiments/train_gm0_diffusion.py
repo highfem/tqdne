@@ -36,20 +36,24 @@ flags.mark_flags_as_required(["config"])
 def main(argv):
     del argv
 
-    name = f"{FLAGS.config.name}-{FLAGS.config.model.net_params.dims}D_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}".replace(" ", "").replace("\n", "")
+    name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}-{FLAGS.config.data_repr.params.scaling.type}-{"scalar" if FLAGS.config.data_repr.params.scaling.scalar else "signal"}".replace(" ", "").replace("\n", "")
 
     t = general_config.signal_length
-    batch_size = FLAGS.config.model.optimizer_params.batch_size
+    batch_size = FLAGS.config.optimizer_params.batch_size
 
-    data_representation = get_data_representation(FLAGS.config.data_repr.name, FLAGS.config.data_repr.params, general_config.signal_statistics)
+    data_representation = get_data_representation(FLAGS.config.data_repr.name, FLAGS.config.data_repr.params, general_config) 
 
     train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), cut=t, data_repr=data_representation) 
     test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), cut=t, data_repr=data_representation)
+
+    # Get the number of channels of the data representation
+    data_repr_channels = train_dataset[0]["representation"].shape[0]
     
     # DEBUG
     if FLAGS.debug:
-        train_dataset = torch.utils.data.Subset(train_dataset, range(0, 1000))
-        test_dataset = torch.utils.data.Subset(test_dataset, range(0, 100))
+        logging.info("DEBUG MODE: Use only a subset of the dataset")
+        train_dataset = torch.utils.data.Subset(train_dataset, range(0, 100))
+        test_dataset = torch.utils.data.Subset(test_dataset, range(0, 20))
 
     # Get the number of available CPU cores
     num_cores = multiprocessing.cpu_count()
@@ -58,15 +62,14 @@ def main(argv):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
-    repr_channels = train_dataset[0]["representation"].shape[0]
-
     logging.info("Build network...")
-    net = UNetModel(in_channels=repr_channels, out_channels=repr_channels, **FLAGS.config.model.net_params)
+    net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, **FLAGS.config.model.net_params)
     logging.info(FLAGS.config.model.net_params)
 
     if FLAGS.config.name == "consistency-model":
         logging.info("Build consistency model...")
-        model = LightningConsistencyModel(net, lr=FLAGS.config.model.optimizer_params.lr, example_input_array=[next(iter(train_loader))["representation"], torch.ones(batch_size), None, next(iter(train_loader))["cond"]])
+        # TODO: what about the trainer and its parameters like max_epochs?
+        model = LightningConsistencyModel(net, lr=FLAGS.config.optimizer_params.lr, example_input_array=[next(iter(train_loader))["representation"], torch.ones(batch_size), None, next(iter(train_loader))["cond"]])
         FLAGS.config.trainer_params.update({"max_steps": FLAGS.config.trainer_params.max_epochs * len(train_loader)})
     elif FLAGS.config.name == "ddpm" or FLAGS.config.name == "ddim":
         logging.info("Build diffusion model...")
@@ -74,17 +77,16 @@ def main(argv):
             scheduler = DDPMScheduler(**FLAGS.config.model.scheduler_params)
         elif FLAGS.config.name == "ddim":
             scheduler = DDIMScheduler(**FLAGS.config.model.scheduler_params)
-            scheduler.set_timesteps(num_inference_steps=FLAGS.config.model.scheduler_params.num_train_timesteps // 50)
+            scheduler.set_timesteps(num_inference_steps=FLAGS.config.model.scheduler_params.num_train_timesteps // 10)
         else:
             raise ValueError(f"Unknown model name: {FLAGS.config.name}")    
         logging.info(scheduler.config)
         logging.info("Build lightning module...")
 
-        FLAGS.config.model.optimizer_params.update(
+        FLAGS.config.optimizer_params.update(
         {
             "n_train": len(train_dataset) // batch_size,
             "max_epochs": FLAGS.config.trainer_params.max_epochs,
-            "seed": FLAGS.config.seed
         }
         )
         example_input_array = [next(iter(train_loader))["representation"], torch.randint(0, FLAGS.config.model.scheduler_params.num_train_timesteps,(batch_size,)).long(), None, next(iter(train_loader))["cond"]]
@@ -92,7 +94,7 @@ def main(argv):
             net,
             scheduler,
             prediction_type=FLAGS.config.model.scheduler_params.prediction_type,
-            optimizer_params=FLAGS.config.model.optimizer_params,
+            optimizer_params=FLAGS.config.optimizer_params,
             cond_signal_input=False,
             cond_input=True,
             example_input_array=example_input_array

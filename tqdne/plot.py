@@ -6,6 +6,7 @@ import seaborn as sns
 
 from tqdne import utils
 from tqdne.metric import Metric
+from tqdne.representations import to_numpy
 
 # TODO: maybe rename into plots.py
 class Plot(ABC):
@@ -14,28 +15,28 @@ class Plot(ABC):
     All plots should inherit from this class.
     """
 
-    def __init__(self, channel=None, data_representation=None):
+    def __init__(self, channel=None, data_representation=None, invert_representation=True):
         self.channel = channel
         self.data_representation = data_representation
+        self.invert_representation = invert_representation
+        self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
 
     @property
     def name(self):
         name = self.__class__.__name__
-        return f"{name} - Channel {self.channel}" if self.channel is not None else name
+        name = f"{name} - Raw Output" if not self.invert_representation else name
+        name = f"{name} - Channel {self.channel}" if self.channel is not None else name
+        return name
 
-    def __call__(self, pred, target=None, cond_signal=None, cond=None, data_representation=None):
-        #pred = to_numpy(pred)
-        #target = to_numpy(target)
-        #cond_signal = to_numpy(cond_signal)
-        #cond = to_numpy(cond)
+    def __call__(self, pred, target=None, cond_signal=None, cond=None):
         if self.data_representation is not None:
-            pred = self.data_representation.invert_representation(pred)
-            target = self.data_representation.invert_representation(target)
+            pred = self.invert_representation_fun(pred)
+            target = self.invert_representation_fun(target) 
+            cond = to_numpy(cond)
         if self.channel is not None:
             pred = pred[:, self.channel]
             target = target[:, self.channel]
             cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
-
 
         ##### DEBUG
         #figuretoplot = target[0,:]
@@ -55,15 +56,18 @@ class Plot(ABC):
 class SamplePlot(Plot):
     """Plot a sample of the predicted signal."""
 
-    def __init__(self, fs=100, channel=0, data_representation=None):
-        super().__init__(channel, data_representation)
+    def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
+        super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
     def plot(self, pred, target=None, cond_signal=None, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, pred[0], "g", label="Generated")
-        title = f"{self.name}\n{utils.get_cond_params_dict(cond)}" if cond is not None else self.name
+        if not self.invert_representation:
+            ax.plot(time, target[0], "r", alpha=0.5, label="Target")
+        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
+        #return {key: f"{value:.2f}" for key, value in cond.items()}
         ax.set_title(title)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -75,7 +79,7 @@ class SamplePlot(Plot):
 class UpsamplingSamplePlot(Plot):
     """Plot a sample of the input, target, and reconstructed signals."""
 
-    def __init__(self, fs=100, channel=0, data_representation=None):
+    def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
         super().__init__(channel, data_representation)
         self.fs = fs
 
@@ -85,7 +89,7 @@ class UpsamplingSamplePlot(Plot):
         ax.plot(time, cond_signal[0], "b", label="Input")
         ax.plot(time, target[0], "r", label="Target")
         ax.plot(time, pred[0], "g", label="Reconstructed")
-        title = f"{self.name}\n{utils.get_cond_params_dict(cond)}" if cond is not None else self.name
+        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
         ax.set_title(title)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -114,10 +118,10 @@ class LogEnvelopePlot(Plot):
 
         time_ax = np.arange(0, len(pred_logenv_median)) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(pred_logenv_median, "g", label="Generated")
-        ax.fill_between(time_ax, pred_logenv_p25, pred_logenv_p75, color="g", alpha=0.2)
-        ax.plot(target_logenv_median, "r", label="Target")
-        ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, color="r", alpha=0.2)
+        ax.plot(time_ax, pred_logenv_median, "g", label="Generated - median")
+        ax.fill_between(time_ax, pred_logenv_p25, pred_logenv_p75, color="g", alpha=0.2, label="Generated - IQR (25-75%)")
+        ax.plot(time_ax, target_logenv_median, "r", label="Target - median")
+        ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, color="r", alpha=0.2, label="Target - IQR (25-75%)")
 
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
