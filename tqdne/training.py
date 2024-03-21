@@ -13,6 +13,7 @@ def get_pl_trainer(
     val_loader,
     metrics,
     plots,
+    flags,
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
@@ -22,6 +23,7 @@ def get_pl_trainer(
     # wandb logger
     if log_to_wandb:
         wandb_logger = WandbLogger(project=config.project_name, name=name)
+        wandb_logger.experiment.config.update(flags)
     else:
         wandb_logger = None
 

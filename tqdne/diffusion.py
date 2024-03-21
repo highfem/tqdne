@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 
 from diffusers import ConfigMixin, SchedulerMixin
-from diffusers.optimization import get_cosine_schedule_with_warmup
+from diffusers.optimization import get_scheduler
 
 
 class LightningDiffusion(pl.LightningModule):
@@ -138,11 +138,16 @@ class LightningDiffusion(pl.LightningModule):
         if self.optimizer_params["lr_warmup_steps"] is None:
             return optimizer
         
-        lr_scheduler = get_cosine_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=self.optimizer_params["lr_warmup_steps"],
-            num_training_steps=(
-                self.optimizer_params["n_train"] * self.optimizer_params["max_epochs"]
-            ),
+        lr_scheduler = get_scheduler(
+            self.optimizer_params["scheduler_name"], 
+            optimizer, 
+            num_warmup_steps=self.optimizer_params["lr_warmup_steps"], 
+            num_training_steps=self.optimizer_params["n_train"] * self.optimizer_params["max_epochs"]
         )
+        lr_scheduler = {
+          'scheduler': lr_scheduler, 
+          'interval': 'step', 
+          'frequency': 1, 
+        }
+        
         return [optimizer], [lr_scheduler]

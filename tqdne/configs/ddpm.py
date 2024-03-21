@@ -2,7 +2,6 @@
 
 import ml_collections
 
-
 def new_dict(**kwargs):
     return ml_collections.ConfigDict(initial_dictionary=kwargs)
 
@@ -17,19 +16,19 @@ def get_config():
             beta_start=0.0001,
             beta_end=0.02,
             num_train_timesteps=1000,
-            prediction_type="epsilon",
+            prediction_type="sample",
             clip_sample=False,
         ),
         net_params=new_dict(
             cond_features=5, 
             dims=1,
-            conv_kernel_size=5,  # might want to change to 5
+            conv_kernel_size=3,  # might want to change to 5
             model_channels=32,
             num_res_blocks=2,
             num_heads=4,
-            dropout=0.2,
+            dropout=0.1,
             flash_attention=False,  # flash attention not tested (potentially faster),
-            cond_emb_scale=0.1, 
+            cond_emb_scale=None, 
         ),
     )
 

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import scipy
 import torch
 import tqdm
 from scipy import signal
@@ -181,7 +182,7 @@ class UpsamplingDataset(torch.utils.data.Dataset):
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_repr, cut=None):
+    def __init__(self, h5_path, data_repr, cut=None, downsample=1):
         super().__init__()
         self.h5_path = h5_path
         self.representation = data_repr
@@ -201,6 +202,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         self.n = len(self.features)
         assert self.n == len(self.waveforms)
         self.cut = cut
+        self.downsample = downsample
 
     def __del__(self):
         pass
@@ -214,10 +216,16 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         signal = self.waveforms[index]
         features = self.features[index]
-        # features = (features - self.features_means) / (self.features_stds + 1e-6) # cannot be scaled because BinMetric uses non-scaled features
+        
+        # cannot be scaled because BinMetric uses non-scaled features
+        # features = (features - self.features_means) / (self.features_stds + 1e-6) 
+
 
         if self.cut:
             signal = signal[:, : self.cut]
+
+        if self.downsample > 1:
+            signal = scipy.signal.decimate(signal, self.downsample, axis=1)   
 
         repr = self.representation.get_representation(signal)    
 

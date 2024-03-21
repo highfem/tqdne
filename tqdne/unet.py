@@ -216,7 +216,7 @@ class ResBlock(TimestepBlock):
         # x.shape -> torch.Size([8, 32, 5472]) 
         h = self.in_layers(x) # h.shape -> torch.Size([8, 32, 5472])
         emb_out = self.emb_layers(emb).type(h.dtype) # emb_out.shape -> torch.Size([8, 32]) (batch_size := 8)
-        emb_out = append_dims(emb_out, h.dim()) # emb_out.shape -> torch.Size([8, 32, 1])
+        emb_out = append_dims(emb_out, h.dim()) # emb_out.shape -> torch.Size([8, 32, 1]) (batch_size := 8)
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
@@ -224,7 +224,7 @@ class ResBlock(TimestepBlock):
             h = out_rest(h)
         else:
             h = h + emb_out # h.shape -> torch.Size([8, 32, 5472])
-            h = self.out_layers(h) # h.shape -> torch.Size([8, 32, 5472]) # TODO: return all 0s
+            h = self.out_layers(h) # h.shape -> torch.Size([8, 32, 5472])
         return self.skip_connection(x) + h
 
 
@@ -565,7 +565,9 @@ class UNetModel(ModelMixin, ConfigMixin):
         if self.cond_features is not None:
             if self.cond_embed is not None:
                 cond = self.cond_embed(cond).view(cond.shape[0], -1)  
-            emb += self.cond_mlp(cond) # emb.shape -> torch.Size([8, 128]) (batch_size := 8)
+                # cond.shape -> torch.Size([8, 160]) (batch_size := 8)
+            emb += self.cond_mlp(cond) 
+            # emb.shape -> torch.Size([8, 128]) (batch_size := 8)
 
         h = x
         for module in self.input_blocks:
@@ -573,6 +575,6 @@ class UNetModel(ModelMixin, ConfigMixin):
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            h = th.cat([h, hs.pop()], dim=1) # TODO: is it correct to do the skip connection here?
+            h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb)  
-        return self.out(h) # TODO: out are all 0s
+        return self.out(h) 

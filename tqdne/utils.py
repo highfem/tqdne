@@ -151,6 +151,8 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True):
     if not model_ckpt_path.exists():
         raise FileNotFoundError(f"Model checkpoint not found at {model_ckpt_path}.")
     
+    # TODO: CKPT files should contains the FLAGS used. with that, I should be able to recover the correct config params for the scheduler and the data representation
+    
     model_ckpt_path = str(model_ckpt_path)
     if model_ckpt_path.split(".")[-1] == "ckpt":
         ckpt = model_ckpt_path
@@ -160,24 +162,28 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True):
         model_dir_name = model_ckpt_path.split("/")[-1]
     
     if "ddpm" in model_dir_name:
-        config_file = ddpm.get_config()
         model = LightningDiffusion.load_from_checkpoint(ckpt)
-        noise_scheduler = DDIMScheduler(**config_file.model.scheduler_params)
-        noise_scheduler.set_timesteps(num_inference_steps=config_file.model.scheduler_params.num_train_timesteps // 20)
+        if use_ddim:
+            config_file = ddim.get_config()
+            noise_scheduler = DDIMScheduler(**config_file.model.scheduler_params)
+            noise_scheduler.set_timesteps(num_inference_steps=config_file.model.scheduler_params.num_train_timesteps // 10)
+        else:
+            config_file = ddpm.get_config()    
+            noise_scheduler = DDPMScheduler(**config_file.model.scheduler_params)
         model.noise_scheduler = noise_scheduler
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], config_file.data_repr.params, general_config.signal_statistics)
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], config_file.data_repr.params, general_config)
         return model, data_repr
     
     if "ddim" in model_dir_name:
         model = LightningDiffusion.load_from_checkpoint(ckpt)
         data_repr_config = ddim.get_config().data_repr
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config.signal_statistics)
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config)
         return model, data_repr
     
     if "consistency-model" in model_dir_name:
         model = LightningConsistencyModel.load_from_checkpoint(ckpt)
         data_repr_config = consistency_model.get_config().data_repr
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config.signal_statistics)
+        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config)
         return model, data_repr
 
 
@@ -303,7 +309,7 @@ def get_cond_input_tensor(*conditioning_params: dict):
     return torch.tensor(cond_params, dtype=torch.float32)
 
 
-def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], batch_size: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda') -> np.ndarray:
+def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], raw_output: bool, batch_size: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda') -> np.ndarray:
     """
     Generates synthetic data using a given model and data representation.
 
@@ -318,21 +324,27 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
     Returns:
         np.ndarray: A dictionary containing the generated waveforms and the conditional inputs ("waveforms" and "cond").
     """
-    assert cond_input_params is not None or cond_input is not None, "Either cond_input_params or cond_input must be provided."
+    assert not(cond_input_params is not None and cond_input is not None), "Either cond_input_params or cond_input must be provided."
+    if cond_input_params is None and cond_input is None:
+        logging.warning("No conditional input provided. Generating random conditional inputs.")
+        cond_input_params = general_config.conditional_params_range
     signal_len = general_config.signal_length
     num_channels = general_config.num_channels
     if cond_input is None:
         cond_input = generate_cond_inputs(batch_size, cond_input_params)
-        max_batch_size = 64
-        num_samples = batch_size
-        generated_waveforms = []
-        with torch.no_grad():
-            for i in range(0, num_samples, max_batch_size):
-                batch_cond_input = cond_input[i:i+max_batch_size]
-                batch_size = batch_cond_input.shape[0]
-                model_output = model.sample(shape=model_data_representation._get_input_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
+    max_batch_size = 64
+    num_samples = batch_size
+    generated_waveforms = []
+    with torch.no_grad():
+        for i in range(0, num_samples, max_batch_size):
+            batch_cond_input = cond_input[i:i+max_batch_size]
+            batch_size = batch_cond_input.shape[0]
+            model_output = model.sample(shape=model_data_representation.get_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
+            if raw_output:
+                generated_waveforms.append(to_numpy(model_output))
+            else:    
                 generated_waveforms.append(model_data_representation.invert_representation(model_output))
-        generated_waveforms = np.concatenate(generated_waveforms, axis=0)
+    generated_waveforms = np.concatenate(generated_waveforms, axis=0)
     return {"waveforms": generated_waveforms, "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
 
 def get_samples(data: dict[str, np.ndarray], num_samples = None, indexes: list = None) -> dict[str, np.ndarray]:
@@ -474,14 +486,14 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
         axs[0].legend()
         if plot_log_envelope:
             assert(plot_envelope), "If plot_log_envelope is True, plot_envelope must be True as well."
-            axs[1].plot(time_ax, get_log_envelope(waveforms[row, channel_index].reshape(1, -1), env_function=_get_moving_avg_envelope), label=f"Log Envelope")    
+            axs[1].plot(time_ax, get_log_envelope(waveforms[row, channel_index].reshape(1, -1), env_function=_get_moving_avg_envelope)[0], label=f"Log Envelope")    
             axs[1].set_xlabel('Time (s)')  
             axs[1].legend()
 
     plt.show()
 
-def _get_moving_avg_envelope(a, window_len=50):
-    return signal.convolve(np.abs(a), np.ones((a.shape[0], window_len)), mode='same') / window_len    
+def _get_moving_avg_envelope(x, window_len=50):
+    return signal.convolve(np.abs(x), np.ones((x.shape[0], window_len)), mode='same') / window_len    
 
 def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, env_function_params={}, eps=1e-7):
     """
@@ -541,7 +553,7 @@ def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distan
         dist_bin = int(
             (dist - min_dist) / (max_dist - min_dist) * num_distance_bins
         )
-        to_plot = waveforms[i] if plot_type == 'waveform' else get_log_envelope(waveforms[i].reshape(1, -1)[0], env_function=_get_moving_avg_envelope)
+        to_plot = waveforms[i] if plot_type == 'waveform' else get_log_envelope(waveforms[i].reshape(1, -1), env_function=_get_moving_avg_envelope)[0]
         plots[mag_bin][dist_bin].append(to_plot)
 
     fig, axs = plt.subplots(num_distance_bins, num_magnitude_bins, figsize=(12, 5*num_distance_bins), constrained_layout=True) 

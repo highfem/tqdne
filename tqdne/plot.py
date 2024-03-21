@@ -98,8 +98,8 @@ class UpsamplingSamplePlot(Plot):
         return fig
 
 class LogEnvelopePlot(Plot):
-    def __init__(self, fs=100, channel=0, data_representation=None):
-        super().__init__(channel, data_representation)
+    def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
+        super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
     def plot(self, pred, target=None, cond_signal=None, cond=None):
@@ -132,8 +132,8 @@ class LogEnvelopePlot(Plot):
         
 
 class PowerSpectralDensityPlot(Plot):
-    def __init__(self, fs=100, channel=0, data_representation=None):
-        super().__init__(channel, data_representation)
+    def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
+        super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
     def plot(self, pred, target, cond_signal=None, cond=None):
@@ -177,10 +177,9 @@ class BinPlot(Plot):
         min_mag=4.5,
         max_mag=9.5,
         min_dist=0,
-        max_dist=180,
-        data_representation=None,
+        max_dist=180
     ):
-        super().__init__(data_representation=data_representation)
+        super().__init__(data_representation=None, invert_representation=False)
         self.metric = metric
         self.num_mag_bins = num_mag_bins
         self.num_dist_bins = num_dist_bins

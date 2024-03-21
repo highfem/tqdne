@@ -17,8 +17,9 @@ def get_config():
             beta_start=0.0001,
             beta_end=0.02,
             num_train_timesteps=1000,
-            prediction_type="epsilon",
+            prediction_type="sample",
             clip_sample=False,
+            timestep_decimation_factor=10,
         ),
         net_params=new_dict(
             cond_features=5, 
@@ -29,13 +30,14 @@ def get_config():
             num_heads=4,
             dropout=0.2,
             flash_attention=False,  # flash attention not tested (potentially faster),
-            cond_emb_scale=0.1, 
+            cond_emb_scale=None, 
         ),
     )
 
     config.optimizer_params=new_dict(
-        learning_rate=3e-4,
-        lr_warmup_steps=None,
+        learning_rate=1e-3,
+        scheduler_name="cosine",
+        lr_warmup_steps=1000,
         batch_size=64,
         seed=0,
     )
