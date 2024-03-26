@@ -141,6 +141,11 @@ class Dataset(torch.utils.data.Dataset):
             self.features_means = self.file["feature_means"][:]
             self.features_stds = self.file["feature_stds"][:]
 
+            # hack: set inf log10snr to largest non-inf value
+            log10snr = self.features[:, 2]
+            log10snr[log10snr == np.inf] = np.max(log10snr[log10snr != np.inf])
+            self.features[:, 2] = log10snr
+
     def __del__(self):
         self.file.close()
 
@@ -184,6 +189,11 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             self.features = self.file["features"][:]
             self.features_means = self.file["feature_means"][:]
             self.features_stds = self.file["feature_stds"][:]
+
+            # hack: set inf log10snr to largest non-inf value
+            log10snr = self.features[:, 2]
+            log10snr[log10snr == np.inf] = np.max(log10snr[log10snr != np.inf])
+            self.features[:, 2] = log10snr
 
     def __del__(self):
         self.file.close()
