@@ -40,6 +40,8 @@ class LogSpectrogram(Representation):
         If not given, it will be inferred during the first call to `get_representation`.
     library : str, default="librosa"
         Library to use for the STFT. Currently `librosa` and `tifresi` are supported.
+        `tifresi` is faster and more accurate, but installing the package is cumbersome.
+        Reconstruction accuracy in terms of spectral content is similar for both libraries.
     """
 
     def __init__(
@@ -78,9 +80,9 @@ class LogSpectrogram(Representation):
         if not shape:
             return x
         if x.shape[1] < shape[0]:
-            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[0]), (0, 0)), mode="constant")
+            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[1]), (0, 0)), mode="constant")
         if x.shape[2] < shape[1]:
-            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[1])), mode="constant")
+            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[2])), mode="constant")
 
         return x[:, : shape[0], : shape[1]]
 

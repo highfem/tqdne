@@ -2,10 +2,9 @@ import time
 import warnings
 
 import torch
+import wandb
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
-
-import wandb
 
 
 class LogCallback(Callback):
@@ -20,9 +19,7 @@ class LogCallback(Callback):
         every (int): Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(
-        self, val_loader, representation, metrics, plots, limit_batches=1, every=1
-    ):
+    def __init__(self, val_loader, representation, metrics, plots, limit_batches=1, every=1):
         super().__init__()
         self.val_loader = val_loader
         self.representation = representation
@@ -51,15 +48,12 @@ class LogCallback(Callback):
                 break
             batches.append(batch)
             batch = {
-                k: v.to(pl_module.device) if isinstance(v, Tensor) else v
-                for k, v in batch.items()
+                k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
             preds.append(pred)
 
-        batch = {
-            k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()
-        }
+        batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
         pred = torch.cat(preds, dim=0)
 
         # Get signal from representation
@@ -86,9 +80,11 @@ class LogCallback(Callback):
             )
             try:
                 trainer.logger.experiment.log(
-                    {f"{plot.name} (Image)": wandb.Image(fig)}
+                    {f"{plot.name} (Image)": wandb.Image(fig)}, step=pl_module.global_step
                 )
-                trainer.logger.experiment.log({f"{plot.name} (Plot)": fig})
+                trainer.logger.experiment.log(
+                    {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
+                )
             except Exception as e:
                 warnings.warn(f"Failed to log plot: {e}")
 
