@@ -12,8 +12,8 @@ def get_pl_trainer(
     name,
     val_loader,
     representation,
-    metrics,
-    plots,
+    metrics=None,
+    plots=None,
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
@@ -30,16 +30,17 @@ def get_pl_trainer(
     callbacks = [LearningRateMonitor()]
 
     # log callback
-    callbacks.append(
-        LogCallback(
-            val_loader,
-            representation,
-            metrics,
-            plots,
-            limit_batches=limit_eval_batches,
-            every=eval_every,
+    if metrics or plots:
+        callbacks.append(
+            LogCallback(
+                val_loader,
+                representation,
+                metrics,
+                plots,
+                limit_batches=limit_eval_batches,
+                every=eval_every,
+            )
         )
-    )
 
     # set early stopping
     # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
@@ -50,7 +51,7 @@ def get_pl_trainer(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),
                 filename="{name}_{epoch}-{val_loss:.2f}",
-                monitor="val_loss",
+                monitor="validation/loss",
                 mode="min",
                 save_top_k=5,
             )
