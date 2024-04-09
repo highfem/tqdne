@@ -20,10 +20,10 @@ def get_config():
             clip_sample=False,
         ),
         net_params=new_dict(
-            cond_features=5, 
             dims=1,
             conv_kernel_size=3,  # might want to change to 5
             model_channels=32,
+            channel_mult=(1, 2, 4, 8),
             num_res_blocks=2,
             num_heads=4,
             dropout=0.1,
@@ -34,7 +34,8 @@ def get_config():
 
     config.optimizer_params=new_dict(
         learning_rate=1e-3,
-        lr_warmup_steps=None,
+        scheduler_name="cosine",
+        lr_warmup_steps=5000,
         batch_size=64,
         seed=0,
     )
@@ -46,7 +47,7 @@ def get_config():
         accelerator="auto",
         devices="auto",
         num_nodes=1,
-        max_epochs=150,
+        max_epochs=100,
         eval_every=2,
         log_to_wandb=True,
         num_sanity_val_steps=0,
@@ -74,7 +75,8 @@ def get_config():
     # TODO: not sure if it is the best way to do it
     # -1: means all channels
     config.metrics = new_dict(
-        psd=-1, 
+        psd=-1,
+        logenv=-1,
     )
 
     # TODO: not sure if it is the best way to do it
@@ -83,11 +85,11 @@ def get_config():
         psd=-1,
         logenv=-1,
         debug=-1,
-        # bin=new_dict(
-        #     num_mag_bins=4,
-        #     num_dist_bins=4,
-        #     metrics="all",
-        # )
+        bin=new_dict(
+            num_mag_bins=4,
+            num_dist_bins=4,
+            metrics="all",
+        )
     )
 
     return config

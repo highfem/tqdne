@@ -1,3 +1,4 @@
+import ml_collections
 import pytorch_lightning as pl
 import torch
 from torch.nn import functional as F
@@ -37,6 +38,7 @@ class LightningDiffusion(pl.LightningModule):
         cond_signal_input: bool = False,
         cond_input: bool = False,
         example_input_array: torch.Tensor = None,
+        ml_config: ml_collections.ConfigDict = None,
     ):
         super().__init__()
 
@@ -48,8 +50,9 @@ class LightningDiffusion(pl.LightningModule):
         self.prediction_type = prediction_type
         self.cond_signal_input = cond_signal_input
         self.cond_input = cond_input
-        self.save_hyperparameters()
         self.example_input_array = example_input_array
+        self.ml_config = ml_config
+        self.save_hyperparameters(ignore=["example_input_array"])
 
     def log_value(self, value, name, train=True, prog_bar=True):
         if train:
@@ -60,8 +63,6 @@ class LightningDiffusion(pl.LightningModule):
     def forward(self, input, t, cond_signal=None, cond=None):
         """Make a forward pass through the network."""
         
-        # TODO: maybe remove isfinite assertion to speed up training
-
         # input
         if self.cond_signal_input:
             assert cond_signal is not None

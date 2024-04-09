@@ -1,3 +1,4 @@
+import ml_collections
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -50,6 +51,7 @@ class LightningConsistencyModel(pl.LightningModule):
         lognormal_std: float = 2.0,
         lr: float = 1e-4,
         example_input_array: torch.Tensor = None,
+        ml_config: ml_collections.ConfigDict = None,
     ) -> None:
         super().__init__()
         self.net = net
@@ -63,6 +65,8 @@ class LightningConsistencyModel(pl.LightningModule):
         self.lognormal_std = lognormal_std
         self.lr = lr
         self.example_input_array = example_input_array
+        self.ml_config = ml_config
+        self.save_hyperparameters(ignore=["example_input_array"])
 
     def forward(self, sample, sigma, cond_signal=None, cond=None):
         """Make a forward pass through the network with skip connection."""

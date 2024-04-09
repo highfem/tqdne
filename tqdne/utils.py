@@ -10,131 +10,28 @@ from scipy import signal
 import torch
 import matplotlib.pyplot as plt
 
-#from tqdne.metric import *
 from tqdne.conf import Config
 
 from tqdne.consistency_model import LightningConsistencyModel
 from tqdne.diffusion import LightningDiffusion
-from tqdne.metric import *
-from tqdne.plot import *
-from tqdne.configs import ddpm, ddim, consistency_model
 from tqdne.representations import *
 from diffusers import DDPMScheduler, DDIMScheduler
 
 general_config = Config()
 
-def get_metrics_list(metrics_config, data_representation=None):
-    metrics = []
-    for metric, v in metrics_config.items():
-        if v == -1:
-            channels = [c for c in range(general_config.num_channels)]
-        else:
-            channels = [v]    
-        if metric == "psd":
-            for c in channels:
-                metrics.append(PowerSpectralDensity(fs=general_config.fs, channel=c, data_representation=data_representation))
-        elif metric == "mse":
-            for c in channels:
-                metrics.append(MeanSquaredError(channel=c, data_representation=data_representation))
-        else:
-            raise ValueError(f"Unknown metric name: {metric}")
-    return metrics    
-
-def get_plots_list(plots_config, metrics, data_representation=None):
-    plots = []
-    for plot, v_plot in plots_config.items():
-        if plot == "bin":
-            if v_plot.metrics == "all":
-                for m in metrics:
-                    plots.append(BinPlot(metric=m, num_mag_bins=v_plot.num_mag_bins, num_dist_bins=v_plot.num_dist_bins, data_representation=None)) # data_representation=None since the metric is already using it
-            elif v_plot.metrics == "channels-avg":
-                #for i in range(0, len(metrics), general_config.num_channels):
-                #    metric_avg = np.mean(metrics[i:i+general_config.num_channels])
-                #    plots.append(BinPlot())
-                # TODO: it should be handled by BinPlot itself 
-                raise NotImplementedError("channels-avg not implemented yet")
-        else:
-            if v_plot == -1:
-                channels = [c for c in range(general_config.num_channels)]
-            else:
-                channels = [v_plot]    
-            if plot == "psd":
-                for c in channels:
-                    plots.append(PowerSpectralDensityPlot(fs=general_config.fs, channel=c, data_representation=data_representation))
-            elif plot == "sample":
-                for c in channels:
-                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation))
-            elif plot == "logenv":
-                for c in channels:
-                    plots.append(LogEnvelopePlot(fs=general_config.fs, channel=c, data_representation=data_representation)) 
-            elif plot == "debug":
-                data_repr_channels = data_representation.get_shape((None, general_config.num_channels, None))[1]
-                channels = [c for c in range(data_repr_channels)]
-                for c in channels:
-                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation, invert_representation=False))              
-            else:
-                raise ValueError(f"Unknown metric name: {plot}")
-    return plots    
-
-def get_data_representation(repr_name, repr_params, config):
+def get_data_representation(repr_name, repr_params, max_ch_mult=None):
     if repr_name == "SignalWithEnvelope":
-        return SignalWithEnvelope(repr_params, config)
+        return SignalWithEnvelope(**repr_params)
+    elif repr_name == "LogSpectrogram":
+        def closest_divisible_by_divisor(n, divisor):
+            return round(n / divisor) * divisor
+        output_shape = (closest_divisible_by_divisor(repr_params["stft_channels"] // 2, max_ch_mult), closest_divisible_by_divisor(general_config.signal_length // repr_params["hop_size"], max_ch_mult))
+        return LogSpectrogram(**repr_params, output_shape=output_shape)
     else:
         raise ValueError(f"Unknown representation name: {repr_name}")
 
-# def load_model_by_name(model_name: str, path: Path = None, **kwargs):
-#     """Load the model from the outputs directory given the name of the model. 
-#     If a path is specified, return the specific model from that path.
 
-#     Parameters
-#     ----------
-#     model_name : str
-#         The name of the model to load. Only available options are "diffusion_1d" and "GAN".
-#     path : Path
-#         The checkpoint path.
-#     **kwargs : dict
-#         The keyword arguments to pass to the load_from_checkpoint method.
-#         Instead one can add `self.save_hyperparameters()` to the init method
-#         of the model.
-
-#     Returns
-#     -------
-#     model : pl.LightningModule
-#         The trained model.
-#     data_representation : tqdne.representations.Representation
-#         The data representation used by the model.
-
-#     """
-
-#     available_models = ["diffusion_1d", "GAN"]
-#     if model_name not in available_models:
-#         raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")
-    
-#     if model_name == "diffusion_1d":
-#         if path is None:
-#             path = get_last_checkpoint(path) # TODO: change to CSCS path
-#             # TODO: use on_save_checkpoint
-#             # to save and load the representation (thte model itself it's not safe to store)
-#         #data_representation = SignalWithEnvelope(general_config, ) # TODO: not sure if it is the best design choice
-#         data_representation = get_data_representation(FLAGS.config.data_repr.name, FLAGS.config.data_repr.params, general_config.signal_statistics)
-#         model = load_model(LightningDiffusion, path, **kwargs)
-    
-#     elif model_name == "GAN":
-#         #if path is None:
-#         #    path = get_last_checkpoint("/users/abosisio/scratch/tqdne/outputs/GAN") # TODO: ask Francisco (or Robins(?))
-#         data_representation = None
-#         model = None
-
-#     else:
-#         raise ValueError(f"Invalid model name. Available options are: {', '.join(available_models)}")        
-
-
-#     #model = getattr(pl.LightningModule, f"load_from_checkpoint")(path, **kwargs)
-    
-#     return model, data_representation
-
-
-def load_model(model_ckpt_path: Path, use_ddim: bool = True):
+def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     """
     Loads a model from a given checkpoint directory path.
 
@@ -151,41 +48,86 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True):
     if not model_ckpt_path.exists():
         raise FileNotFoundError(f"Model checkpoint not found at {model_ckpt_path}.")
     
-    # TODO: CKPT files should contains the FLAGS used. with that, I should be able to recover the correct config params for the scheduler and the data representation
-    
     model_ckpt_path = str(model_ckpt_path)
     if model_ckpt_path.split(".")[-1] == "ckpt":
         ckpt = model_ckpt_path
         model_dir_name = model_ckpt_path.split("/")[-2]
     else:
         ckpt = get_last_checkpoint(model_ckpt_path)
-        model_dir_name = model_ckpt_path.split("/")[-1]
+        model_dir_name = model_ckpt_path.split("/")[-1]     
     
     if "ddpm" in model_dir_name:
-        model = LightningDiffusion.load_from_checkpoint(ckpt)
+        model = LightningDiffusion.load_from_checkpoint(ckpt, **kwargs)
+        assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
+        ml_configs = model.hparams.ml_config   
         if use_ddim:
-            config_file = ddim.get_config()
-            noise_scheduler = DDIMScheduler(**config_file.model.scheduler_params)
-            noise_scheduler.set_timesteps(num_inference_steps=config_file.model.scheduler_params.num_train_timesteps // 10)
+            noise_scheduler = DDIMScheduler(**ml_configs.model.scheduler_params)
+            noise_scheduler.set_timesteps(num_inference_steps=ml_configs.model.scheduler_params.num_train_timesteps // 10)
         else:
-            config_file = ddpm.get_config()    
-            noise_scheduler = DDPMScheduler(**config_file.model.scheduler_params)
+            noise_scheduler = DDPMScheduler(**ml_configs.model.scheduler_params)
         model.noise_scheduler = noise_scheduler
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], config_file.data_repr.params, general_config)
-        return model, data_repr
-    
-    if "ddim" in model_dir_name:
-        model = LightningDiffusion.load_from_checkpoint(ckpt)
-        data_repr_config = ddim.get_config().data_repr
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config)
-        return model, data_repr
-    
-    if "consistency-model" in model_dir_name:
-        model = LightningConsistencyModel.load_from_checkpoint(ckpt)
-        data_repr_config = consistency_model.get_config().data_repr
-        data_repr = get_data_representation(model_dir_name.split("_")[1].split("-")[0], data_repr_config.params, general_config)
-        return model, data_repr
+    elif "ddim" in model_dir_name:
+        model = LightningDiffusion.load_from_checkpoint(ckpt, **kwargs)
+        assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
+        ml_configs = model.hparams.ml_config 
+    elif "consistency-model" in model_dir_name:
+        model = LightningConsistencyModel.load_from_checkpoint(ckpt, **kwargs)
+        assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
+        ml_configs = model.hparams.ml_config 
+    else:
+        raise ValueError(f"Unknown model name: {model_dir_name}")    
 
+    data_repr = get_data_representation(ml_configs.data_repr.name, ml_configs.data_repr.params, ml_configs.model.net_params.channel_mult[-1])
+    return model, data_repr, ckpt    
+
+# TODO: not used. Remove?
+def get_model_summary_plot(model_ckpt_path: Path, batch_size: int = 64):
+    model, data_repr, ckpt = load_model(model_ckpt_path)
+    data = generate_data(model, data_repr, raw_output=False, num_samples=batch_size)
+    fig, axs = plt.subplots(2, 1, figsize=(15, 15))
+    axs[0].plot()
+
+def plot_envelope(signal, envelope_function, title=None, **envelope_params):
+    envelope = envelope_function(signal, **envelope_params)
+    fig = plt.figure()
+    
+    ax1 = fig.add_subplot(211)
+    ax1.plot(signal, alpha=0.6, label='signal')
+    ax1.plot(envelope, linewidth=1,  label='envelope')
+    title = title if title is not None else envelope_function.__name__
+    ax1.set_title(title)
+    ax1.legend()
+
+    ax2 = fig.add_subplot(212)
+    sig_scaled_by_envelope = np.nan_to_num(signal/envelope, nan=0., posinf=0., neginf=0.) # since if the envelope is 0, the signal is also small. 
+
+    ax2.plot(sig_scaled_by_envelope)
+    ax2.set_title("Signal scaled by its envelope")
+    
+    plt.tight_layout()
+    plt.show()
+
+    return envelope
+
+def print_model_info(model, model_data_repr, ckpt):
+    model_data_repr.plot_representation()
+    print(f"Model: {model.__class__.__name__}")
+    print(f"Number of learnable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):}")
+    print(f"Model size: {ckpt.stat().st_size / 1e6:.2f} MB")
+    print(f"UNet scheme: \n base num. channels: {model.hparams.ml_config.model.net_params.model_channels} \n channel multipliers (down/up blocks): {model.hparams.ml_config.model.net_params.channel_mult} \n num. ResBlocks per down/up block: {model.hparams.ml_config.model.net_params.num_res_blocks} \n use Attention: {model.hparams.ml_config.model.net_params.num_heads is not None} \n conv. kernel size: {model.hparams.ml_config.model.net_params.conv_kernel_size} ")
+    print(f"Diffusion prediction type: {model.hparams.ml_config.model.scheduler_params.prediction_type}")
+    print(f"Learning rate schedule: \n start: {model.hparams.ml_config.optimizer_params.learning_rate} \n scheduler: {model.hparams.ml_config.optimizer_params.scheduler_name} \n warmup steps: {model.hparams.ml_config.optimizer_params.lr_warmup_steps}")
+    print(f"Batch size: {model.hparams.ml_config.optimizer_params.batch_size}")
+    downsampling_factor = int(str(ckpt).split("downsampling:")[-1][0])
+    if downsampling_factor > 1:
+        print(f"Downsampling factor: {downsampling_factor}. The model was trained on signals with length {general_config.signal_length // downsampling_factor}, as the sampling rate used was {general_config.fs // downsampling_factor} instead of {general_config.fs}" )
+    else: 
+        print(f"The model was trained on signals with length {general_config.signal_length}, as the sampling rate used was {general_config.fs}, whihc is the original sampling rate." )
+    print(f"Data representation shape: {model_data_repr.get_shape((1, general_config.num_channels, general_config.signal_length))} (batch_size, channels, signal_length)")
+    print(f"Data representation name: {model_data_repr.__class__.__name__}")
+    if hasattr(model.hparams.ml_config.data_repr, "env_function"):
+        print(f"Data representation envelope function: {model.hparams.ml_config.data_repr.params.env_function}") 
+    print("ckpt file:", ckpt)    
 
 
 # def to_numpy(x):
@@ -309,14 +251,14 @@ def get_cond_input_tensor(*conditioning_params: dict):
     return torch.tensor(cond_params, dtype=torch.float32)
 
 
-def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], raw_output: bool, batch_size: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda') -> np.ndarray:
+def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], raw_output: bool, num_samples: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda', max_batch_size=64) -> np.ndarray:
     """
     Generates synthetic data using a given model and data representation.
 
     Args:
         model (Type[pl.LightningModule]): The model used to generate the data.
         model_data_representation (Type[Representation]): The data representation used by the model.
-        batch_size (int): The number of samples to generate.
+        num_samples (int): The number of samples to generate.
         cond_input_params (dict[str, list], optional): The parameters for generating conditional inputs. Defaults to None.
         cond_input (torch.Tensor, optional): The conditional inputs. Defaults to None.
         device (str, optional): The device to use for computation. Defaults to 'cuda'.
@@ -326,20 +268,23 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
     """
     assert not(cond_input_params is not None and cond_input is not None), "Either cond_input_params or cond_input must be provided."
     if cond_input_params is None and cond_input is None:
-        logging.warning("No conditional input provided. Generating random conditional inputs.")
-        cond_input_params = general_config.conditional_params_range
+        logging.warning("No conditional input provided. Using the range values for each parameter.")
+        cond_input_params = {k: None for k,v in general_config.conditional_params_range.items()}
     signal_len = general_config.signal_length
     num_channels = general_config.num_channels
     if cond_input is None:
-        cond_input = generate_cond_inputs(batch_size, cond_input_params)
-    max_batch_size = 64
-    num_samples = batch_size
+        cond_input = generate_cond_inputs(num_samples, cond_input_params)
+    else:
+        cond_input = np.resize(cond_input, (num_samples, cond_input.shape[1]))
     generated_waveforms = []
     with torch.no_grad():
+        if num_samples < max_batch_size:
+            max_batch_size = num_samples
+        model_input_shape = model_data_representation.get_shape((max_batch_size, num_channels, signal_len))
         for i in range(0, num_samples, max_batch_size):
             batch_cond_input = cond_input[i:i+max_batch_size]
-            batch_size = batch_cond_input.shape[0]
-            model_output = model.sample(shape=model_data_representation.get_shape((batch_size, num_channels, signal_len)), cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
+            num_samples = batch_cond_input.shape[0]
+            model_output = model.sample(shape=model_input_shape, cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
             if raw_output:
                 generated_waveforms.append(to_numpy(model_output))
             else:    
@@ -368,7 +313,6 @@ def generate_cond_inputs(batch_size: int, cond_input_params: dict[str, list]) ->
     """
     cond_inputs = []
     for param, values in cond_input_params.items():
-        print(param, values)
         if values is not None:
             cond_inputs.append(np.random.choice(values, size=batch_size))
         else:
@@ -422,17 +366,17 @@ def plot_waveform_and_psd(data: dict[str, np.ndarray]) -> None:
     # Plotting the three channels over time
     fig, axs = plt.subplots(waveform.shape[0], 2, figsize=(18, 12), constrained_layout=True)
 
-    channels = ['channel1', 'channel2', 'channel3']  # TODO: Replace with actual channel names
+    # TODO: Replace with actual channel names of channels
     time_ax = np.arange(0, signal_length) / fs
     freq_ax = np.fft.rfftfreq(signal_length, 1 / fs)
-    for i, channel in enumerate(channels):
-        axs[i, 0].plot(time_ax, waveform[i], label=channel)
+    for i in range(num_channels):
+        axs[i, 0].plot(time_ax, waveform[i], label=f'Channel {i}')
         axs[i, 0].set_xlabel('Time (s)')
         axs[i, 0].set_ylabel('Amplitude') # TODO: insert correct unit of measurement
         axs[i, 0].legend()
 
         psd = np.abs(np.fft.rfft(waveform[i], axis=-1)) ** 2
-        axs[i, 1].semilogx(freq_ax, 10 * np.log10(psd),  label=channel)
+        axs[i, 1].semilogx(freq_ax, 10 * np.log10(psd),  label=f'Channel {i}')
         axs[i, 1].set_xlabel('Frequency (Hz)')
         axs[i, 1].set_ylabel('Power Spectral Density (dB/Hz)')
         axs[i, 1].legend()
@@ -442,19 +386,7 @@ def plot_waveform_and_psd(data: dict[str, np.ndarray]) -> None:
     plt.show()
         
 
-def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_envelope: bool = True, plot_log_envelope: bool = True):
-    """
-    Plot waveforms for multiple signals.
-
-    Args:
-        data (dict[str, np.ndarray]): A dictionary containing the waveform and condition input data.
-        channel_index (int, optional): The index of the channel to plot. Defaults to 0.
-        plot_envelope (bool, optional): Whether to plot the envelope of the signal. Defaults to True.
-        plot_log_envelope (bool, optional): Whether to plot the logarithm of the envelope. Defaults to True.
-
-    Returns:
-        None
-    """
+def plot_waveforms(data: dict[str, np.ndarray], test_waveforms: np.ndarray = None, channel_index: int = 0, plot_envelope: bool = True, plot_log_envelope: bool = True):
     fs = general_config.fs
     signal_length = general_config.signal_length
 
@@ -471,7 +403,7 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
     # create 3x1 subfigs
     subfigs = fig.subfigures(nrows=n, ncols=1)
     for row, subfig in enumerate(subfigs):
-        subfig.suptitle(f'Sample {row} - Cond. Input: {get_cond_params_dict(cond_input[row])}')
+        subfig.suptitle(f'Sample {row} - Cond. params: {get_cond_params_dict(cond_input[row])}')
 
         # create 1x3 subplots per subfig
         axs = subfig.subplots(nrows=1, ncols=m)
@@ -481,17 +413,33 @@ def plot_waveforms(data: dict[str, np.ndarray], channel_index: int = 0, plot_env
         if plot_envelope:
             env = _get_moving_avg_envelope(waveforms[row, channel_index].reshape(1, -1))[0]
             axs[0].plot(time_ax, env, label=f"Envelope")
+            if test_waveforms is not None:
+                test_env = _get_moving_avg_envelope(test_waveforms[:, channel_index])
+                test_env_median = np.mean(test_env, axis=0)
+                test_env_p25 = np.percentile(test_env, 25, axis=0)
+                test_env_p75 = np.percentile(test_env, 75, axis=0)
+                axs[0].plot(time_ax, test_env_median, alpha=0.5, color='r', label=f"Real Distribution Env. - Median")
+                axs[0].fill_between(time_ax, test_env_p75, test_env_p25, alpha=0.2, color='r', label=f'IQR (25-75%) - Num. Samples: {test_waveforms.shape[0]}')
         axs[0].set_xlabel('Time (s)')  
         axs[0].set_ylabel('Amplitude')  # TODO: insert correct unit of measurement  
         axs[0].legend()
         if plot_log_envelope:
             assert(plot_envelope), "If plot_log_envelope is True, plot_envelope must be True as well."
-            axs[1].plot(time_ax, get_log_envelope(waveforms[row, channel_index].reshape(1, -1), env_function=_get_moving_avg_envelope)[0], label=f"Log Envelope")    
+            axs[1].plot(time_ax, get_log_envelope(waveforms[row, channel_index].reshape(1, -1), env_function=_get_moving_avg_envelope)[0], label=f"Log Envelope")   
+            if test_waveforms is not None:
+                test_log_env = get_log_envelope(test_waveforms[:, channel_index], env_function=_get_moving_avg_envelope)
+                test_log_env_median = np.median(test_log_env, axis=0)
+                test_log_env_p25 = np.percentile(test_log_env, 25, axis=0)
+                test_log_env_p75 = np.percentile(test_log_env, 75, axis=0)
+                axs[1].plot(time_ax, test_log_env_median, alpha=0.5, color='r', label=f"Real Distribution Log. Env. - Median")
+                axs[1].fill_between(time_ax, test_log_env_p25, test_log_env_p75, alpha=0.3, color='r', label=f'IQR (25-75%) - Num. Samples: {test_waveforms.shape[0]}')
             axs[1].set_xlabel('Time (s)')  
             axs[1].legend()
 
     plt.show()
 
+
+##### TODO: move to metric.py
 def _get_moving_avg_envelope(x, window_len=50):
     return signal.convolve(np.abs(x), np.ones((x.shape[0], window_len)), mode='same') / window_len    
 
@@ -509,6 +457,25 @@ def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, en
         np.ndarray: The log envelope of the input data.
     """
     return np.log(env_function(data, **env_function_params) + eps)    
+
+
+def get_power_spectral_density(data: np.ndarray, log_scale: bool = True, eps=1e-7):
+    """
+    Calculate the power spectral density of the input data.
+
+    Parameters:
+        data (np.ndarray): The input data.
+        log_scale (bool, optional): Whether to return the result in log scale (decibel). Default is True.
+        eps (float, optional): A small value added to avoid division by zero. Default is 1e-7.
+
+    Returns:
+        np.ndarray: The power spectral density of the input data.
+    """
+    if log_scale:
+        return 10 * np.log(np.abs(np.fft.rfft(data, axis=-1)) ** 2 + eps) # dB
+    return np.abs(np.fft.rfft(data, axis=-1)) ** 2
+
+#####
     
           
 def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distance_bins: int, channel_index: int = 0, plot_type: str = 'waveform'):                  
@@ -525,55 +492,70 @@ def plot_by_bins(data: dict[str, np.ndarray], num_magnitude_bins:int, num_distan
     Returns:
         None
     """
+    #TODO: keep axis fixed for all plots (to that in all the plotting functions)
     fs = general_config.fs
     signal_length = general_config.signal_length
     conditional_params_range = general_config.conditional_params_range
 
     waveforms = data['waveforms'][:, channel_index, :] if channel_index is not None else data['waveforms']  
-    cond_input = data['cond']
-
-    plots = [[list() for _ in range(num_distance_bins)] for _ in range(num_magnitude_bins)]  
+    cond_input = data['cond'] 
 
     min_mag, max_mag = conditional_params_range['magnitude']
     min_dist, max_dist = conditional_params_range['hypocentral_distance']
     
-    count_mag_values = len(np.unique(cond_input[:, 3]))
+    count_mag_values = len(np.unique(cond_input[:, 2]))
     count_dist_values = len(np.unique(cond_input[:, 0]))
     if num_magnitude_bins > count_mag_values:
         num_magnitude_bins = count_mag_values
     if num_distance_bins > count_dist_values:
         num_distance_bins = count_dist_values
-    
+
+    plots = [[list() for _ in range(num_magnitude_bins)] for _ in range(num_distance_bins)] 
     for i, cond_sample in enumerate(cond_input):
-        mag = cond_sample[3]
+        mag = cond_sample[2]
         dist = cond_sample[0]
-        mag_bin = int(
-            (mag - min_mag) / (max_mag - min_mag) * num_magnitude_bins
+        # TODO: modify the binning in other places as well (use round instead of int)
+        mag_bin = round(
+            (mag - min_mag) / (max_mag - min_mag) * (num_magnitude_bins-1)
         )
-        dist_bin = int(
-            (dist - min_dist) / (max_dist - min_dist) * num_distance_bins
+        dist_bin = round(
+            (dist - min_dist) / (max_dist - min_dist) * (num_distance_bins-1)
         )
-        to_plot = waveforms[i] if plot_type == 'waveform' else get_log_envelope(waveforms[i].reshape(1, -1), env_function=_get_moving_avg_envelope)[0]
-        plots[mag_bin][dist_bin].append(to_plot)
+        if plot_type == 'waveform':
+            to_plot = waveforms[i]
+            x_axis = np.arange(0, signal_length) / fs
+            xlabel = 'Time (s)'
+            ylabel = 'Amplitude'
+        elif plot_type == 'log_envelope':
+            to_plot = get_log_envelope(waveforms[i].reshape(1, -1), env_function=_get_moving_avg_envelope)[0]
+            x_axis = np.arange(0, signal_length) / fs
+            xlabel = 'Time (s)'
+            ylabel = 'Log Envelope'
+        elif plot_type == 'power_spectral_density':
+            to_plot = get_power_spectral_density(waveforms[i].reshape(1, -1), log_scale=True)[0]
+            x_axis = np.fft.rfftfreq(signal_length, 1 / fs)
+            xlabel = 'Frequency (Hz)'
+            ylabel = 'Power Spectral Density (dB)'
+        else:
+            raise ValueError(f"Unknown plot type: {plot_type}. Available options are 'waveform', 'log_envelope' and 'power_spectral_density'.")    
+        plots[dist_bin][mag_bin].append(to_plot)
 
     fig, axs = plt.subplots(num_distance_bins, num_magnitude_bins, figsize=(12, 5*num_distance_bins), constrained_layout=True) 
     axs = np.atleast_2d(axs)  # Adjust dimensions to ensure axs can be indexed with axs[i, j]
-    time_ax = np.arange(0, signal_length) / fs
     for i in range(num_distance_bins):
         for j in range(num_magnitude_bins):
-            plots_tensor = np.stack(plots[j][i]) if len(plots[j][i])>0 else np.zeros((1, signal_length))
+            plots_tensor = np.stack(plots[i][j]) if len(plots[i][j])>0 else np.zeros((1, signal_length))
             #mean_signal = np.mean(plots_tensor, axis=0) # TODO: or median?
             median_signal = np.median(plots_tensor, axis=0)
             #std_signal = np.std(plots_tensor, axis=0)
             p25 = np.percentile(plots_tensor, 25, axis=0)
             p75 = np.percentile(plots_tensor, 75, axis=0)
             #axs[i, j].plot(time_ax, mean_signal, label='mean signal')
-            axs[i, j].plot(time_ax, median_signal, label='median signal')
+            axs[i, j].plot(x_axis, median_signal, label='median signal')
             #axs[i, j].fill_between(time_ax, mean_signal - std_signal, mean_signal + std_signal, alpha=0.3, label='+- std dev')
-            axs[i, j].fill_between(time_ax, p75, p25, alpha=0.5, label='IQR (25-75%)')
-            axs[i, j].set_title(f"Mag. Bin: [{min_mag + (max_mag - min_mag) / num_magnitude_bins * i:.2f}, {min_mag + (max_mag - min_mag) / num_magnitude_bins * (i+1):.2f}] - Dist Bin: [{min_dist + (max_dist - min_dist) / num_distance_bins * j:.2f}, {min_dist + (max_dist - min_dist) / num_distance_bins * (j+1):.2f}] - Num. Samples: {len(plots[j][i])}")
-            axs[i, j].set_xlabel('Time (s)')
-            ylabel = 'Amplitude' if plot_type == 'waveform' else 'Log Envelope' 
+            axs[i, j].fill_between(x_axis, p75, p25, alpha=0.5, label=f'IQR (25-75%) - Num. Samples: {len(plots[i][j])}')
+            axs[i, j].set_title(f"Mag. Bin: [{min_mag + (max_mag - min_mag) / (num_magnitude_bins) * j:.1f}, {min_mag + (max_mag - min_mag) / (num_magnitude_bins) * (j+1):.1f}] - Dist Bin: [{min_dist + (max_dist - min_dist) / (num_distance_bins) * i:.1f}, {min_dist + (max_dist - min_dist) / (num_distance_bins) * (i+1):.1f}]")
+            axs[i, j].set_xlabel(xlabel)
             axs[i, j].set_ylabel(ylabel) 
             axs[i, j].legend()
 
@@ -589,54 +571,129 @@ def divide_data_by_bins(data: dict[str, np.ndarray], magnitude_bins: list[tuple]
         distance_bins (list[tuple]): The list of distance bins as tuples.
 
     Returns:
-        dict[str, dict[str, np.ndarray]]: A dictionary containing the divided data.
+        dict[str, dict[str, np.ndarray]]: A dictionary containing the divided data (key: str((dist_bin, mag_bin))).
 
     """
     divided_data = {}
     cond_input = data['cond']
+    data_waveforms = data['waveforms'] if 'waveforms' in data.keys() else data['representation']
     for i, dist_bin in enumerate(distance_bins):
         for j, mag_bin in enumerate(magnitude_bins):
-            bins_indexes = (cond_input[:, 0] >= dist_bin[0]) & (cond_input[:, 0] < dist_bin[1]) & (cond_input[:, 3] >= mag_bin[0]) & (cond_input[:, 3] < mag_bin[1])
+            bins_indexes = (cond_input[:, 0] >= dist_bin[0]) & (cond_input[:, 0] < dist_bin[1]) & (cond_input[:, 2] >= mag_bin[0]) & (cond_input[:, 2] < mag_bin[1])
             if np.any(bins_indexes):
-                divided_data[f"({dist_bin}, {mag_bin})"] = {"waveforms": data['waveforms'][bins_indexes], "cond": cond_input[bins_indexes]}
+                divided_data[f"({dist_bin}, {mag_bin})"] = {"waveforms": data_waveforms[bins_indexes], "cond": cond_input[bins_indexes]}
     return divided_data
+
+
+def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[tuple], test_data: dict[str, np.ndarray], data: dict[str, np.ndarray] = None, model: Type[pl.LightningModule] = None, model_data_representation: Type[Representation] = None, channel_index: int = 0) -> None:
+    assert (data is not None) or (model is not None and model_data_representation is not None), "Either data or model and model_data_representation must be provided."
+    test_data_by_bins = divide_data_by_bins(test_data, magnitude_bins, distance_bins)
+
+    if data is None:
+        data = generate_data(model, model_data_representation, raw_output=False,  num_samples=len(test_data['cond']), cond_input=test_data['cond'])
+    gen_data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
+
+    signal_length = general_config.signal_length
+    fs = general_config.fs
+
+    if plot_type == 'log_envelope':
+        x_axis = np.arange(0, signal_length) / fs
+        plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope)
+        x_label = 'Time (s)'
+        y_label = 'Log Envelope'
+        y_limit = [-10, 7]          
+    elif plot_type == 'power_spectral_density':
+        x_axis = np.fft.rfftfreq(signal_length, 1 / fs)
+        plot_fun = lambda x: get_power_spectral_density(x, log_scale=True)
+        x_label = 'Frequency (Hz)'
+        y_label = 'Power Spectral Density (dB)'
+        y_limit = [-150, 150]
+    else:
+        raise ValueError(f"Unknown plot type: {plot_type}. Available options are 'log_envelope' and 'power_spectral_density'.")    
+
+    
+    fig, axs = plt.subplots(len(distance_bins), 2, figsize=(14, 5*len(distance_bins)))
+    for i, dist_bin in enumerate(distance_bins):
+        for j, mag_bin in enumerate(magnitude_bins):
+            if f"({dist_bin}, {mag_bin})" in gen_data_by_bins.keys():
+                gen_data_bin = plot_fun(gen_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :])
+                gen_data_median = np.median(gen_data_bin, axis=0)
+                gen_data_p25, gen_data_p75 = np.percentile(gen_data_bin, 25, axis=0), np.percentile(gen_data_bin, 75, axis=0)
+                axs[i, 0].plot(x_axis, gen_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
+                axs[i, 0].fill_between(x_axis, gen_data_p75, gen_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(gen_data_bin)}')
+
+                test_data_bin = plot_fun(test_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :])
+                test_data_median = np.median(test_data_bin, axis=0)
+                test_data_p25, test_data_p75 = np.percentile(test_data_bin, 25, axis=0), np.percentile(test_data_bin, 75, axis=0)
+                axs[i, 1].plot(x_axis, test_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
+                axs[i, 1].fill_between(x_axis, test_data_p75, test_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(test_data_bin)}')
+                
+                axs[i, 0].set_title('Generated')
+                axs[i, 1].set_title('Real')
+                axs[i, 0].set_xlabel(x_label)
+                axs[i, 0].set_ylabel(y_label) 
+                axs[i, 0].set_ylim(y_limit)
+                axs[i, 0].legend()
+                axs[i, 0].grid()
+                axs[i, 1].set_xlabel(x_label)
+                axs[i, 1].set_ylabel(y_label) 
+                axs[i, 1].set_ylim(y_limit)
+                axs[i, 1].legend()
+                axs[i, 1].grid()
+            else:
+                axs[i, 0].plot(x_axis, np.zeros_like(x_axis), alpha=0, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin} -- No Data")
+                axs[i, 1].plot(x_axis, np.zeros_like(x_axis), alpha=0, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin} -- No Data")    
+     
+    plt.show()
+
 
 
 def plot_log_envelope_bins(distance_bins: list[tuple], magnitude_bins: list[tuple], test_data: dict[str, np.ndarray], data: dict[str, np.ndarray] = None, model: Type[pl.LightningModule] = None, model_data_representation: Type[Representation] = None, channel_index: int = 0) -> None:
     assert (data is not None) or (model is not None and model_data_representation is not None), "Either data or model and model_data_representation must be provided."
     test_data_by_bins = divide_data_by_bins(test_data, magnitude_bins, distance_bins)
-    # keep only one sample per bin
-    test_sample_by_bins = {key: get_samples(test_data_by_bins[key], num_samples=1) for key in test_data_by_bins.keys()}
-    cond_inputs = np.array([test_sample_by_bins[key]['cond'][0] for key in test_sample_by_bins.keys()])
+
     if data is None:
-        data = generate_data(model, model_data_representation, len(test_sample_by_bins), cond_input=cond_inputs)
-    data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
+        data = generate_data(model, model_data_representation, raw_output=False,  num_samples=len(test_data['cond']), cond_input=test_data['cond'])
+    gen_data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
 
     signal_length = general_config.signal_length
     fs = general_config.fs
 
 
     time_ax = np.arange(0, signal_length) / fs
-    fig, axs = plt.subplots(len(distance_bins), 2)
+    fig, axs = plt.subplots(len(distance_bins), 2, figsize=(14, 5*len(distance_bins)))
     for i, dist_bin in enumerate(distance_bins):
         for j, mag_bin in enumerate(magnitude_bins):
-            axs[i, 0].plot(
-                get_log_envelope(data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0], env_function=_get_moving_avg_envelope)[channel_index, :],
-                label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}"
-            )
-            axs[i, 1].plot(
-                get_log_envelope(test_sample_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][0], env_function=_get_moving_avg_envelope)[channel_index, :], 
-                label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}"
-            )
-            axs[i, 0].set_title('Generated')
-            axs[i, 1].set_title('Real')
-            axs[i, 0].set_xlabel('Time (s)')
-            axs[i, 0].set_ylabel('Log Envelope') 
-            axs[i, 0].legend()
-            axs[i, 1].set_xlabel('Time (s)')
-            axs[i, 1].set_ylabel('Log Envelope') 
-            axs[i, 1].legend()
+            if f"({dist_bin}, {mag_bin})" in gen_data_by_bins.keys():
+                gen_data_bin = get_log_envelope(gen_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :], env_function=_get_moving_avg_envelope)
+                gen_data_median = np.median(gen_data_bin, axis=0)
+                gen_data_p25, gen_data_p75 = np.percentile(gen_data_bin, 25, axis=0), np.percentile(gen_data_bin, 75, axis=0)
+                axs[i, 0].plot(time_ax, gen_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
+                axs[i, 0].fill_between(time_ax, gen_data_p75, gen_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(gen_data_bin)}')
+
+                test_data_bin = get_log_envelope(test_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :], env_function=_get_moving_avg_envelope)
+                test_data_median = np.median(test_data_bin, axis=0)
+                test_data_p25, test_data_p75 = np.percentile(test_data_bin, 25, axis=0), np.percentile(test_data_bin, 75, axis=0)
+                axs[i, 1].plot(time_ax, test_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
+                axs[i, 1].fill_between(time_ax, test_data_p75, test_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(test_data_bin)}')
+                
+                axs[i, 0].set_title('Generated')
+                axs[i, 1].set_title('Real')
+                axs[i, 0].set_xlabel('Time (s)')
+                axs[i, 0].set_ylabel('Log Envelope') 
+                axs[i, 0].legend()
+                axs[i, 1].set_xlabel('Time (s)')
+                axs[i, 1].set_ylabel('Log Envelope') 
+                axs[i, 1].legend()
+            else:
+                axs[i, 0].plot(time_ax, np.zeros_like(time_ax), alpha=0, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin} -- No Data")
+                axs[i, 1].plot(time_ax, np.zeros_like(time_ax), alpha=0, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin} -- No Data")    
      
     plt.show()
+
+
+def plot_raw_waveform(raw_waveform, cond, data_representation, inverted_waveform=None):
+    data_representation.plot(raw_waveform, inverted_waveform=inverted_waveform, title=str(get_cond_params_dict(cond)))    
+
 
     

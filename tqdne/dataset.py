@@ -194,10 +194,8 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         self.features_means = self.file["feature_means"][:] #  Not really needed. Scaling is meaningless since embedding are sin/cos so periodic
         self.features_stds = self.file["feature_stds"][:] 
         
-        # TODO: temporary fix for log10snr being inf
-        log10snr = self.features[:, 2]
-        log10snr[log10snr == np.inf] = 40  # since max(log10snr)=17
-        self.features[:, 2] = log10snr
+        # Remove the third feature (log10snr)
+        self.features = self.features[:, [0, 1, 3, 4]] 
 
         self.n = len(self.features)
         assert self.n == len(self.waveforms)
@@ -225,7 +223,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
             signal = signal[:, : self.cut]
 
         if self.downsample > 1:
-            signal = scipy.signal.decimate(signal, self.downsample, axis=1)   
+            signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False)   
 
         repr = self.representation.get_representation(signal)    
 
@@ -233,3 +231,22 @@ class EnvelopeDataset(torch.utils.data.Dataset):
             "representation": torch.tensor(repr, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
+    
+    def get_waveforms_by_cond_input(self, cond_input):
+        # TODO: make it faster
+        idxs = []
+        for c in cond_input:
+            for idx, f in enumerate(self.features):
+                if np.all(f == c):
+                    idxs.append(idx)
+        return np.array([self.waveforms[i, :, :self.cut] for i in idxs])  
+    
+    
+    def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
+        bins_indexes = (self.features[:, 0] >= distance_bin[0]) & (self.features[:, 0] < distance_bin[1]) & (self.features[:, 2] >= magnitude_bin[0]) & (self.features[:, 2] < magnitude_bin[1])
+        if is_shallow_crustal is not None:
+            bins_indexes = bins_indexes & (self.features[:, 1] == is_shallow_crustal)
+        if np.any(bins_indexes):
+            return {"waveforms": self.waveforms[bins_indexes, :, :self.cut], "cond": self.features[bins_indexes]}
+        raise ValueError("No data in the given bins")
+        

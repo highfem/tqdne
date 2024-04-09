@@ -212,19 +212,17 @@ class ResBlock(TimestepBlock):
         )
 
     def _forward(self, x, emb):
-        # shapes at the first iteration
-        # x.shape -> torch.Size([8, 32, 5472]) 
-        h = self.in_layers(x) # h.shape -> torch.Size([8, 32, 5472])
-        emb_out = self.emb_layers(emb).type(h.dtype) # emb_out.shape -> torch.Size([8, 32]) (batch_size := 8)
-        emb_out = append_dims(emb_out, h.dim()) # emb_out.shape -> torch.Size([8, 32, 1]) (batch_size := 8)
+        h = self.in_layers(x) 
+        emb_out = self.emb_layers(emb).type(h.dtype) 
+        emb_out = append_dims(emb_out, h.dim()) 
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
             h = out_norm(h) * (1 + scale) + shift
             h = out_rest(h)
         else:
-            h = h + emb_out # h.shape -> torch.Size([8, 32, 5472])
-            h = self.out_layers(h) # h.shape -> torch.Size([8, 32, 5472])
+            h = h + emb_out 
+            h = self.out_layers(h) 
         return self.skip_connection(x) + h
 
 

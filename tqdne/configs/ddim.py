@@ -22,10 +22,10 @@ def get_config():
             timestep_decimation_factor=10,
         ),
         net_params=new_dict(
-            cond_features=5, 
-            dims=1,
+            dims=1, #TODO: change it dynamically according to representation used
             conv_kernel_size=5,  # might want to change to 5
             model_channels=32,
+            channel_mult=(1, 2, 4, 8),
             num_res_blocks=2,
             num_heads=4,
             dropout=0.2,
@@ -35,10 +35,10 @@ def get_config():
     )
 
     config.optimizer_params=new_dict(
-        learning_rate=1e-3,
+        learning_rate=3e-4,
         scheduler_name="cosine",
-        lr_warmup_steps=1000,
-        batch_size=64,
+        lr_warmup_steps=500,
+        batch_size=128,
         seed=0,
     )
 
@@ -56,6 +56,15 @@ def get_config():
         fast_dev_run=False,
         detect_anomaly=False,
     )
+
+        
+    # config.data_repr = new_dict(
+    #     name="LogSpectrogram",
+    #     params=new_dict(
+    #         stft_channels = 128,
+    #         hop_size = 16,
+    #     )
+    # )
 
     config.data_repr = new_dict(
         name="SignalWithEnvelope",
@@ -78,6 +87,7 @@ def get_config():
     # -1: means all channels
     config.metrics = new_dict(
         psd=-1, 
+        logenv=-1,
     )
 
     # TODO: not sure if it is the best way to do it
@@ -86,11 +96,11 @@ def get_config():
         psd=-1,
         logenv=-1,
         debug=-1,
-        # bin=new_dict(
-        #     num_mag_bins=4,
-        #     num_dist_bins=4,
-        #     metrics="all",
-        # )
+        bin=new_dict(
+             num_mag_bins=4,
+             num_dist_bins=4,
+             metrics="all",
+        )
     )
 
     return config

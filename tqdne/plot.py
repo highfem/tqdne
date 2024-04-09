@@ -8,6 +8,45 @@ from tqdne import utils
 from tqdne.metric import Metric
 from tqdne.representations import to_numpy
 
+# TODO: MERGE ALL WITH METRIC.PY
+
+def get_plots_list(plots_config, metrics, general_config, data_representation=None):
+    plots = []
+    for plot, v_plot in plots_config.items():
+        if plot == "bin":
+            if v_plot.metrics == "all":
+                for m in metrics:
+                    plots.append(BinPlot(metric=m, num_mag_bins=v_plot.num_mag_bins, num_dist_bins=v_plot.num_dist_bins))
+            elif v_plot.metrics == "channels-avg":
+                #for i in range(0, len(metrics), general_config.num_channels):
+                #    metric_avg = np.mean(metrics[i:i+general_config.num_channels])
+                #    plots.append(BinPlot())
+                # TODO: it should be handled by BinPlot itself 
+                raise NotImplementedError("channels-avg not implemented yet")
+        else:
+            if v_plot == -1:
+                channels = [c for c in range(general_config.num_channels)]
+            else:
+                channels = [v_plot]    
+            if plot == "psd":
+                for c in channels:
+                    plots.append(PowerSpectralDensityPlot(fs=general_config.fs, channel=c, data_representation=data_representation))
+            elif plot == "sample":
+                for c in channels:
+                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation))
+            elif plot == "logenv":
+                for c in channels:
+                    plots.append(LogEnvelopePlot(fs=general_config.fs, channel=c, data_representation=data_representation)) 
+            elif plot == "debug":
+                data_repr_channels = data_representation.get_shape((1, general_config.num_channels, general_config.signal_length))[1]
+                channels = [c for c in range(data_repr_channels)]
+                for c in channels:
+                    plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation, invert_representation=False))              
+            else:
+                raise ValueError(f"Unknown metric name: {plot}")
+    return plots    
+
+
 # TODO: maybe rename into plots.py
 class Plot(ABC):
     """Abstract plot class.
@@ -15,11 +54,17 @@ class Plot(ABC):
     All plots should inherit from this class.
     """
 
-    def __init__(self, channel=None, data_representation=None, invert_representation=True):
-        self.channel = channel
-        self.data_representation = data_representation
-        self.invert_representation = invert_representation
-        self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
+    def __init__(self, channel=None, data_representation=None, invert_representation=True, metric=None):
+        if metric is not None:
+            # TODO: rethink this, because metric.compute return a scalar (FID)
+            self.metric = metric
+        else:    
+            self.metric = None
+            self.channel = channel
+            assert not invert_representation or data_representation is not None, "Data representation must be provided if invert_representation is True"
+            self.data_representation = data_representation
+            self.invert_representation = invert_representation
+            self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
 
     @property
     def name(self):
@@ -29,22 +74,13 @@ class Plot(ABC):
         return name
 
     def __call__(self, pred, target=None, cond_signal=None, cond=None):
-        if self.data_representation is not None:
-            pred = self.invert_representation_fun(pred)
-            target = self.invert_representation_fun(target) 
-            cond = to_numpy(cond)
+        pred = self.invert_representation_fun(pred)
+        target = self.invert_representation_fun(target) 
+        cond = to_numpy(cond)
         if self.channel is not None:
             pred = pred[:, self.channel]
             target = target[:, self.channel]
             cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
-
-        ##### DEBUG
-        #figuretoplot = target[0,:]
-        #fig, ax = plt.subplots( nrows=1, ncols=1 )  # create figure & 1 axis
-        #ax.plot(figuretoplot)
-        #fig.savefig("target_inv_is_working.png")   # save the figure to file
-        #plt.close(fig)    # close the figure window
-
 
         return self.plot(pred, target, cond_signal, cond)
 
@@ -60,6 +96,7 @@ class SamplePlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
+    # TODO: handle 2d stft representation (plot heatmap)
     def plot(self, pred, target=None, cond_signal=None, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
@@ -136,27 +173,28 @@ class PowerSpectralDensityPlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, pred, target, cond_signal=None, cond=None):
-        # TODO: bad design choice: code is duplicated from metric.py
-        pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
-        target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
-
-        # Compute mean and std of PSD in log scale
-        eps = 1e-7
-        pred_mean = np.log(pred_psd + eps).mean(axis=0)
-        target_mean = np.log(target_psd + eps).mean(axis=0)
-        pred_std = np.log(pred_psd + eps).std(axis=0)
-        target_std = np.log(target_psd + eps).std(axis=0)
-
-        # Plot
-        freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
+    def plot(self, pred, target, cond_signal=None, cond=None, eps=1e-7):
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(freq, pred_mean, "g", label="Predicted")
-        ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2)
+        if self.metric is not None:
+            pred_mean, pred_std, target_mean, target_std = self.metric.get_pred_and_target_stats()
+        else:  
+            target = pred if target is None else target
+            target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
+            target_mean = np.log(target_psd + eps).mean(axis=0)
+            target_std = np.log(target_psd + eps).std(axis=0)
+
+            freq = np.fft.rfftfreq(target.shape[-1], d=1 / self.fs)
+
+            if pred is not None and target is not None:
+                pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
+                pred_mean = np.log(pred_psd + eps).mean(axis=0)
+                pred_std = np.log(pred_psd + eps).std(axis=0)
+                ax.plot(freq, pred_mean, "g", label="Predicted")
+                ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2)
+
+
         ax.plot(freq, target_mean, "r", label="Target")
-        ax.fill_between(
-            freq, target_mean - target_std, target_mean + target_std, color="r", alpha=0.2
-        )
+        ax.fill_between(freq, target_mean - target_std, target_mean + target_std, color="r", alpha=0.2)
         ax.set_title(self.name)
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Log Power")
@@ -165,7 +203,6 @@ class PowerSpectralDensityPlot(Plot):
         return fig
         
 
-# TODO: it doesn't work like this since it needs to be updated, not just evaluated with a single batch 
 class BinPlot(Plot):
     """Creates a bin plot for a given metric."""
 
@@ -194,7 +231,7 @@ class BinPlot(Plot):
 
     def plot(self, pred, target, cond_signal, cond):
         # extract the magnitude and distance (this is specific to the dataset)
-        mags = cond[:, 3]
+        mags = cond[:, 2]
         dists = cond[:, 0]
 
         # create the bins
@@ -207,7 +244,7 @@ class BinPlot(Plot):
             for j in range(self.num_dist_bins):
                 mask = (mags >= mag_bins[i]) & (mags < mag_bins[i + 1])
                 mask &= (dists >= dist_bins[j]) & (dists < dist_bins[j + 1])
-                results[i, j] = self.metric(pred[mask], target[mask])
+                results[i, j] = self.metric(pred[mask], target[mask]) if mask.any() else np.nan
 
         # Plotting the heatmap using seaborn
         mag_bins_center = (mag_bins[1:] + mag_bins[:-1]) / 2

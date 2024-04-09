@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Tuple, Type
 
 from dotenv import load_dotenv
+import h5py
 
 # Set up the default logger
 logging.basicConfig(
@@ -73,6 +74,13 @@ PROJECT_NAME = "tqdne"
 class Config:
     """Configuration class for the project."""
 
+    # Singleton
+    _instance = None
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super().__new__(cls, *args, **kwargs)
+        return cls._instance
+
     # Dataset
     datasetdir: Path = DATASETDIR
     outputdir: Path = OUTPUTDIR
@@ -94,11 +102,10 @@ class Config:
     sigma_in: float = 0.01
 
     # Input data parameters
-    datapath: Path = DATASETDIR / Path("wforms_GAN_input_v20220805.h5")
+    datapath: Path = Path("/store/sdsc/sd28") / Path("wforms_GAN_input_v20220805.h5")
     features_keys: Tuple[str] = (
         "hypocentral_distance",
         "is_shallow_crustal",
-        "log10snr",
         "magnitude",
         "vs30",
     )
@@ -106,12 +113,16 @@ class Config:
     conditional_params_range = {
         "hypocentral_distance": (0., 200.),
         "is_shallow_crustal": (0., 1.), # 0: False, 1: True
-        "log10snr": (-2., 40),
         "magnitude": (3., 10),
         "vs30": (-1., 2100.)
     }
-    num_channels: int = 3
-    signal_length: int = (5501 // 32) * 32 # is it something that one should change?
+    
+    # Open the h5 file
+    with h5py.File(datasetdir / data_test, 'r', locking=False) as file:
+        # Get the first sample
+        example_signal = file["waveform"][0]
+        num_channels: int = example_signal.shape[0]
+        signal_length: int = (example_signal.shape[1] // 32) * 32 # is it something that one should change?
 
     # Train Dataset statistics
     # TODO: this shouldn't be here. It should be a parameter of the class SignalWithEnvelope, that should be passed to the init method 
