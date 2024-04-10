@@ -50,10 +50,11 @@ def get_pl_trainer(
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),
-                filename="{name}_{epoch}-{val_loss:.2f}",
+                filename="{name}_{epoch}-val_loss={validation/loss:.2e}",
                 monitor="validation/loss",
+                auto_insert_metric_name=False,
                 mode="min",
-                save_top_k=5,
+                save_top_k=3,
             )
         )
 
