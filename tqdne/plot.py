@@ -41,14 +41,17 @@ class Plot(ABC):
 class SamplePlot(Plot):
     """Plot a sample of the predicted signal."""
 
-    def __init__(self, fs=100, channel=0):
+    def __init__(self, plot_target=False, fs=100, channel=0):
         super().__init__(channel)
+        self.plot_target = plot_target
         self.fs = fs
 
     def plot(self, pred, target=None, cond_signal=None, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, pred[0], "g", label="Reconstructed")
+        if self.plot_target:
+            ax.plot(time, target[0], "r", label="Target")
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
