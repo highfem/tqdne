@@ -61,8 +61,19 @@ class Representation(ABC):
         pass
 
     def plot_representation(self, channel=0): 
-        return self._plot_representation(channel)    
+        return self._plot_representation(channel)   
+
+    @abstractmethod
+    def _test(self, waveforms):
+        pass
     
+    @staticmethod
+    def test(repr, waveforms):
+        repr._test(repr, waveforms)
+
+    def _test_inversion(self, waveforms):
+        assert np.allclose(waveforms, self.invert_representation(self.get_representation(waveforms)), atol=1e-6) 
+
     def update_stats(self, config: Config):
         return self._update_stats(config)
 
@@ -82,8 +93,8 @@ class SignalWithEnvelope(Representation):
         self.env_transform_params = env_transform_params
         self.scaling = scaling
 
-        if self.scaling.type == "normalize":
-            if self.scaling.scalar:
+        if self.scaling["type"] == "normalize":
+            if self.scaling["scalar"]:
                 # Signal statistics for normalization
                 # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0.
                 dataset_stats_dict = config.signal_statistics 
@@ -97,8 +108,8 @@ class SignalWithEnvelope(Representation):
             else:
                 raise NotImplementedError("Channel-wise normalization is not implemented yet -- missing statistics")
 
-        elif self.scaling_type == "standardize":
-            if self.scaling.scalar:
+        elif self.scaling["type"] == "standardize":
+            if self.scaling["scalar"]:
                 raise NotImplementedError("Scalar standardization is not implemented yet -- missing statistics")
             else:
                 # Statistics of the transformed envelope (computer over a subset of the training dataset)
@@ -111,13 +122,15 @@ class SignalWithEnvelope(Representation):
                 # Standardize the transformed envelope 
                 self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel[:, : trans_env.shape[-1]]) / trans_env_std_per_channel[:, : trans_env.shape[-1]] 
                 self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel[:, : std_trans_env.shape[-1]] + trans_env_mean_per_channel[:, : std_trans_env.shape[-1]]
-
+    
+    _trans_functions = ["log"]
+    _env_functions = ["hilbert", "moving_average", "moving_average_shifted", "first_order_lp"]
 
     def _get_trans_function_by_name(self, name):
         if name == "log":
             return self._log_transform, self._inverse_log_transform
         else:
-            raise ValueError(f"Unknown transformation function: {name}")
+            raise ValueError(f"Unknown transformation function: {name}. Supported functions are: {self._trans_functions}")
         
     def _get_env_function_by_name(self, name):
         if name == "hilbert":
@@ -129,7 +142,7 @@ class SignalWithEnvelope(Representation):
         elif name == "first_order_lp":
             return self.first_order_lp_env
         else:
-            raise ValueError(f"Unknown envelope function: {name}")
+            raise ValueError(f"Unknown envelope function: {name}. Supported functions are: {self._env_functions}")
     
     def _get_representation(self, signal):
         envelope = self.env_function(signal, **self.env_function_params)
@@ -190,6 +203,13 @@ class SignalWithEnvelope(Representation):
         plt.tight_layout()
         plt.show()
 
+    def _test(self, waveforms):
+        for trans_fun in self._trans_functions:
+            for env_fun in self._env_functions:
+                repr_config = SignalWithEnvelope(env_fun, {}, trans_fun, {}, scaling={"type": "normalize", "scalar": True})
+                repr_config.test_inversion(waveforms)
+           
+
     def _update_stats(self, config: Config):
         # TODO
         # Compute the statistics of the transformed envelope (mean, std, min, max) over a subset of the training dataset
@@ -230,11 +250,11 @@ class SignalWithEnvelope(Representation):
     
     # TRANSFORMATION FUNCTIONS
     @staticmethod
-    def _log_transform(x, log_offset):
+    def _log_transform(x, log_offset=1e-5):
         return np.log10(x + log_offset)
     
     @staticmethod
-    def _inverse_log_transform(x, log_offset):
+    def _inverse_log_transform(x, log_offset=1e-5):
         return 10 ** x - log_offset
         
 
@@ -380,6 +400,9 @@ class LogSpectrogram(Representation):
         
         plt.tight_layout()
         plt.show()
+
+    def _test(self, waveforms):
+        return LogSpectrogram()._test_inversion(waveforms)    
         
     
     def _update_stats(self, config: Config):

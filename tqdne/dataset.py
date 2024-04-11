@@ -233,13 +233,8 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         }
     
     def get_waveforms_by_cond_input(self, cond_input):
-        # TODO: make it faster
-        idxs = []
-        for c in cond_input:
-            for idx, f in enumerate(self.features):
-                if np.all(f == c):
-                    idxs.append(idx)
-        return np.array([self.waveforms[i, :, :self.cut] for i in idxs])  
+        idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[1]
+        return self.waveforms[np.sort(idxs), :, :self.cut]
     
     
     def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):

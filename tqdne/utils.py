@@ -80,12 +80,6 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     data_repr = get_data_representation(ml_configs.data_repr.name, ml_configs.data_repr.params, ml_configs.model.net_params.channel_mult[-1])
     return model, data_repr, ckpt    
 
-# TODO: not used. Remove?
-def get_model_summary_plot(model_ckpt_path: Path, batch_size: int = 64):
-    model, data_repr, ckpt = load_model(model_ckpt_path)
-    data = generate_data(model, data_repr, raw_output=False, num_samples=batch_size)
-    fig, axs = plt.subplots(2, 1, figsize=(15, 15))
-    axs[0].plot()
 
 def plot_envelope(signal, envelope_function, title=None, **envelope_params):
     envelope = envelope_function(signal, **envelope_params)
@@ -323,24 +317,6 @@ def generate_cond_inputs(batch_size: int, cond_input_params: dict[str, list]) ->
                 cond_inputs.append(np.random.uniform(cond_params_range[param][0], cond_params_range[param][1], size=batch_size))
     return np.stack(cond_inputs, axis=1)
 
-# TODO: maybe not the best design choice to use Metrics. Simply define some plot functions (and rollback changes to metric.py that i made for the title)
-#def plot_metrics(data: np.ndarray, metrics: list[Metric], target=None) -> None:
-#    """
-#    Plots the metrics for the given data.
-
-    # Args:
-    #     data (np.ndarray): The input data.
-    #     metrics (list[Metric]): A list of Metric objects.
-    #     target: The target data (optional).
-
-    # Returns:
-    #     None
-    # """
-    # # if data is a single sample, 
-    # for metric in metrics:
-    #     metric.reset()
-    #     metric.update(data, target)
-    #     metric.plot().show()
 
 def get_cond_params_dict(cond_input: np.ndarray) -> dict[str, float]:
     return {key: cond_input[i] for i, key in enumerate(general_config.features_keys)}    
@@ -439,9 +415,8 @@ def plot_waveforms(data: dict[str, np.ndarray], test_waveforms: np.ndarray = Non
     plt.show()
 
 
-##### TODO: move to metric.py
-def _get_moving_avg_envelope(x, window_len=50):
-    return signal.convolve(np.abs(x), np.ones((x.shape[0], window_len)), mode='same') / window_len    
+def _get_moving_avg_envelope(x, window_len=100):
+    return SignalWithEnvelope._moving_average_env(x, window_size=window_len)    
 
 def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, env_function_params={}, eps=1e-7):
     """
@@ -590,7 +565,7 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
     test_data_by_bins = divide_data_by_bins(test_data, magnitude_bins, distance_bins)
 
     if data is None:
-        data = generate_data(model, model_data_representation, raw_output=False,  num_samples=len(test_data['cond']), cond_input=test_data['cond'])
+        data = generate_data(model, model_data_representation, raw_output=False, num_samples=len(test_data['cond']), cond_input=test_data['cond'])
     gen_data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
 
     signal_length = general_config.signal_length
@@ -598,7 +573,7 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
 
     if plot_type == 'log_envelope':
         x_axis = np.arange(0, signal_length) / fs
-        plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope)
+        plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope) #TODO: restore
         x_label = 'Time (s)'
         y_label = 'Log Envelope'
         y_limit = [-10, 7]          
