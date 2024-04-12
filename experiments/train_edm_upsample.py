@@ -16,16 +16,16 @@ from tqdne.utils import get_last_checkpoint
 if __name__ == "__main__":
     resume = True
     logging.info("Loading data...")
-    t = 1024 * 13
-    batch_size = 32
+    batch_size = 64
     stft_channels = 256
-    spec_len = t // 16
+    hop_size = stft_channels // 4
+    t = 1024 * 13 - hop_size  # subtract hop_size to make sure spectrogram has even number of frames
     fs = 4
 
     name = "EDM-Upsample-LogSpectrogram"
     config = Config()
 
-    representation = LogSpectrogram(output_shape=(stft_channels // 2, spec_len), stft_channels=stft_channels)
+    representation = LogSpectrogram(stft_channels=stft_channels, hop_size=hop_size)
 
     dataset_path = Path("dataset_7-8")
     obs_path = dataset_path / "observed"
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         # "cond_features": 5,  # set to 5 if cond=True
         "dims": 2,
         "conv_kernel_size": 3,
-        "model_channels": 32,
+        "model_channels": 64,
         "channel_mult": (1, 2, 4, 8),  # might want to change to (1, 2, 4, 8)
         "num_res_blocks": 2,
         "num_heads": 4,

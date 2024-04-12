@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import torch
 
 from torch.utils.data import DataLoader
 
@@ -15,13 +16,15 @@ from tqdne.utils import get_last_checkpoint
 if __name__ == "__main__":
     resume = True
     logging.info("Loading data...")
-    t = 4096
-    batch_size = 64
+    batch_size = 128
+    stft_channels = 128
+    hop_size = stft_channels // 4
+    t = 4096 - hop_size  # subtract hop_size to make sure spectrogram has even number of frames
 
     name = "EDM-LogSpectrogram"
     config = Config()
 
-    representation = LogSpectrogram(output_shape=(256, 256))
+    representation = LogSpectrogram()
 
     path_train = config.datasetdir / Path(config.data_upsample_train)
     path_test = config.datasetdir / Path(config.data_upsample_test)
@@ -50,8 +53,8 @@ if __name__ == "__main__":
         "cond_features": 5,  # set to 5 if cond=True
         "dims": 2,
         "conv_kernel_size": 3,
-        "model_channels": 32, 
-        "channel_mult": (1, 2, 4, 8),  # might want to change to (1, 2, 4, 8)
+        "model_channels": 64,
+        "channel_mult": (1, 2, 1, 2),  # might want to change to (1, 2, 4, 8)
         "num_res_blocks": 2,
         "num_heads": 4,
         "dropout": 0.2,
@@ -92,7 +95,7 @@ if __name__ == "__main__":
     )
 
     logging.info("Start training...")
-
+    torch.set_float32_matmul_precision("high")
     checkpoint = get_last_checkpoint(trainer.default_root_dir) if resume else None
     trainer.fit(
         model,
