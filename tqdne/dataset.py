@@ -225,3 +225,42 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
+
+
+class SeisbenchDataset(torch.utils.data.Dataset):
+    def __init__(self, obs_path, syn_path, representaion, cut=None, cond=False, config=Config()):
+        super().__init__()
+        self.cond = cond
+        self.cut = cut
+        self.representation = representaion
+        self.obs_data = WaveformDataset(obs_path)
+        self.syn_data = WaveformDataset(syn_path)
+
+        # sort out waveforms shorter than cut
+        self.indices = np.array(
+            [i for i in range(len(self.obs_data)) if self.obs_data.get_sample(i)[0].shape[1] >= cut]
+        )
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        obs = self.obs_data.get_sample(self.indices[index])[0]
+        syn = self.syn_data.get_sample(self.indices[index])[0]
+
+        if self.cut:
+            obs = obs[:, : self.cut]
+            syn = syn[:, : self.cut]
+
+        obs = np.nan_to_num(obs)
+        syn = np.nan_to_num(syn)
+
+        signal = self.representation.get_representation(obs)
+        cond_signal = self.representation.get_representation(syn)
+
+        return {
+            "waveform": torch.tensor(obs, dtype=torch.float32),
+            "cond_waveform": torch.tensor(syn, dtype=torch.float32),
+            "signal": torch.tensor(signal, dtype=torch.float32),
+            "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
+        }
