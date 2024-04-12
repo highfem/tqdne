@@ -123,12 +123,14 @@ class SignalWithEnvelope(Representation):
                 self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel[:, : trans_env.shape[-1]]) / trans_env_std_per_channel[:, : trans_env.shape[-1]] 
                 self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel[:, : std_trans_env.shape[-1]] + trans_env_mean_per_channel[:, : std_trans_env.shape[-1]]
     
-    _trans_functions = ["log"]
-    _env_functions = ["hilbert", "moving_average", "moving_average_shifted", "first_order_lp"]
+    _trans_functions = ["log", "none"]
+    _env_functions = ["hilbert", "moving_average", "moving_average_shifted", "first_order_lp", "constant_max", "constant_mean", "constant_one"]
 
     def _get_trans_function_by_name(self, name):
         if name == "log":
             return self._log_transform, self._inverse_log_transform
+        elif name == "none":
+            return lambda x: x, lambda x: x
         else:
             raise ValueError(f"Unknown transformation function: {name}. Supported functions are: {self._trans_functions}")
         
@@ -140,9 +142,70 @@ class SignalWithEnvelope(Representation):
         elif name == "moving_average_shifted":
             return self._moving_average_env_shifted
         elif name == "first_order_lp":
-            return self.first_order_lp_env
+            return self._first_order_lp_env
+        elif name == "constant_max":
+            pass 
+        elif name == "constant_mean":
+            pass 
+        elif name == "constant_one":
+            pass 
         else:
             raise ValueError(f"Unknown envelope function: {name}. Supported functions are: {self._env_functions}")
+        
+    # ENVELOPES
+    @staticmethod
+    def _hilbert_env(signal):
+        return np.abs(hilbert(signal))
+    
+    @staticmethod
+    def _moving_average_env(signal, window_size=100):
+        return np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
+    
+    @staticmethod
+    def _moving_average_env_shifted(signal, window_size=100):
+        moving_avg_envelopes = np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
+        max_indices = np.argmax(signal, axis=-1)
+        max_values = np.take_along_axis(signal, max_indices[..., np.newaxis], axis=-1)
+        values = np.take_along_axis(moving_avg_envelopes, max_indices[..., np.newaxis], axis=-1)
+        moving_avg_envelopes_shifted = moving_avg_envelopes + (max_values - values)
+        return moving_avg_envelopes_shifted
+
+    @staticmethod
+    def _first_order_lp_env(signal, k_env=0.98):
+        def first_order_lp_env_fun(s):
+            envelope = np.zeros_like(s)
+            s = np.abs(s)
+            for i in range(1, len(s)):
+                if s[i] > s[i-1] and s[i] > envelope[i-1]:
+                    envelope[i] = s[i]
+                else:
+                    envelope[i] = k_env*envelope[i-1] + (1-k_env)*s[i] # first order discrete time low pass filter
+
+            return envelope        
+        return np.apply_along_axis(first_order_lp_env_fun, axis=-1, arr=signal)
+
+    @staticmethod
+    def _constant_max_env(signal):
+        return np.max(signal, axis=-1)  
+    
+    @staticmethod
+    def _constant_mean_env(signal):
+        return np.mean(signal, axis=-1)
+    
+    @staticmethod
+    def _constant_one_env(signal):
+        return 1
+    
+    # TRANSFORMATION FUNCTIONS
+    @staticmethod
+    def _log_transform(x, log_offset=1e-5):
+        return np.log10(x + log_offset)
+    
+    @staticmethod
+    def _inverse_log_transform(x, log_offset=1e-5):
+        return 10 ** x - log_offset
+    
+    ## --- Representation methods --- ##
     
     def _get_representation(self, signal):
         envelope = self.env_function(signal, **self.env_function_params)
@@ -215,47 +278,6 @@ class SignalWithEnvelope(Representation):
         # Compute the statistics of the transformed envelope (mean, std, min, max) over a subset of the training dataset
         # Save the statistics in a pickle file
         pass    
-    
-    # ENVELOPES
-    @staticmethod
-    def _hilbert_env(signal):
-        return np.abs(hilbert(signal))
-    
-    @staticmethod
-    def _moving_average_env(signal, window_size=100):
-        return np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
-    
-    @staticmethod
-    def _moving_average_env_shifted(signal, window_size=100):
-        moving_avg_envelopes = np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
-        max_indices = np.argmax(signal, axis=-1)
-        max_values = np.take_along_axis(signal, max_indices[..., np.newaxis], axis=-1)
-        values = np.take_along_axis(moving_avg_envelopes, max_indices[..., np.newaxis], axis=-1)
-        moving_avg_envelopes_shifted = moving_avg_envelopes + (max_values - values)
-        return moving_avg_envelopes_shifted
-
-    @staticmethod
-    def first_order_lp_env(signal, k_env=0.98):
-        def first_order_lp_env_fun(s):
-            envelope = np.zeros_like(s)
-            s = np.abs(s)
-            for i in range(1, len(s)):
-                if s[i] > s[i-1] and s[i] > envelope[i-1]:
-                    envelope[i] = s[i]
-                else:
-                    envelope[i] = k_env*envelope[i-1] + (1-k_env)*s[i] # first order discrete time low pass filter
-
-            return envelope        
-        return np.apply_along_axis(first_order_lp_env_fun, axis=-1, arr=signal)
-    
-    # TRANSFORMATION FUNCTIONS
-    @staticmethod
-    def _log_transform(x, log_offset=1e-5):
-        return np.log10(x + log_offset)
-    
-    @staticmethod
-    def _inverse_log_transform(x, log_offset=1e-5):
-        return 10 ** x - log_offset
         
 
 class LogSpectrogram(Representation):

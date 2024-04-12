@@ -576,7 +576,7 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
         plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope) #TODO: restore
         x_label = 'Time (s)'
         y_label = 'Log Envelope'
-        y_limit = [-10, 7]          
+        y_limit = [-10, 4]          
     elif plot_type == 'power_spectral_density':
         x_axis = np.fft.rfftfreq(signal_length, 1 / fs)
         plot_fun = lambda x: get_power_spectral_density(x, log_scale=True)
