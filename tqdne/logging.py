@@ -2,9 +2,10 @@ import time
 import warnings
 
 import torch
-import wandb
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
+
+import wandb
 
 
 class LogCallback(Callback):
@@ -51,31 +52,23 @@ class LogCallback(Callback):
                 k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
+            pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
         batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
         pred = torch.cat(preds, dim=0)
 
-        # Get signal from representation
-        signal = self.representation.invert_representation(batch["signal"])
-        cond_signal = (
-            self.representation.invert_representation(batch["cond_signal"])
-            if "cond_signal" in batch
-            else None
-        )
-        pred = self.representation.invert_representation(pred)
-
         # Log metrics
         for metric in self.metrics:
-            result = metric(pred=pred, target=signal)
+            result = metric(pred=pred, target=batch["waveform"])
             pl_module.log(metric.name, result)
 
         # Log plots
         for plot in self.plots:
             fig = plot(
                 pred=pred,
-                target=signal,
-                cond_signal=cond_signal,
+                target=batch["waveform"],
+                cond_signal=batch["cond_waveform"],
                 cond=batch["cond"] if "cond" in batch else None,
             )
             try:

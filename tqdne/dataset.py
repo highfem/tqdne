@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import tqdm
 from scipy import signal
+from seisbench.data import WaveformDataset
 
 from tqdne.conf import Config
 
@@ -93,9 +94,7 @@ def build_dataset(config=Config()):
                 featuress = fout.create_dataset("features", (len(indices), nf))
                 for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
                     waveform, features = extract_sample_from_h5file(f, idx)
-                    filtered[i] = np.array(
-                        [signal.sosfilt(sos, channel) for channel in waveform]
-                    )
+                    filtered[i] = np.array([signal.sosfilt(sos, channel) for channel in waveform])
                     waveforms[i] = waveform
                     featuress[i] = features
 
@@ -155,10 +154,6 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         waveform = self.waveform[index]
 
-        # normalize
-        scale = np.abs(waveform).max()
-        waveform = waveform / scale / 5
-
         # features
         features = self.features[index]
         features = (features - self.features_means) / self.features_stds
@@ -169,6 +164,7 @@ class Dataset(torch.utils.data.Dataset):
         signal = self.representation.get_representation(waveform)
 
         return {
+            "waveform": torch.tensor(waveform, dtype=torch.float32),
             "signal": torch.tensor(signal, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
