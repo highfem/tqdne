@@ -10,10 +10,13 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
+import pytorch_lightning as pl
+
 from .nn import (
     GaussianFourierProjection,
     append_dims,
     avg_pool_nd,
+    global_avg_pool_nd,
     checkpoint,
     conv_nd,
     linear,
@@ -22,6 +25,7 @@ from .nn import (
 )
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.modeling_utils import ModelMixin
+from diffusers.optimization import get_scheduler
 
 
 class TimestepBlock(nn.Module):
@@ -167,14 +171,14 @@ class ResBlock(TimestepBlock):
             nn.SiLU(),
             conv_nd(dims, channels, self.out_channels, kernel_size, padding="same"),
         )
-
-        self.emb_layers = nn.Sequential(
-            nn.SiLU(),
-            linear(
-                emb_channels,
-                2 * self.out_channels if use_scale_shift_norm else self.out_channels,
-            ),
-        )
+        if emb_channels > 0:
+            self.emb_layers = nn.Sequential(
+                nn.SiLU(),
+                linear(
+                    emb_channels,
+                    2 * self.out_channels if use_scale_shift_norm else self.out_channels,
+                ),
+            )
         self.out_layers = nn.Sequential(
             normalization(self.out_channels),
             nn.SiLU(),
@@ -199,7 +203,7 @@ class ResBlock(TimestepBlock):
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
-    def forward(self, x, emb):
+    def forward(self, x, emb=None):
         """
         Apply the block to a Tensor, conditioned on a timestep embedding.
 
@@ -213,8 +217,11 @@ class ResBlock(TimestepBlock):
 
     def _forward(self, x, emb):
         h = self.in_layers(x) 
-        emb_out = self.emb_layers(emb).type(h.dtype) 
-        emb_out = append_dims(emb_out, h.dim()) 
+        if emb is not None:
+            emb_out = self.emb_layers(emb).type(h.dtype) 
+            emb_out = append_dims(emb_out, h.dim()) 
+        else:
+            emb_out = 0    
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
@@ -558,14 +565,11 @@ class UNetModel(ModelMixin, ConfigMixin):
 
         hs = []
         emb = self.time_mlp(self.time_embed(timesteps))
-        # emb.shape shape: torch.Size([8, 128]) (batch_size := 8)
 
         if self.cond_features is not None:
             if self.cond_embed is not None:
                 cond = self.cond_embed(cond).view(cond.shape[0], -1)  
-                # cond.shape -> torch.Size([8, 160]) (batch_size := 8)
             emb += self.cond_mlp(cond) 
-            # emb.shape -> torch.Size([8, 128]) (batch_size := 8)
 
         h = x
         for module in self.input_blocks:
@@ -576,3 +580,101 @@ class UNetModel(ModelMixin, ConfigMixin):
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb)  
         return self.out(h) 
+    
+
+class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
+    @register_to_config
+    def __init__(
+        self,
+        in_channels,
+        model_channels,
+        num_classes,
+        num_res_blocks,
+        attention_resolutions=(8, 16, 32),
+        dropout=0.1,
+        channel_mult=(1, 2, 4, 8),
+        conv_kernel_size=3,
+        conv_resample=True,
+        dims=2,
+        use_checkpoint=False,
+        num_heads=1,
+        use_scale_shift_norm=False,
+        flash_attention=True,
+    ):  
+        super().__init__()
+
+        ch = input_ch = int(channel_mult[0] * model_channels)
+        self.input_blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    conv_nd(dims, in_channels, ch, conv_kernel_size, padding="same")
+                )
+            ]
+        )
+        self._feature_size = ch
+        input_block_chans = [ch]
+        ds = 1
+        for level, mult in enumerate(channel_mult):
+            for _ in range(num_res_blocks):
+                layers = [
+                    ResBlock(
+                        ch,
+                        emb_channels=0,
+                        dropout=dropout,
+                        out_channels=int(mult * model_channels),
+                        kernel_size=conv_kernel_size,
+                        dims=dims,
+                        use_checkpoint=use_checkpoint,
+                        use_scale_shift_norm=use_scale_shift_norm,
+                    )
+                ]
+                ch = int(mult * model_channels)
+                if ds in attention_resolutions:
+                    layers.append(
+                        AttentionBlock(
+                            ch,
+                            num_heads=num_heads,
+                            dims=dims,
+                            use_checkpoint=use_checkpoint,
+                            flash_attention=flash_attention,
+                        )
+                    )
+                self.input_blocks.append(nn.Sequential(*layers))
+                self._feature_size += ch
+                input_block_chans.append(ch)
+            if level != len(channel_mult) - 1:
+                out_ch = ch
+                self.input_blocks.append(
+                    nn.Sequential(
+                        Downsample(ch, conv_resample, dims=dims, out_channels=out_ch)
+                    )
+                )
+                ch = out_ch
+                input_block_chans.append(ch)
+                ds *= 2
+                self._feature_size += ch
+
+        self.mlp = nn.Sequential(
+            normalization(ch),
+            nn.SiLU(),
+            global_avg_pool_nd(dims),
+            nn.Flatten(1),
+            linear(ch, 128),
+            linear(128, num_classes),
+        )
+
+    def forward(self, x):
+        """
+        Apply the model to an input batch.
+
+        :param x: an [N x C x ...] Tensor of inputs.
+        :return: an [N x C x ...] Tensor of outputs.
+        """
+        hs = []
+        h = x
+        for module in self.input_blocks:
+            h = module(h)
+            hs.append(h)
+        return self.mlp(h)    
+
+                

@@ -54,7 +54,7 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # TODO: this should be done automatically by the representation 
-    channels = train_dataset[0]["representation"].shape[0] # already accounts for both envelope and signal (i.e. 6 channels in total)
+    channels = train_dataset[0]["repr"].shape[0] # already accounts for both envelope and signal (i.e. 6 channels in total)
 
     # train_dataset[0]['representation'].shape --> torch.Size([6, 5472])
     # train_dataset[0]['cond'].shape --> torch.Size([5])

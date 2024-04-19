@@ -117,15 +117,15 @@ class LightningConsistencyModel(pl.LightningModule):
 
     def evaluate(self, batch, sigmas=[1]):
         """Evaluate the model on a batch of data."""
-        sample = batch["representation"]
+        sample = batch["repr"]
         cond_signal = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
         return self.sample(sample.shape, sigmas, cond_signal, cond) 
-        #return {"representation": self.sample(sample.shape, sigmas, cond_signal, cond)} old interface
+        #return {"repr": self.sample(sample.shape, sigmas, cond_signal, cond)} old interface
 
     def step(self, batch):
         """A single step of training or validation."""
-        sample = batch["representation"]
+        sample = batch["repr"]
         cond_signal = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
 

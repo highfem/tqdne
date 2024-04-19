@@ -19,14 +19,22 @@ from diffusers import DDPMScheduler, DDIMScheduler
 
 general_config = Config()
 
-def get_data_representation(repr_name, repr_params, max_ch_mult=None):
+def get_data_representation(configs):
+    repr_name = configs.data_repr.name
+    repr_params = configs.data_repr.params
     if repr_name == "SignalWithEnvelope":
+        configs.model.net_params.dims = 1
         return SignalWithEnvelope(**repr_params)
     elif repr_name == "LogSpectrogram":
+        max_ch_mult = configs.model.net_params.channel_mult[-1]
         def closest_divisible_by_divisor(n, divisor):
             return round(n / divisor) * divisor
         output_shape = (closest_divisible_by_divisor(repr_params["stft_channels"] // 2, max_ch_mult), closest_divisible_by_divisor(general_config.signal_length // repr_params["hop_size"], max_ch_mult))
+        configs.model.net_params.dims = 2
         return LogSpectrogram(**repr_params, output_shape=output_shape)
+    elif repr_name == "Signal":
+        configs.model.net_params.dims = 1
+        return Signal(**repr_params)
     else:
         raise ValueError(f"Unknown representation name: {repr_name}")
 
@@ -77,7 +85,7 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     else:
         raise ValueError(f"Unknown model name: {model_dir_name}")    
 
-    data_repr = get_data_representation(ml_configs.data_repr.name, ml_configs.data_repr.params, ml_configs.model.net_params.channel_mult[-1])
+    data_repr = get_data_representation(ml_configs)
     return model, data_repr, ckpt    
 
 
@@ -573,7 +581,7 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
 
     if plot_type == 'log_envelope':
         x_axis = np.arange(0, signal_length) / fs
-        plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope) #TODO: restore
+        plot_fun = lambda x: get_log_envelope(x, env_function=_get_moving_avg_envelope)
         x_label = 'Time (s)'
         y_label = 'Log Envelope'
         y_limit = [-10, 4]          
@@ -669,6 +677,9 @@ def plot_log_envelope_bins(distance_bins: list[tuple], magnitude_bins: list[tupl
 
 def plot_raw_waveform(raw_waveform, cond, data_representation, inverted_waveform=None):
     data_representation.plot(raw_waveform, inverted_waveform=inverted_waveform, title=str(get_cond_params_dict(cond)))    
+
+def plot_raw_output_distribution(pred_raw_waveforms, test_raw_waveforms, model_data_repr):
+    model_data_repr.plot_distribution(pred_raw_waveforms, test_raw_waveforms)
 
 
     

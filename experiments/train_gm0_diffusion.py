@@ -36,24 +36,18 @@ flags.mark_flags_as_required(["config"])
 
 
 def main(argv):
-    del argv
-    
-    if FLAGS.config.data_repr.name == "SignalWithEnvelope":
-        name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}-{FLAGS.config.data_repr.params.scaling.type}-scalar:{FLAGS.config.data_repr.params.scaling.scalar}".replace(" ", "").replace("\n", "")
-    else:
-        name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params}".replace(" ", "").replace("\n", "")
+    del argv    
 
     batch_size = FLAGS.config.optimizer_params.batch_size
 
-    #max_ch_mult = FLAGS.config.model.net_params.channel_mult[-1] if "channel_mult" in FLAGS.config.model.net_params else UNetModel.__init__.__kwdefaults__["channel_mult"][-1]
-    max_ch_mult = FLAGS.config.model.net_params.channel_mult[-1]
-    data_representation = get_data_representation(FLAGS.config.data_repr.name, FLAGS.config.data_repr.params, max_ch_mult) 
+    data_representation = get_data_representation(FLAGS.config) 
+    name = data_representation.get_name(FLAGS)
 
     train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), cut=general_config.signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
     test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), cut=general_config.signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
 
     # Get the number of channels of the data representation
-    data_repr_channels = train_dataset[0]["representation"].shape[0]
+    data_repr_channels = train_dataset[0]["repr"].shape[0]
 
     # Get the number of conditioning features
     num_cond_features = train_dataset[0]["cond"].shape[0]
@@ -95,7 +89,7 @@ def main(argv):
         model = LightningConsistencyModel(
             net, 
             lr=FLAGS.config.optimizer_params.lr, 
-            example_input_array=[next(iter(train_loader))["representation"], torch.ones(batch_size), None, next(iter(train_loader))["cond"]],
+            example_input_array=[next(iter(train_loader))["repr"], torch.ones(batch_size), None, next(iter(train_loader))["cond"]],
             ml_config=FLAGS.config
         )
         FLAGS.config.trainer_params.update({"max_steps": FLAGS.config.trainer_params.max_epochs * len(train_loader)})
@@ -120,7 +114,7 @@ def main(argv):
             "max_epochs": FLAGS.config.trainer_params.max_epochs,
         }
         )
-        example_input_array = [next(iter(train_loader))["representation"], torch.randint(0, FLAGS.config.model.scheduler_params.num_train_timesteps,(batch_size,)).long(), None, next(iter(train_loader))["cond"]]
+        example_input_array = [next(iter(train_loader))["repr"], torch.randint(0, FLAGS.config.model.scheduler_params.num_train_timesteps,(batch_size,)).long(), None, next(iter(train_loader))["cond"]]
         model = LightningDiffusion(
             net,
             scheduler,
@@ -139,6 +133,7 @@ def main(argv):
     metrics = get_metrics_list(FLAGS.config.metrics, general_config, data_representation)
     trainer = get_pl_trainer(
         name=name,
+        task="generation",
         val_loader=test_loader,
         metrics=metrics,
         plots=get_plots_list(FLAGS.config.plots, metrics, general_config, data_representation),

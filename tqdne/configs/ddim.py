@@ -22,7 +22,7 @@ def get_config():
             timestep_decimation_factor=10,
         ),
         net_params=new_dict(
-            dims=1, #TODO: change it dynamically according to representation used
+            dims=1, 
             conv_kernel_size=5,  # might want to change to 5
             model_channels=32,
             channel_mult=(1, 2, 4, 8),
@@ -66,15 +66,23 @@ def get_config():
     #     )
     # )
 
+    # config.data_repr = new_dict(
+    #     name="SignalWithEnvelope",
+    #     params=new_dict(
+    #         env_function="moving_average",
+    #         env_function_params=new_dict(),
+    #         env_transform="none",
+    #         env_transform_params=new_dict(),
+    #         scaling=new_dict(
+    #             type="normalize",
+    #             scalar=True
+    #         ),
+    #     )
+    # )
+
     config.data_repr = new_dict(
-        name="SignalWithEnvelope",
+        name="Signal",
         params=new_dict(
-            env_function="hilbert",
-            env_function_params=new_dict(),
-            env_transform="log",
-            env_transform_params=new_dict(
-                log_offset=1e-5,
-            ),
             scaling=new_dict(
                 type="normalize",
                 scalar=True
@@ -95,12 +103,12 @@ def get_config():
         sample=-1,
         psd=-1,
         logenv=-1,
-        debug=-1,
-        bin=new_dict(
-             num_mag_bins=4,
-             num_dist_bins=4,
-             metrics="all",
-        )
+        # debug=-1,
+        # bin=new_dict(
+        #      num_mag_bins=4,
+        #      num_dist_bins=4,
+        #      metrics="all",
+        # )
     )
 
     return config

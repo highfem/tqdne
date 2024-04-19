@@ -73,19 +73,19 @@ class Plot(ABC):
         name = f"{name} - Channel {self.channel}" if self.channel is not None else name
         return name
 
-    def __call__(self, pred, target=None, cond_signal=None, cond=None):
-        pred = self.invert_representation_fun(pred)
+    def __call__(self, preds, target=None, cond_signal=None, cond=None):
+        preds = self.invert_representation_fun(preds)
         target = self.invert_representation_fun(target) 
         cond = to_numpy(cond)
         if self.channel is not None:
-            pred = pred[:, self.channel]
+            preds = preds[:, self.channel]
             target = target[:, self.channel]
             cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
 
-        return self.plot(pred, target, cond_signal, cond)
+        return self.plot(preds, target, cond_signal, cond)
 
     @abstractmethod
-    def plot(self, pred, target=None, cond_signal=None, cond=None):
+    def plot(self, preds, target=None, cond_signal=None, cond=None):
         pass
 
 
@@ -97,10 +97,10 @@ class SamplePlot(Plot):
         self.fs = fs
 
     # TODO: handle 2d stft representation (plot heatmap)
-    def plot(self, pred, target=None, cond_signal=None, cond=None):
-        time = np.arange(0, pred.shape[-1]) / self.fs
+    def plot(self, preds, target=None, cond_signal=None, cond=None):
+        time = np.arange(0, preds.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, pred[0], "g", label="Generated")
+        ax.plot(time, preds[0], "g", label="Generated")
         if not self.invert_representation:
             ax.plot(time, target[0], "r", alpha=0.5, label="Target")
         title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
@@ -120,12 +120,12 @@ class UpsamplingSamplePlot(Plot):
         super().__init__(channel, data_representation)
         self.fs = fs
 
-    def plot(self, pred, target, cond_signal, cond=None):
-        time = np.arange(0, pred.shape[-1]) / self.fs
+    def plot(self, preds, target, cond_signal, cond=None):
+        time = np.arange(0, preds.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, cond_signal[0], "b", label="Input")
         ax.plot(time, target[0], "r", label="Target")
-        ax.plot(time, pred[0], "g", label="Reconstructed")
+        ax.plot(time, preds[0], "g", label="Reconstructed")
         title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
         ax.set_title(title)
         ax.set_xlabel("Time (s)")
@@ -139,24 +139,24 @@ class LogEnvelopePlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, pred, target=None, cond_signal=None, cond=None):
+    def plot(self, preds, target=None, cond_signal=None, cond=None):
 
-        pred_logenv = utils.get_log_envelope(pred)
+        preds_logenv = utils.get_log_envelope(preds)
         target_logenv = utils.get_log_envelope(target)
 
         # TODO: mean or median?
 
-        pred_logenv_median = np.median(pred_logenv, axis=0)
-        pred_logenv_p25 = np.percentile(pred_logenv, 25, axis=0)
-        pred_logenv_p75 = np.percentile(pred_logenv, 75, axis=0)
+        preds_logenv_median = np.median(preds_logenv, axis=0)
+        preds_logenv_p25 = np.percentile(preds_logenv, 25, axis=0)
+        preds_logenv_p75 = np.percentile(preds_logenv, 75, axis=0)
         target_logenv_median = np.median(target_logenv, axis=0)
         target_logenv_p25 = np.percentile(target_logenv, 25, axis=0)
         target_logenv_p75 = np.percentile(target_logenv, 75, axis=0)
 
-        time_ax = np.arange(0, len(pred_logenv_median)) / self.fs
+        time_ax = np.arange(0, len(preds_logenv_median)) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time_ax, pred_logenv_median, "g", label="Generated - median")
-        ax.fill_between(time_ax, pred_logenv_p25, pred_logenv_p75, color="g", alpha=0.2, label="Generated - IQR (25-75%)")
+        ax.plot(time_ax, preds_logenv_median, "g", label="Generated - median")
+        ax.fill_between(time_ax, preds_logenv_p25, preds_logenv_p75, color="g", alpha=0.2, label="Generated - IQR (25-75%)")
         ax.plot(time_ax, target_logenv_median, "r", label="Target - median")
         ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, color="r", alpha=0.2, label="Target - IQR (25-75%)")
 
@@ -173,24 +173,24 @@ class PowerSpectralDensityPlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, pred, target, cond_signal=None, cond=None, eps=1e-7):
+    def plot(self, preds, target, cond_signal=None, cond=None, eps=1e-7):
         fig, ax = plt.subplots(figsize=(9, 6))
         if self.metric is not None:
-            pred_mean, pred_std, target_mean, target_std = self.metric.get_pred_and_target_stats()
+            preds_mean, preds_std, target_mean, target_std = self.metric.get_preds_and_target_stats()
         else:  
-            target = pred if target is None else target
+            target = preds if target is None else target
             target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
             target_mean = np.log(target_psd + eps).mean(axis=0)
             target_std = np.log(target_psd + eps).std(axis=0)
 
             freq = np.fft.rfftfreq(target.shape[-1], d=1 / self.fs)
 
-            if pred is not None and target is not None:
-                pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
-                pred_mean = np.log(pred_psd + eps).mean(axis=0)
-                pred_std = np.log(pred_psd + eps).std(axis=0)
-                ax.plot(freq, pred_mean, "g", label="Predicted")
-                ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2)
+            if preds is not None and target is not None:
+                preds_psd = np.abs(np.fft.rfft(preds, axis=-1)) ** 2
+                preds_mean = np.log(preds_psd + eps).mean(axis=0)
+                preds_std = np.log(preds_psd + eps).std(axis=0)
+                ax.plot(freq, preds_mean, "g", label="predsicted")
+                ax.fill_between(freq, preds_mean - preds_std, preds_mean + preds_std, color="g", alpha=0.2)
 
 
         ax.plot(freq, target_mean, "r", label="Target")
@@ -229,7 +229,7 @@ class BinPlot(Plot):
     def name(self):
         return f"Bin {self.metric.name}"
 
-    def plot(self, pred, target, cond_signal, cond):
+    def plot(self, preds, target, cond_signal, cond):
         # extract the magnitude and distance (this is specific to the dataset)
         mags = cond[:, 2]
         dists = cond[:, 0]
@@ -244,7 +244,7 @@ class BinPlot(Plot):
             for j in range(self.num_dist_bins):
                 mask = (mags >= mag_bins[i]) & (mags < mag_bins[i + 1])
                 mask &= (dists >= dist_bins[j]) & (dists < dist_bins[j + 1])
-                results[i, j] = self.metric(pred[mask], target[mask]) if mask.any() else np.nan
+                results[i, j] = self.metric(preds[mask], target[mask]) if mask.any() else np.nan
 
         # Plotting the heatmap using seaborn
         mag_bins_center = (mag_bins[1:] + mag_bins[:-1]) / 2

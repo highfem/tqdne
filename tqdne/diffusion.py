@@ -97,13 +97,13 @@ class LightningDiffusion(pl.LightningModule):
 
     def evaluate(self, batch):
         """Evaluate diffusion model."""
-        shape = batch["representation"].shape
+        shape = batch["repr"].shape
         cond_signal = batch["cond_signal"] if self.cond_signal_input else None
         cond = batch["cond"] if self.cond_input else None
         return self.sample(shape, cond_signal, cond)
 
     def step(self, batch, train):
-        signal_batch = batch["representation"]
+        signal_batch = batch["repr"]
         cond_signal_batch = batch["cond_signal"] if self.cond_signal_input else None
         cond_batch = batch["cond"] if self.cond_input else None
 

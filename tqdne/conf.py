@@ -111,9 +111,9 @@ class Config:
     )
     # TODO: check if they are correct
     conditional_params_range = {
-        "hypocentral_distance": (0., 200.),
+        "hypocentral_distance": (3.9, 180.),
         "is_shallow_crustal": (0., 1.), # 0: False, 1: True
-        "magnitude": (3., 10),
+        "magnitude": (4.5, 9.1),
         "vs30": (-1., 2100.)
     }
     

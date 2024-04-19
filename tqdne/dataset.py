@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 
 import h5py
@@ -179,6 +180,99 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
+    
+class SampleDataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, data_representation, cut=None, mag_bins=None, dist_bins=None, config=Config()):
+        super().__init__()
+        self.h5_path = h5_path
+        self.file = h5py.File(h5_path, "r", locking=False)
+        self.features = self.file["features"][:]
+        self.waveforms = self.file["waveform"]  
+        self.cut = cut
+
+        # Remove the third feature (log10snr)
+        self.features = self.features[:, [0, 1, 3, 4]] 
+
+        self.n = len(self.features)
+        assert self.n == len(self.waveforms)
+
+        self.data_representation = data_representation
+
+        self.bin_mapping = None
+        if (mag_bins and dist_bins):
+            self.mag_bins = mag_bins
+            self.dist_bins = dist_bins
+            self.bin_mapping = {f"{i}_{j}": idx for idx, (i, j) in enumerate(np.ndindex((len(dist_bins), len(mag_bins))))}
+            self.max_mag = config.conditional_params_range["magnitude"][1]
+            self.min_mag = config.conditional_params_range["magnitude"][0]
+            self.max_dist = config.conditional_params_range["hypocentral_distance"][1]
+            self.min_dist = config.conditional_params_range["hypocentral_distance"][0]
+    
+    def __del__(self):
+        pass
+        #if not self.in_memory:
+        #    self.file.close()
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, index):
+        """
+        Get an item from the dataset at the specified index.
+
+        Args:
+            index (int): The index of the item to retrieve.
+
+        Returns:
+            dict: A dictionary containing the waveform, features, and optionally the class label.
+        """
+
+        signal = self.waveforms[index]
+        features = self.features[index]
+        
+        if self.cut:
+            signal = signal[:, : self.cut]
+
+        repr = self.data_representation.get_representation(signal)    
+        
+        if self.bin_mapping is None:
+            return {
+                "repr": torch.tensor(repr, dtype=torch.float32),
+                "cond": torch.tensor(features, dtype=torch.float32),
+            }
+
+        return {
+            "repr": torch.tensor(repr, dtype=torch.float32),
+            "cond": torch.tensor(features, dtype=torch.float32),
+            "classes": torch.tensor(self._get_class_label(features), dtype=torch.long)
+        }
+    
+    def _get_class_label(self, features):
+        mag, dist = features[2], features[0]
+        for i, dist_bin in enumerate(self.dist_bins):
+            for j, mag_bin in enumerate(self.mag_bins):
+                if dist >= dist_bin[0] and dist < dist_bin[1] and mag >= mag_bin[0] and mag < mag_bin[1]:
+                    return self.bin_mapping[f"{i}_{j}"]
+    
+    def get_num_classes(self):
+        """
+        Get the number of classes in the dataset.
+
+        Returns:
+            int: The number of classes.
+        """
+        return len(self.bin_mapping) if self.bin_mapping else 0
+    
+    def get_class_weights(self):
+            """
+            Calculate the class weights based on the frequency of each class label in the dataset.
+
+            Returns:
+                torch.Tensor: The class weights.
+            """
+            class_counts = torch.bincount(torch.tensor([self._get_class_label(features) for features in self.features]))
+            class_weights = 1. / class_counts.float()
+            return class_weights / class_weights.sum()
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
@@ -218,7 +312,6 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         # cannot be scaled because BinMetric uses non-scaled features
         # features = (features - self.features_means) / (self.features_stds + 1e-6) 
 
-
         if self.cut:
             signal = signal[:, : self.cut]
 
@@ -228,10 +321,11 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         repr = self.representation.get_representation(signal)    
 
         return {
-            "representation": torch.tensor(repr, dtype=torch.float32),
+            "repr": torch.tensor(repr, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
     
+    # TODO: maybe should be moved to SampleDataset
     def get_waveforms_by_cond_input(self, cond_input):
         idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[0]
         if self.cut:

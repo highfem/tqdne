@@ -10,6 +10,7 @@ from tqdne.logging import LogCallback
 
 def get_pl_trainer(
     name,
+    task,
     val_loader,
     metrics,
     plots,
@@ -32,7 +33,7 @@ def get_pl_trainer(
 
     # log callback
     callbacks.append(
-        LogCallback(val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
+        LogCallback(task, val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
     )
 
     # set early stopping

@@ -13,14 +13,17 @@ class LogCallback(Callback):
     Callback for logging metrics and visualizations during training and validation.
 
     Args:
+        task (str): Task name.
         val_loader (torch.utils.data.DataLoader): Validation data loader.
         metrics (list): List of metrics to compute and log.
+        plots (list): List of functions that return plots to log.
         limit_batches (int): Limit the number of validation batches to process (-1 for all).
         every (int): Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(self, val_loader, metrics, plots, limit_batches=1, every=1):
+    def __init__(self, task, val_loader, metrics, plots, limit_batches=1, every=1):
         super().__init__()
+        self.task = task
         self.val_loader = val_loader
         self.metrics = metrics
         self.plots = plots
@@ -45,26 +48,33 @@ class LogCallback(Callback):
         for i, batch in enumerate(self.val_loader):
             if self.limit_batches != -1 and i >= self.limit_batches:
                 break
-            batches.append(batch)
             batch = {
                 k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
+            batches.append(batch)
             pred = pl_module.evaluate(batch)
             preds.append(pred)
 
         batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
         pred = torch.cat(preds, dim=0)
+        if self.task == "classification":
+            target = batch["classes"]
+        elif self.task == "generation":
+            target = batch["repr"] 
+        else:
+            raise ValueError(f"Unknown task: {self.task}")
 
         # Log metrics
         for metric in self.metrics:
-            result = metric(pred=pred, target=batch["representation"])
-            pl_module.log(metric.name, result)
+            result = metric(preds=pred, target=target)
+            metric_name = metric.name if hasattr(metric, "name") else metric.__class__.__name__
+            pl_module.log(metric_name, result)
 
         # Log plots
         for plot in self.plots:
             fig = plot(
-                pred=pred,
-                target=batch["representation"],
+                preds=pred,
+                target=target,
                 cond_signal=batch["cond_signal"] if "cond_signal" in batch else None,
                 cond=batch["cond"] if "cond" in batch else None,
             )

@@ -43,8 +43,8 @@ class Metric(ABC):
         self.invert_representation = invert_representation
         assert data_representation is not None or invert_representation is False, "invert_representation can only be True if data_representation is not None"
         self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
-        self.pred_mean = None, 
-        self.pred_std = None,
+        self.preds_mean = None, 
+        self.preds_std = None,
         self.target_mean = None,
         self.target_std = None
 
@@ -53,26 +53,26 @@ class Metric(ABC):
         name = self.__class__.__name__
         return f"{name} - Channel {self.channel}" if self.channel is not None else name
 
-    def __call__(self, pred, target):
+    def __call__(self, preds, target):
         if self.data_representation is not None:
-            pred = self.invert_representation_fun(pred)
+            preds = self.invert_representation_fun(preds)
             target = self.invert_representation_fun(target) 
         if self.channel is not None:
-            pred = pred[:, self.channel]
+            preds = preds[:, self.channel]
             target = target[:, self.channel]
-        return self.compute(pred, target)
+        return self.compute(preds, target)
 
     @abstractmethod
-    def compute(self, pred, target):
+    def compute(self, preds, target):
         pass
 
-    def get_pred_and_target_stats(self):
-        return self.pred_mean, self.pred_std, self.target_mean, self.target_std
+    def get_preds_and_target_stats(self):
+        return self.preds_mean, self.preds_std, self.target_mean, self.target_std
 
 
 class MeanSquaredError(Metric):
-    def compute(self, pred, target):
-        return ((pred - target) ** 2).mean()
+    def compute(self, preds, target):
+        return ((preds - target) ** 2).mean()
 
 
 class PowerSpectralDensity(Metric):
@@ -80,20 +80,20 @@ class PowerSpectralDensity(Metric):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def compute(self, pred, target):
-        pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
+    def compute(self, preds, target):
+        preds_psd = np.abs(np.fft.rfft(preds, axis=-1)) ** 2
         target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
 
         # Compute mean and std of PSD in log scale
         eps = 1e-7
-        self.pred_mean = np.log(pred_psd + eps).mean(axis=0)
+        self.preds_mean = np.log(preds_psd + eps).mean(axis=0)
         self.target_mean = np.log(target_psd + eps).mean(axis=0)
-        self.pred_std = np.log(pred_psd + eps).std(axis=0)
+        self.preds_std = np.log(preds_psd + eps).std(axis=0)
         self.target_std = np.log(target_psd + eps).std(axis=0)
 
         # Frechét distance between isotropic Gaussians (Wasserstein-2)
-        fid = np.sum((self.pred_mean - self.target_mean) ** 2, axis=-1) + np.sum(
-            self.pred_std**2 + self.target_std**2 - 2 * self.pred_std * self.target_std, axis=-1
+        fid = np.sum((self.preds_mean - self.target_mean) ** 2, axis=-1) + np.sum(
+            self.preds_std**2 + self.target_std**2 - 2 * self.preds_std * self.target_std, axis=-1
         )
 
         return fid
@@ -123,9 +123,9 @@ class LogEnvelope(Metric):
         """
         return np.log(env_function(data, **env_function_params) + eps)        
 
-    def compute(self, pred, target):
+    def compute(self, preds, target):
         
-        pred_logenv = self.get_log_envelope(pred)
+        pred_logenv = self.get_log_envelope(preds)
         target_logenv = self.get_log_envelope(target)
 
         self.pred_mean = pred_logenv.mean(axis=0)
