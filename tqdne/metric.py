@@ -8,6 +8,7 @@ from tqdne.conf import Config
 from tqdne.representations import to_numpy
 
 
+@staticmethod
 def get_metrics_list(metrics_config, general_config, data_representation=None):
     metrics = []
     for metric, v in metrics_config.items():
@@ -29,6 +30,65 @@ def get_metrics_list(metrics_config, general_config, data_representation=None):
     return metrics    
 
 
+@staticmethod
+def compute_fid(preds, target):
+    """
+    Compute the Fréchet Inception Distance (FID) between two sets of samples.
+
+    Args:
+        preds (numpy.ndarray): Predicted samples.
+        target (numpy.ndarray): Target samples.
+
+    Returns:
+        float: The Fréchet Inception Distance (FID) between the two sets of samples.
+    """
+    preds_mean = np.mean(preds, axis=0)
+    target_mean = np.mean(target, axis=0)
+    preds_std = np.std(preds, axis=0)
+    target_std = np.std(target, axis=0)
+    # Frechét distance between isotropic Gaussians (Wasserstein-2)
+    fid = np.sum((preds_mean - target_mean) ** 2, axis=-1) + np.sum(
+        preds_std**2 + target_std**2 - 2 * preds_std * target_std, axis=-1
+    )
+    return fid
+
+@staticmethod
+def compute_inception_score(preds, preds_2=None):
+    """
+    Computes the Inception Score for a given set of predictions.
+
+    Args:
+        preds (numpy.ndarray): Array of predictions.
+        preds_2 (numpy.ndarray, optional): Array of additional predictions. Defaults to None.
+
+    Returns:
+        float: The computed Inception Score.
+    """
+    if preds_2 is None:
+        preds_1 = preds[: preds.shape[0] // 2]
+        preds_2 = preds[preds.shape[0] // 2:]
+    else:
+        preds_1 = preds
+    p_hat = np.sum(preds_1, axis=0) / preds_1.shape[0]
+    kl_divergences = compute_kl_divergence(preds_2, p_hat)
+    inception_score = np.exp(np.mean(kl_divergences))
+    return inception_score
+
+
+@staticmethod
+def compute_kl_divergence(prob_dist_1, prob_dist_2, eps=1e-7):
+    """
+    Compute the Kullback-Leibler (KL) divergence between two probability distributions.
+
+    Parameters:
+        prob_dist_1 (numpy.ndarray): The first probability distribution.
+        prob_dist_2 (numpy.ndarray): The second probability distribution.
+        eps (float, optional): A small value to add to the denominator. Defaults to 1e-7.
+
+    Returns:
+        numpy.ndarray: The KL divergence between the two probability distributions.
+    """
+    return np.sum(prob_dist_1 * np.log((prob_dist_1 / (prob_dist_2 + eps)) + eps), axis=-1)
 
 
 class Metric(ABC):
@@ -139,3 +199,5 @@ class LogEnvelope(Metric):
         )
 
         return fid
+
+        

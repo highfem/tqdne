@@ -328,9 +328,12 @@ class EnvelopeDataset(torch.utils.data.Dataset):
     # TODO: maybe should be moved to SampleDataset
     def get_waveforms_by_cond_input(self, cond_input):
         idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[0]
-        if self.cut:
+        if self.cut is None:
+            self.cut = self.waveforms.shape[1]
+        if self.downsample > 1:
+            return np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in idxs])
+        else:
             return np.array([self.waveforms[i, :, :self.cut] for i in idxs])
-        return np.array([self.waveforms[i] for i in idxs])
     
     
     def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
@@ -338,6 +341,11 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         if is_shallow_crustal is not None:
             bins_indexes = bins_indexes & (self.features[:, 1] == is_shallow_crustal)
         if np.any(bins_indexes):
-            return {"waveforms": self.waveforms[bins_indexes, :, :self.cut], "cond": self.features[bins_indexes]}
+            if self.cut is None:
+                self.cut = self.waveforms.shape[1]
+            if self.downsample > 1:
+                return {"waveforms": np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in np.where(bins_indexes)[0]]), "cond": self.features[bins_indexes]}
+            else:    
+                return {"waveforms": self.waveforms[bins_indexes, :, :self.cut], "cond": self.features[bins_indexes]}
         raise ValueError("No data in the given bins")
         

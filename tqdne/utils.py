@@ -14,14 +14,27 @@ from tqdne.conf import Config
 
 from tqdne.consistency_model import LightningConsistencyModel
 from tqdne.diffusion import LightningDiffusion
+from tqdne.classification import LightningClassifier
 from tqdne.representations import *
 from diffusers import DDPMScheduler, DDIMScheduler
 
 general_config = Config()
 
 def get_data_representation(configs):
-    repr_name = configs.data_repr.name
-    repr_params = configs.data_repr.params
+    """
+    Get the data representation based on the given configurations.
+
+    Args:
+        configs (object): The configurations object.
+
+    Returns:
+        object: The data representation object.
+
+    Raises:
+        ValueError: If the representation name is unknown.
+    """
+    repr_name = configs.data_repr.name if hasattr(configs, "data_repr") else "Signal"
+    repr_params = configs.data_repr.params if hasattr(configs, "data_repr") else {}
     if repr_name == "SignalWithEnvelope":
         configs.model.net_params.dims = 1
         return SignalWithEnvelope(**repr_params)
@@ -39,6 +52,8 @@ def get_data_representation(configs):
         raise ValueError(f"Unknown representation name: {repr_name}")
 
 
+from pathlib import Path
+
 def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     """
     Loads a model from a given checkpoint directory path.
@@ -46,28 +61,30 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     Args:
         model_ckpt_path (Path): The path of the directory containing the model checkpoints or a checkpoint file.
         use_ddim (bool, optional): Whether to use the DDIM scheduler. Defaults to True.
+        **kwargs: Additional keyword arguments to be passed to the model's `load_from_checkpoint` method.
 
     Returns:
-        Tuple: A tuple containing the loaded model and the data representation used by the model.
+        Tuple: A tuple containing the loaded model, the data representation used by the model, and the checkpoint path.
 
     Raises:
         FileNotFoundError: If the model checkpoint file is not found.
+        ValueError: If the model name in the checkpoint path is unknown.
     """
     if not model_ckpt_path.exists():
         raise FileNotFoundError(f"Model checkpoint not found at {model_ckpt_path}.")
-    
+
     model_ckpt_path = str(model_ckpt_path)
     if model_ckpt_path.split(".")[-1] == "ckpt":
         ckpt = model_ckpt_path
         model_dir_name = model_ckpt_path.split("/")[-2]
     else:
         ckpt = get_last_checkpoint(model_ckpt_path)
-        model_dir_name = model_ckpt_path.split("/")[-1]     
-    
+        model_dir_name = model_ckpt_path.split("/")[-1]
+
     if "ddpm" in model_dir_name:
         model = LightningDiffusion.load_from_checkpoint(ckpt, **kwargs)
         assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
-        ml_configs = model.hparams.ml_config   
+        ml_configs = model.hparams.ml_config
         if use_ddim:
             noise_scheduler = DDIMScheduler(**ml_configs.model.scheduler_params)
             noise_scheduler.set_timesteps(num_inference_steps=ml_configs.model.scheduler_params.num_train_timesteps // 10)
@@ -77,16 +94,20 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     elif "ddim" in model_dir_name:
         model = LightningDiffusion.load_from_checkpoint(ckpt, **kwargs)
         assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
-        ml_configs = model.hparams.ml_config 
+        ml_configs = model.hparams.ml_config
     elif "consistency-model" in model_dir_name:
         model = LightningConsistencyModel.load_from_checkpoint(ckpt, **kwargs)
         assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
-        ml_configs = model.hparams.ml_config 
+        ml_configs = model.hparams.ml_config
+    elif "classifier" in model_dir_name:
+        model = LightningClassifier.load_from_checkpoint(ckpt, **kwargs)
+        assert model.hparams.ml_config is not None, "The model must have a ml_config attribute."
+        ml_configs = model.hparams.ml_config
     else:
-        raise ValueError(f"Unknown model name: {model_dir_name}")    
+        raise ValueError(f"Unknown model name: {model_dir_name}")
 
     data_repr = get_data_representation(ml_configs)
-    return model, data_repr, ckpt    
+    return model, data_repr, ckpt
 
 
 def plot_envelope(signal, envelope_function, title=None, **envelope_params):
@@ -132,59 +153,6 @@ def print_model_info(model, model_data_repr, ckpt):
     print("ckpt file:", ckpt)    
 
 
-# def to_numpy(x):
-#     if isinstance(x, Sequence):
-#         return x.__class__(to_numpy(v) for v in x)
-#     elif isinstance(x, Mapping):
-#         return x.__class__((k, to_numpy(v)) for k, v in x.items())
-#     else:
-#         return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
-
-
-# class NumpyArgMixin:
-#     """Mixin for automatic conversion of method arguments to numpy arrays."""
-
-#     def __getattribute__(self, name):
-#         """Return a function wrapper that converts method arguments to numpy arrays."""
-#         attr = super().__getattribute__(name)
-#         if not callable(attr):
-#             return attr
-
-#         def wrapper(*args, **kwargs):
-#             args = to_numpy(args)
-#             kwargs = to_numpy(kwargs)
-#             return attr(*args, **kwargs)
-
-#         return wrapper
-
-
-# def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
-#     """Load the model from the outputs directory.
-
-#     Parameters
-#     ----------
-#     type : Type[pl.LightningModule]
-#         The type of the model to load.
-#     path : Path
-#         The checkpoint path.
-#     **kwargs : dict
-#         The keyword arguments to pass to the load_from_checkpoint method.
-#         Instead one can add `self.save_hyperparameters()` to the init method
-#         of the model.
-
-#     Returns
-#     -------
-#     model : pl.LightningModule
-#         The trained model.
-
-#     """
-#     if not path.exists():
-#         logging.info("Model not found. Returning None.")
-#         return None
-#     model = type.load_from_checkpoint(path, **kwargs)
-#     return model
-
-
 def fig2PIL(fig):
     """Convert a matplotlib figure to a PIL Image.
 
@@ -214,23 +182,6 @@ def get_last_checkpoint(dirpath):
     checkpoint = checkpoints[-1]
     logging.info(f"Last checkpoint is : {checkpoint}")
     return checkpoint
-
-
-# def get_model_summary(model: Type[pl.LightningModule], input_size=(1, 1, 64), batch_size=-1, device="cuda":
-#     """Get the model summary.
-
-#     Parameters
-#     ----------
-#     model : Type[pl.LightningModule]
-#         The model.
-
-#     Returns
-#     -------
-#     dict
-#         The model summary.
-
-#     """
-#     return summary(model, input_size=input_size, batch_size=batch_size, device=device)
 
 
 def get_cond_input_tensor(*conditioning_params: dict):
@@ -284,9 +235,11 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
             max_batch_size = num_samples
         model_input_shape = model_data_representation.get_shape((max_batch_size, num_channels, signal_len))
         for i in range(0, num_samples, max_batch_size):
+            print(f"Batch {i//max_batch_size + 1}/{num_samples//max_batch_size}")
             batch_cond_input = cond_input[i:i+max_batch_size]
-            num_samples = batch_cond_input.shape[0]
-            model_output = model.sample(shape=model_input_shape, cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
+            ## num_samples = batch_cond_input.shape[0] ## TODO: maybe remove this line
+            shape = (batch_cond_input.shape[0], *model_input_shape[1:])
+            model_output = model.sample(shape=shape, cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
             if raw_output:
                 generated_waveforms.append(to_numpy(model_output))
             else:    
@@ -295,6 +248,20 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
     return {"waveforms": generated_waveforms, "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
 
 def get_samples(data: dict[str, np.ndarray], num_samples = None, indexes: list = None) -> dict[str, np.ndarray]:
+    """
+    Get a subset of samples from the given data.
+
+    Args:
+        data (dict[str, np.ndarray]): A dictionary containing arrays of samples.
+        num_samples (int, optional): The number of samples to retrieve. Defaults to None.
+        indexes (list, optional): The specific indexes of samples to retrieve. Defaults to None.
+
+    Returns:
+        dict[str, np.ndarray]: A dictionary containing the subset of samples.
+
+    Raises:
+        AssertionError: If neither num_samples nor indexes are provided.
+    """
     assert num_samples is not None or indexes is not None, "Either num_samples or indexes must be provided."
     if indexes is None:
         indexes = np.random.choice(data['waveforms'].shape[0], num_samples, replace=False)
@@ -602,14 +569,14 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
                 gen_data_bin = plot_fun(gen_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :])
                 gen_data_median = np.median(gen_data_bin, axis=0)
                 gen_data_p25, gen_data_p75 = np.percentile(gen_data_bin, 25, axis=0), np.percentile(gen_data_bin, 75, axis=0)
-                axs[i, 0].plot(x_axis, gen_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
-                axs[i, 0].fill_between(x_axis, gen_data_p75, gen_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(gen_data_bin)}')
+                axs[i, 0].plot(x_axis, gen_data_median, label=f"Mag: {mag_bin}, Dist: {dist_bin} - {len(gen_data_bin)} samples")
+                axs[i, 0].fill_between(x_axis, gen_data_p75, gen_data_p25, alpha=0.5)
 
                 test_data_bin = plot_fun(test_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :])
                 test_data_median = np.median(test_data_bin, axis=0)
                 test_data_p25, test_data_p75 = np.percentile(test_data_bin, 25, axis=0), np.percentile(test_data_bin, 75, axis=0)
-                axs[i, 1].plot(x_axis, test_data_median, label=f"Mag. Bin: {mag_bin} - Dist Bin: {dist_bin}")
-                axs[i, 1].fill_between(x_axis, test_data_p75, test_data_p25, alpha=0.5, label=f'IQR (25-75%) - n. samples: {len(test_data_bin)}')
+                axs[i, 1].plot(x_axis, test_data_median, label=f"Mag: {mag_bin}, Dist: {dist_bin} - {len(test_data_bin)} samples")
+                axs[i, 1].fill_between(x_axis, test_data_p75, test_data_p25, alpha=0.5)
                 
                 axs[i, 0].set_title('Generated')
                 axs[i, 1].set_title('Real')

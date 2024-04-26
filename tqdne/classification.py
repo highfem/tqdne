@@ -1,9 +1,12 @@
 import ml_collections
+import numpy as np
 import pytorch_lightning as pl
 import torch
 from diffusers.optimization import get_scheduler
 
-class LightningClassification(pl.LightningModule):
+from tqdne.representations import to_numpy
+
+class LightningClassifier(pl.LightningModule):
     """A PyTorch Lightning module for training a classification model
 
     Parameters
@@ -75,4 +78,25 @@ class LightningClassification(pl.LightningModule):
             self.net.parameters(), lr=self.optimizer_params["learning_rate"]
         )
         return optimizer
-        
+    
+    def get_embeddings(self, x):
+            """
+            Get the embeddings for the input data.
+
+            Args:
+                x (np.ndarray or torch.Tensor): The input data.
+
+            Returns:
+                torch.Tensor: The embeddings for the input data.
+            """
+            if isinstance(x, np.ndarray):
+                x = torch.from_numpy(x).float()
+            embeddings_list = []    
+            for batch in x.split(self.ml_config.optimizer_params.batch_size):
+                batch = batch.to(self.device)
+                embeddings = self.net.get_embeddings(batch)   
+                embeddings_list.append(embeddings)
+
+            embeddings = torch.cat(embeddings_list, dim=0)    
+            return to_numpy(embeddings)
+

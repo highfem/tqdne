@@ -1,6 +1,6 @@
 # REF: https://github.com/dirmeier/dmvi
 
-from tqdne.classification import LightningClassification
+from tqdne.classification import LightningClassifier
 from tqdne.utils import *
 
 
@@ -93,7 +93,7 @@ def main(argv):
 
     logging.info("Build Pytorch Lightning Trainer...")
     example_input = train_dataset[0]["repr"][None, ...]
-    model = LightningClassification(net=net, optimizer_params=FLAGS.config.optimizer_params, loss=loss, metrics=metrics, example_input_array=example_input, ml_config=FLAGS.config)
+    model = LightningClassifier(net=net, optimizer_params=FLAGS.config.optimizer_params, loss=loss, metrics=metrics, example_input_array=example_input, ml_config=FLAGS.config)
 
     trainer = get_pl_trainer(
         name=name,

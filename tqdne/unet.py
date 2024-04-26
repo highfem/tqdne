@@ -670,11 +670,24 @@ class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
         :param x: an [N x C x ...] Tensor of inputs.
         :return: an [N x C x ...] Tensor of outputs.
         """
-        hs = []
         h = x
         for module in self.input_blocks:
             h = module(h)
-            hs.append(h)
         return self.mlp(h)    
+    
+    def get_embeddings(self, x):
+        """
+        Get the embeddings from the model.
+
+        :param x: an [N x C x ...] Tensor of inputs.
+        :return: an [N x C x ...] Tensor of embeddings.
+        """
+        with th.no_grad():
+            h = x
+            for module in self.input_blocks:
+                h = module(h)
+            for block in self.mlp[:-2]:
+                h = block(h)
+            return h
 
                 

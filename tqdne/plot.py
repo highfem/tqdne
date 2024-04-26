@@ -100,11 +100,10 @@ class SamplePlot(Plot):
     def plot(self, preds, target=None, cond_signal=None, cond=None):
         time = np.arange(0, preds.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, preds[0], "g", label="Generated")
+        ax.plot(time, preds[0], label="Generated")
         if not self.invert_representation:
-            ax.plot(time, target[0], "r", alpha=0.5, label="Target")
+            ax.plot(time, target[0], alpha=0.5, label="Target")
         title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
-        #return {key: f"{value:.2f}" for key, value in cond.items()}
         ax.set_title(title)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -124,8 +123,8 @@ class UpsamplingSamplePlot(Plot):
         time = np.arange(0, preds.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time, cond_signal[0], "b", label="Input")
-        ax.plot(time, target[0], "r", label="Target")
-        ax.plot(time, preds[0], "g", label="Reconstructed")
+        ax.plot(time, target[0], label="Target")
+        ax.plot(time, preds[0], label="Reconstructed")
         title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
         ax.set_title(title)
         ax.set_xlabel("Time (s)")
@@ -155,10 +154,10 @@ class LogEnvelopePlot(Plot):
 
         time_ax = np.arange(0, len(preds_logenv_median)) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time_ax, preds_logenv_median, "g", label="Generated - median")
-        ax.fill_between(time_ax, preds_logenv_p25, preds_logenv_p75, color="g", alpha=0.2, label="Generated - IQR (25-75%)")
-        ax.plot(time_ax, target_logenv_median, "r", label="Target - median")
-        ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, color="r", alpha=0.2, label="Target - IQR (25-75%)")
+        ax.plot(time_ax, preds_logenv_median, label="Generated - median")
+        ax.fill_between(time_ax, preds_logenv_p25, preds_logenv_p75, alpha=0.2, label="Generated - IQR (25-75%)")
+        ax.plot(time_ax, target_logenv_median, label="Target - median")
+        ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, alpha=0.2, label="Target - IQR (25-75%)")
 
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
@@ -189,12 +188,12 @@ class PowerSpectralDensityPlot(Plot):
                 preds_psd = np.abs(np.fft.rfft(preds, axis=-1)) ** 2
                 preds_mean = np.log(preds_psd + eps).mean(axis=0)
                 preds_std = np.log(preds_psd + eps).std(axis=0)
-                ax.plot(freq, preds_mean, "g", label="predsicted")
-                ax.fill_between(freq, preds_mean - preds_std, preds_mean + preds_std, color="g", alpha=0.2)
+                ax.plot(freq, preds_mean, label="Predicted")
+                ax.fill_between(freq, preds_mean - preds_std, preds_mean + preds_std, alpha=0.2)
 
 
-        ax.plot(freq, target_mean, "r", label="Target")
-        ax.fill_between(freq, target_mean - target_std, target_mean + target_std, color="r", alpha=0.2)
+        ax.plot(freq, target_mean, label="Target")
+        ax.fill_between(freq, target_mean - target_std, target_mean + target_std, alpha=0.2)
         ax.set_title(self.name)
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Log Power")
@@ -230,6 +229,9 @@ class BinPlot(Plot):
         return f"Bin {self.metric.name}"
 
     def plot(self, preds, target, cond_signal, cond):
+        # TODO: handle when len(preds) > len(target)
+        
+
         # extract the magnitude and distance (this is specific to the dataset)
         mags = cond[:, 2]
         dists = cond[:, 0]

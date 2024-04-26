@@ -66,29 +66,29 @@ def get_config():
     #     )
     # )
 
-    # config.data_repr = new_dict(
-    #     name="SignalWithEnvelope",
-    #     params=new_dict(
-    #         env_function="moving_average",
-    #         env_function_params=new_dict(),
-    #         env_transform="none",
-    #         env_transform_params=new_dict(),
-    #         scaling=new_dict(
-    #             type="normalize",
-    #             scalar=True
-    #         ),
-    #     )
-    # )
-
     config.data_repr = new_dict(
-        name="Signal",
+        name="SignalWithEnvelope",
         params=new_dict(
+            env_function="moving_average",
+            env_function_params=new_dict(),
+            env_transform="none",
+            env_transform_params=new_dict(),
             scaling=new_dict(
                 type="normalize",
                 scalar=True
             ),
         )
     )
+
+    # config.data_repr = new_dict(
+    #     name="Signal",
+    #     params=new_dict(
+    #         scaling=new_dict(
+    #             type="normalize",
+    #             scalar=True
+    #         ),
+    #     )
+    # )
 
 
     # TODO: not sure if it is the best way to do it
@@ -103,7 +103,7 @@ def get_config():
         sample=-1,
         psd=-1,
         logenv=-1,
-        # debug=-1,
+        debug=-1,
         # bin=new_dict(
         #      num_mag_bins=4,
         #      num_dist_bins=4,
