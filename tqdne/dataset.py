@@ -181,6 +181,7 @@ class UpsamplingDataset(torch.utils.data.Dataset):
             "cond": torch.tensor(features, dtype=torch.float32),
         }
     
+# TODO: class not needed, can be merged with EnvelopeDataset in RepresentationDataset   
 class SampleDataset(torch.utils.data.Dataset):
     def __init__(self, h5_path, data_representation, cut=None, mag_bins=None, dist_bins=None, config=Config()):
         super().__init__()
@@ -203,10 +204,6 @@ class SampleDataset(torch.utils.data.Dataset):
             self.mag_bins = mag_bins
             self.dist_bins = dist_bins
             self.bin_mapping = {f"{i}_{j}": idx for idx, (i, j) in enumerate(np.ndindex((len(dist_bins), len(mag_bins))))}
-            self.max_mag = config.conditional_params_range["magnitude"][1]
-            self.min_mag = config.conditional_params_range["magnitude"][0]
-            self.max_dist = config.conditional_params_range["hypocentral_distance"][1]
-            self.min_dist = config.conditional_params_range["hypocentral_distance"][0]
     
     def __del__(self):
         pass
@@ -264,15 +261,15 @@ class SampleDataset(torch.utils.data.Dataset):
         return len(self.bin_mapping) if self.bin_mapping else 0
     
     def get_class_weights(self):
-            """
-            Calculate the class weights based on the frequency of each class label in the dataset.
+        """
+        Calculate the class weights based on the frequency of each class label in the dataset.
 
-            Returns:
-                torch.Tensor: The class weights.
-            """
-            class_counts = torch.bincount(torch.tensor([self._get_class_label(features) for features in self.features]))
-            class_weights = 1. / class_counts.float()
-            return class_weights / class_weights.sum()
+        Returns:
+            torch.Tensor: The class weights.
+        """
+        class_counts = torch.bincount(torch.tensor([self._get_class_label(features) for features in self.features]))
+        class_weights = 1. / class_counts.float()
+        return class_weights / class_weights.sum()
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
