@@ -29,8 +29,6 @@ class Representation(ABC):
         return f"{self.__class__.__name__} - {self.parameters}"
 
     def get_representation(self, signal):
-        #return self._get_representation(np.nan_to_num(to_numpy(signal), nan=0))
-        # dataset should not have nan values
         return self._get_representation(to_numpy(signal))
 
     @abstractmethod
@@ -38,8 +36,6 @@ class Representation(ABC):
         pass
 
     def invert_representation(self, representation):
-        #return self._invert_representation(np.nan_to_num(to_numpy(representation), nan=0))
-        # model shouldn't return nan values
         return self._invert_representation(to_numpy(representation))
 
     @abstractmethod

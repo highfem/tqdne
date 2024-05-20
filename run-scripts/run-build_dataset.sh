@@ -10,4 +10,3 @@
 mamba activate tqdne
 
 python experiments/build_dataset.py
-```

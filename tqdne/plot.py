@@ -229,24 +229,36 @@ class BinPlot(Plot):
         return f"Bin {self.metric.name}"
 
     def plot(self, preds, target, cond_signal, cond):
-        # TODO: handle when len(preds) > len(target)
-        
-
-        # extract the magnitude and distance (this is specific to the dataset)
-        mags = cond[:, 2]
-        dists = cond[:, 0]
-
         # create the bins
         mag_bins = np.linspace(self.min_mag, self.max_mag, self.num_mag_bins + 1)
         dist_bins = np.linspace(self.min_dist, self.max_dist, self.num_dist_bins + 1)
         results = np.zeros((self.num_dist_bins, self.num_mag_bins))
 
-        # fill the bins
-        for i in range(self.num_mag_bins):
-            for j in range(self.num_dist_bins):
-                mask = (mags >= mag_bins[i]) & (mags < mag_bins[i + 1])
-                mask &= (dists >= dist_bins[j]) & (dists < dist_bins[j + 1])
-                results[i, j] = self.metric(preds[mask], target[mask]) if mask.any() else np.nan
+        def _fill_bins(preds_wf, preds_cond, target_wf, target_cond):
+            preds_mag = preds_cond[:, 2]
+            preds_dist = preds_cond[:, 0]
+            target_mag = target_cond[:, 2]
+            target_dist = target_cond[:, 0]
+
+            for i in range(self.num_mag_bins):
+                for j in range(self.num_dist_bins):
+                    preds_mask = (preds_mag >= mag_bins[i]) & (preds_mag < mag_bins[i + 1])
+                    preds_mask &= (preds_dist >= dist_bins[j]) & (preds_dist < dist_bins[j + 1])
+                    target_mask = (target_mag >= mag_bins[i]) & (target_mag < mag_bins[i + 1])
+                    target_mask &= (target_dist >= dist_bins[j]) & (target_dist < dist_bins[j + 1])
+                    results[j, i] = self.metric(preds_wf[preds_mask], target_wf[target_mask]) if preds_mask.any() else np.nan
+
+        if isinstance(preds, dict) and isinstance(target, dict):
+            preds_wf = preds["waveforms"]
+            preds_cond = preds["cond"]
+            target_wf = target["waveforms"]
+            target_cond = target["cond"]
+            _fill_bins(preds_wf, preds_cond, target_wf, target_cond)
+        elif isinstance(preds, np.ndarray) and isinstance(target, np.ndarray):
+            assert cond is not None, "Conditioning inputs must be provided if preds and target are numpy arrays"
+            _fill_bins(preds, cond, target, cond) 
+        else:
+            raise ValueError("Invalid input format")     
 
         # Plotting the heatmap using seaborn
         mag_bins_center = (mag_bins[1:] + mag_bins[:-1]) / 2

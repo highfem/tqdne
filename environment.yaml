@@ -4,8 +4,8 @@ channels:
   - nvidia
   - conda-forge
 dependencies:
-  - h5py=3.10.0
   - jupyterlab=4.1.1
+  - h5py=3.10.0
   - jupytext=1.16.1
   - matplotlib=3.8.2
   - ml-collections=0.1.1

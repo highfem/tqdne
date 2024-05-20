@@ -1,7 +1,6 @@
 from torch import nn
 import torch
 
-
 class MLP(nn.Module):
     """Multi-layer perceptron model.
 

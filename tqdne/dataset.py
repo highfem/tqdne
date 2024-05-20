@@ -324,14 +324,34 @@ class EnvelopeDataset(torch.utils.data.Dataset):
     
     # TODO: maybe should be moved to SampleDataset
     def get_waveforms_by_cond_input(self, cond_input):
-        idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[0]
+        """
+        Get waveforms based on conditional input. If conditional input is None, all waveforms are returned.
+
+        Args:
+            cond_input (ndarray, optional): Conditional input array.
+
+        Returns:
+            ndarray: Array of waveforms based on the conditional input.
+        """
+        if cond_input is None:
+            idxs = np.ones(self.features.shape[0], dtype=bool)
+        else:
+            idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[0]
         if self.cut is None:
             self.cut = self.waveforms.shape[1]
         if self.downsample > 1:
             return np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in idxs])
         else:
             return np.array([self.waveforms[i, :, :self.cut] for i in idxs])
-    
+
+    # TODO: maybe remove
+    def get_waveforms(self):
+        if self.cut is None:
+            self.cut = self.waveforms.shape[1]
+        if self.downsample > 1:
+            return np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in range(self.waveforms.shape[0])])   
+        return self.waveforms[:, :, :self.cut]
+        
     
     def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
         bins_indexes = (self.features[:, 0] >= distance_bin[0]) & (self.features[:, 0] < distance_bin[1]) & (self.features[:, 2] >= magnitude_bin[0]) & (self.features[:, 2] < magnitude_bin[1])

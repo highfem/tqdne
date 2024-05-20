@@ -44,8 +44,8 @@ def main(argv):
 
     # Datastes
     # Bins decided based on the distribution of the data (see dataset_stats.ipynb)
-    mag_bins = [(4.5, 4.8), (4.8, 5), (5, 5.5), (5.5, 6.), (6., 6.5), (6.5, 7.2), (7.2, 9.1)]
-    dist_bins = [(0, 60), (60, 100), (100, 150), (150, 200)]
+    mag_bins = [(4.5, 4.8), (4.8, 5), (5, 5.5), (5.5, 6.), (6., 6.5), (6.5, 9.1)]
+    dist_bins = [(0, 50), (50, 100), (100, 150), (150, 200)]
     train_dataset = SampleDataset(h5_path=Path(FLAGS.train_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins) 
     test_dataset = SampleDataset(h5_path=Path(FLAGS.test_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins)
 
@@ -84,12 +84,20 @@ def main(argv):
     logging.info(FLAGS.config.model.net_params)
 
     # Metrics
-    accuracy = Accuracy(task="multiclass", num_classes=num_classes)
+    accuracy_micro = Accuracy(task="multiclass", average='micro', num_classes=num_classes)
+    accuracy_macro = Accuracy(task="multiclass", average='macro', num_classes=num_classes)
     precision = Precision(task="multiclass", average='macro', num_classes=num_classes)
     recall = Recall(task="multiclass", average='macro', num_classes=num_classes)
     f1 = F1Score(task="multiclass", average='macro', num_classes=num_classes)
     auroc = AUROC(task="multiclass", num_classes=num_classes)
-    metrics = [accuracy, precision, recall, f1, auroc]
+    metrics = {
+        "accuracy_micro": accuracy_micro,
+        "accuracy_macro": accuracy_macro,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "auroc": auroc,
+    }
 
     logging.info("Build Pytorch Lightning Trainer...")
     example_input = train_dataset[0]["repr"][None, ...]

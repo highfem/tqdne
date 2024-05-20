@@ -654,13 +654,16 @@ class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
                 ds *= 2
                 self._feature_size += ch
 
-        self.mlp = nn.Sequential(
-            normalization(ch),
-            nn.SiLU(),
-            global_avg_pool_nd(dims),
-            nn.Flatten(1),
-            linear(ch, 128),
-            linear(128, num_classes),
+        self.mlp = nn.ModuleList(
+            [
+                nn.Sequential(
+                    normalization(ch),
+                    nn.SiLU(),
+                    global_avg_pool_nd(dims),
+                    nn.Flatten(1),
+                    linear(ch, num_classes)
+                )
+            ]
         )
 
     def forward(self, x):
@@ -686,7 +689,7 @@ class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
             h = x
             for module in self.input_blocks:
                 h = module(h)
-            for block in self.mlp[:-2]:
+            for block in self.mlp[:-1]:
                 h = block(h)
             return h
 

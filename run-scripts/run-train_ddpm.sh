@@ -8,5 +8,4 @@
 #SBATCH --account=sd28
 
 mamba activate tqdne
-
 python experiments/train_ddpm.py

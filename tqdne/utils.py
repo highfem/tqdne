@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Type
 
+import h5py
 import PIL
 import os
 import pytorch_lightning as pl
@@ -107,6 +108,7 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
         raise ValueError(f"Unknown model name: {model_dir_name}")
 
     data_repr = get_data_representation(ml_configs)
+    model.eval()
     return model, data_repr, ckpt
 
 
@@ -204,7 +206,7 @@ def get_cond_input_tensor(*conditioning_params: dict):
     return torch.tensor(cond_params, dtype=torch.float32)
 
 
-def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], raw_output: bool, num_samples: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda', max_batch_size=64) -> np.ndarray:
+def generate_data(model: Type[pl.LightningModule], model_data_representation: Type[Representation], raw_output: bool, num_samples: int, cond_input_params: dict[str, list] = None, cond_input: torch.Tensor = None, device: str = 'cuda', save_path: Path = None) -> np.ndarray:
     """
     Generates synthetic data using a given model and data representation.
 
@@ -215,6 +217,7 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
         cond_input_params (dict[str, list], optional): The parameters for generating conditional inputs. Defaults to None.
         cond_input (torch.Tensor, optional): The conditional inputs. Defaults to None.
         device (str, optional): The device to use for computation. Defaults to 'cuda'.
+        save_path (Path, optional): The directory path to save the generated inverted data. Defaults to None.
 
     Returns:
         np.ndarray: A dictionary containing the generated waveforms and the conditional inputs ("waveforms" and "cond").
@@ -231,21 +234,47 @@ def generate_data(model: Type[pl.LightningModule], model_data_representation: Ty
         cond_input = np.resize(cond_input, (num_samples, cond_input.shape[1]))
     generated_waveforms = []
     with torch.no_grad():
-        if num_samples < max_batch_size:
-            max_batch_size = num_samples
-        model_input_shape = model_data_representation.get_shape((max_batch_size, num_channels, signal_len))
-        for i in range(0, num_samples, max_batch_size):
-            print(f"Batch {i//max_batch_size + 1}/{num_samples//max_batch_size}")
-            batch_cond_input = cond_input[i:i+max_batch_size]
-            ## num_samples = batch_cond_input.shape[0] ## TODO: maybe remove this line
+        batch_size = model.hparams.ml_config.optimizer_params.batch_size
+        if num_samples < batch_size:
+            batch_size = num_samples
+        model_input_shape = model_data_representation.get_shape((batch_size, num_channels, signal_len))
+        for i in range(0, num_samples, batch_size):
+            print(f"Batch {i//batch_size + 1}/{num_samples//batch_size}")
+            batch_cond_input = cond_input[i:i+batch_size]
             shape = (batch_cond_input.shape[0], *model_input_shape[1:])
             model_output = model.sample(shape=shape, cond=torch.from_numpy(batch_cond_input).to(device, dtype=torch.float32))
             if raw_output:
                 generated_waveforms.append(to_numpy(model_output))
+                if save_path is not None:
+                    batch_waveforms = model_data_representation.invert_representation(model_output)
+                    save_data({"waveforms": batch_waveforms, "cond": batch_cond_input}, save_path)
             else:    
                 generated_waveforms.append(model_data_representation.invert_representation(model_output))
+                if save_path is not None:
+                    save_data({"waveforms": generated_waveforms[-1], "cond": batch_cond_input}, save_path)
     generated_waveforms = np.concatenate(generated_waveforms, axis=0)
     return {"waveforms": generated_waveforms, "cond": cond_input} # TODO: maybe refactor with  "cond": _get_cond_params_dict(cond_input)
+
+def save_data(data: dict[str, np.ndarray], save_path: Path) -> None:
+    """
+    Save the given data to a directory.
+
+    Args:
+        data (dict[str, np.ndarray]): The data to save.
+        save_path (Path): The directory path to save the data.
+
+    Returns:
+        None
+    """
+    with h5py.File(save_path, 'a') as f:
+        for key, value in data.items():
+            if key in f:
+                dataset = f[key]
+                dataset.resize((dataset.shape[0] + value.shape[0], *dataset.shape[1:]))
+                dataset[-value.shape[0]:] = value
+            else:
+                dataset = f.create_dataset(key, data=value, maxshape=(None, *value.shape[1:]))
+
 
 def get_samples(data: dict[str, np.ndarray], num_samples = None, indexes: list = None) -> dict[str, np.ndarray]:
     """
@@ -366,11 +395,11 @@ def plot_waveforms(data: dict[str, np.ndarray], test_waveforms: np.ndarray = Non
             axs[0].plot(time_ax, env, label=f"Envelope")
             if test_waveforms is not None:
                 test_env = _get_moving_avg_envelope(test_waveforms[:, channel_index])
-                test_env_median = np.mean(test_env, axis=0)
+                test_env_median = np.median(test_env, axis=0)
                 test_env_p25 = np.percentile(test_env, 25, axis=0)
                 test_env_p75 = np.percentile(test_env, 75, axis=0)
                 axs[0].plot(time_ax, test_env_median, alpha=0.5, color='r', label=f"Real Distribution Env. - Median")
-                axs[0].fill_between(time_ax, test_env_p75, test_env_p25, alpha=0.2, color='r', label=f'IQR (25-75%) - Num. Samples: {test_waveforms.shape[0]}')
+                axs[0].fill_between(time_ax, test_env_p25, test_env_p75, alpha=0.3, color='r', label=f'IQR (25-75%) - Num. Samples: {test_waveforms.shape[0]}')
         axs[0].set_xlabel('Time (s)')  
         axs[0].set_ylabel('Amplitude')  # TODO: insert correct unit of measurement  
         axs[0].legend()
@@ -540,7 +569,7 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
     test_data_by_bins = divide_data_by_bins(test_data, magnitude_bins, distance_bins)
 
     if data is None:
-        data = generate_data(model, model_data_representation, raw_output=False, num_samples=len(test_data['cond']), cond_input=test_data['cond'])
+        data = generate_data(model, model_data_representation, raw_output=False, num_samples=test_data["cond"].shape[0], cond_input=test_data["cond"])
     gen_data_by_bins = divide_data_by_bins(data, magnitude_bins, distance_bins)
 
     signal_length = general_config.signal_length
@@ -570,13 +599,13 @@ def plot_bins(plot_type: str, distance_bins: list[tuple], magnitude_bins: list[t
                 gen_data_median = np.median(gen_data_bin, axis=0)
                 gen_data_p25, gen_data_p75 = np.percentile(gen_data_bin, 25, axis=0), np.percentile(gen_data_bin, 75, axis=0)
                 axs[i, 0].plot(x_axis, gen_data_median, label=f"Mag: {mag_bin}, Dist: {dist_bin} - {len(gen_data_bin)} samples")
-                axs[i, 0].fill_between(x_axis, gen_data_p75, gen_data_p25, alpha=0.5)
+                axs[i, 0].fill_between(x_axis, gen_data_p25, gen_data_p75, alpha=0.5)
 
                 test_data_bin = plot_fun(test_data_by_bins[f"({dist_bin}, {mag_bin})"]['waveforms'][:, channel_index, :])
                 test_data_median = np.median(test_data_bin, axis=0)
                 test_data_p25, test_data_p75 = np.percentile(test_data_bin, 25, axis=0), np.percentile(test_data_bin, 75, axis=0)
                 axs[i, 1].plot(x_axis, test_data_median, label=f"Mag: {mag_bin}, Dist: {dist_bin} - {len(test_data_bin)} samples")
-                axs[i, 1].fill_between(x_axis, test_data_p75, test_data_p25, alpha=0.5)
+                axs[i, 1].fill_between(x_axis, test_data_p25, test_data_p75, alpha=0.5)
                 
                 axs[i, 0].set_title('Generated')
                 axs[i, 1].set_title('Real')
@@ -648,5 +677,26 @@ def plot_raw_waveform(raw_waveform, cond, data_representation, inverted_waveform
 def plot_raw_output_distribution(pred_raw_waveforms, test_raw_waveforms, model_data_repr):
     model_data_repr.plot_distribution(pred_raw_waveforms, test_raw_waveforms)
 
+class OnlineStats:
+    def __init__(self):
+        self.n = 0
+        self.mean = 0
+        self.M2 = 0
 
-    
+    def update(self, x):
+        self.n += 1
+        delta = x - self.mean
+        self.mean += delta / self.n
+        delta2 = x - self.mean
+        self.M2 += delta * delta2
+
+    @property
+    def variance(self):
+        if self.n < 2:
+            return float('nan')
+        else:
+            return self.M2 / (self.n - 1)
+
+    @property
+    def std_dev(self):
+        return np.sqrt(self.variance)   

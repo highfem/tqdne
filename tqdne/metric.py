@@ -36,19 +36,44 @@ def compute_fid(preds, target):
     Compute the Fréchet Inception Distance (FID) between two sets of samples.
 
     Args:
-        preds (numpy.ndarray): Predicted samples.
-        target (numpy.ndarray): Target samples.
+        preds (tuple or numpy.ndarray): Predicted samples. If a tuple, it should contain two elements: the mean and standard deviation of the predictions. If a numpy array, the mean and standard deviation will be computed from the array.
+        target (tuple or numpy.ndarray): Target samples. If a tuple, it should contain two elements: the mean and standard deviation of the targets. If a numpy array, the mean and standard deviation will be computed from the array.
 
     Returns:
         float: The Fréchet Inception Distance (FID) between the two sets of samples.
     """
-    preds_mean = np.mean(preds, axis=0)
-    target_mean = np.mean(target, axis=0)
-    preds_std = np.std(preds, axis=0)
-    target_std = np.std(target, axis=0)
-    # Frechét distance between isotropic Gaussians (Wasserstein-2)
-    fid = np.sum((preds_mean - target_mean) ** 2, axis=-1) + np.sum(
-        preds_std**2 + target_std**2 - 2 * preds_std * target_std, axis=-1
+    if isinstance(preds, tuple):
+        preds_mean = preds[0]
+        preds_std = preds[1]
+    else:    
+        preds_mean = np.mean(preds, axis=0)
+        preds_std = np.std(preds, axis=0)
+
+    if isinstance(target, tuple):
+        target_mean = target[0]
+        target_std = target[1]
+    else:    
+        target_mean = np.mean(target, axis=0)
+        target_std = np.std(target, axis=0)
+
+    return compute_frechet_distance(preds_mean, preds_std, target_mean, target_std)
+
+@staticmethod
+def compute_frechet_distance(mean_1, std_1, mean_2, std_2):
+    """
+    Compute the Fréchet Distance between two Gaussian distributions.
+
+    Args:
+        mean_1 (numpy.ndarray): The mean of the first Gaussian distribution.
+        std_1 (numpy.ndarray): The standard deviation of the first Gaussian distribution.
+        mean_2 (numpy.ndarray): The mean of the second Gaussian distribution.
+        std_2 (numpy.ndarray): The standard deviation of the second Gaussian distribution.
+
+    Returns:
+        float: The Fréchet Distance between the two Gaussian distributions.
+    """
+    fid = np.sum((mean_1 - mean_2) ** 2, axis=-1) + np.sum(
+        std_1**2 + std_2**2 - 2 * std_1 * std_2, axis=-1
     )
     return fid
 
@@ -58,7 +83,7 @@ def compute_inception_score(preds, preds_2=None):
     Computes the Inception Score for a given set of predictions.
 
     Args:
-        preds (numpy.ndarray): Array of predictions.
+        preds (numpy.ndarray): Array of classification predictions.
         preds_2 (numpy.ndarray, optional): Array of additional predictions. Defaults to None.
 
     Returns:
@@ -88,6 +113,7 @@ def compute_kl_divergence(prob_dist_1, prob_dist_2, eps=1e-7):
     Returns:
         numpy.ndarray: The KL divergence between the two probability distributions.
     """
+    assert not np.any(prob_dist_1 < 0) and not np.any(prob_dist_2 < 0), "Probabilities must be non-negative"
     return np.sum(prob_dist_1 * np.log((prob_dist_1 / (prob_dist_2 + eps)) + eps), axis=-1)
 
 

@@ -25,7 +25,7 @@ def get_config():
     )
 
     config.optimizer_params=new_dict(
-        learning_rate=3e-4,
+        learning_rate=1e-3,
         batch_size=256,
         seed=0,
     )
@@ -38,6 +38,7 @@ def get_config():
         devices="auto",
         num_nodes=1,
         eval_every=2,
+        early_stopping_patience=30,
         log_to_wandb=True,
         num_sanity_val_steps=0,
         fast_dev_run=False,

@@ -13,4 +13,4 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 mamba activate tqdne
 
- python experiments/train_eval_classifier.py --config=tqdne/configs/classifier.py 
+python experiments/train_eval_classifier.py --config=tqdne/configs/classifier.py 

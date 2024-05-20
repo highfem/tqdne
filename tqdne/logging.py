@@ -9,18 +9,6 @@ import wandb
 
 
 class LogCallback(Callback):
-    """
-    Callback for logging metrics and visualizations during training and validation.
-
-    Args:
-        task (str): Task name.
-        val_loader (torch.utils.data.DataLoader): Validation data loader.
-        metrics (list): List of metrics to compute and log.
-        plots (list): List of functions that return plots to log.
-        limit_batches (int): Limit the number of validation batches to process (-1 for all).
-        every (int): Log metrics and visualizations every `every` validation epochs.
-    """
-
     def __init__(self, task, val_loader, metrics, plots, limit_batches=1, every=1):
         super().__init__()
         self.task = task
@@ -65,9 +53,11 @@ class LogCallback(Callback):
             raise ValueError(f"Unknown task: {self.task}")
 
         # Log metrics
-        for metric in self.metrics:
+        if isinstance(self.metrics, list):
+            self.metrics = {(metric.name if hasattr(metric, "name") else metric.__class__.__name__): metric for metric in self.metrics}
+
+        for metric_name, metric in self.metrics.items():
             result = metric(preds=pred, target=target)
-            metric_name = metric.name if hasattr(metric, "name") else metric.__class__.__name__
             pl_module.log(metric_name, result)
 
         # Log plots

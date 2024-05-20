@@ -1,6 +1,5 @@
 import pytorch_lightning as pl
 
-
 class LightningGAN(pl.LightningModule):
     """A PyTorch Lightning module for training a Generative Adversarial Network.
 
@@ -19,3 +18,5 @@ class LightningGAN(pl.LightningModule):
     cond_input : bool, optional
         Whether conditional input is provided.
     """
+
+
