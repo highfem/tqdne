@@ -69,16 +69,6 @@ class LogSpectrogram(Representation):
             self.stft = stft_system.spectrogram
             self.istft = stft_system.invert_spectrogram
 
-    def adjust_to_shape(self, x, shape=None):
-        if not shape:
-            return x
-        if x.shape[1] < shape[0]:
-            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[1]), (0, 0)), mode="constant")
-        if x.shape[2] < shape[1]:
-            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[2])), mode="constant")
-
-        return x[:, : shape[0], : shape[1]]
-
     def get_spectrogram(self, signal):
         shape = signal.shape
         signal = signal.reshape(-1, shape[-1])  # flatten trailing dimensions
