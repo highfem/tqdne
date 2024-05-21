@@ -14,13 +14,13 @@ class Plot(ABC):
     All plots should inherit from this class.
     """
 
-    def __init__(self, channel=None):
+    def __init__(self, channel=0):
         self.channel = channel
 
     @property
     def name(self):
         name = self.__class__.__name__
-        return f"{name} - Channel {self.channel}" if self.channel else name
+        return f"{name} - Channel {self.channel}"
 
     def __call__(self, pred, target=None, cond_signal=None, cond=None):
         pred = to_numpy(pred)
@@ -69,7 +69,7 @@ class UpsamplingSamplePlot(Plot):
 
     def plot(self, pred, target, cond_signal, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(9, 6))
+        fig, ax = plt.subplots(figsize=(18, 6))
         ax.plot(time, cond_signal[0], "b", label="Input")
         ax.plot(time, target[0], "r", label="Target")
         ax.plot(time, pred[0], "g", label="Reconstructed")
@@ -81,20 +81,25 @@ class UpsamplingSamplePlot(Plot):
         return fig
 
 
-class PowerSpectralDensity(Plot):
-    def __init__(self, fs=100, channel=0):
+class SpectralDensity(Plot, ABC):
+    def __init__(self, fs, channel=0, log_eps=1e-8):
         super().__init__(channel)
         self.fs = fs
+        self.log_eps = log_eps
+
+    @abstractmethod
+    def spectral_density(self, signal):
+        pass
 
     def plot(self, pred, target, cond_signal=None, cond=None):
-        pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
-        target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
+        pred_sd = self.spectral_density(pred)
+        target_sd = self.spectral_density(target)
 
-        # Compute mean and std of PSD in log scale
-        pred_mean = np.log(pred_psd).mean(axis=0)
-        target_mean = np.log(target_psd).mean(axis=0)
-        pred_std = np.log(pred_psd).std(axis=0)
-        target_std = np.log(target_psd).std(axis=0)
+        # Compute mean and std of SD in log scale
+        pred_mean = pred_sd.mean(axis=0)
+        target_mean = target_sd.mean(axis=0)
+        pred_std = pred_sd.std(axis=0)
+        target_std = target_sd.std(axis=0)
 
         # Plot
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
@@ -111,6 +116,20 @@ class PowerSpectralDensity(Plot):
         ax.legend()
         fig.tight_layout()
         return fig
+
+
+class AmplitudeSpectralDensity(SpectralDensity):
+    def spectral_density(self, signal):
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
+
+
+class PowerSpectralDensity(SpectralDensity):
+    def spectral_density(self, signal):
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = 2 * np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
 
 
 class BinPlot(Plot):

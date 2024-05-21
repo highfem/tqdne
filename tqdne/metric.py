@@ -11,13 +11,13 @@ class Metric(ABC):
     All metrics should inherit from this class.
     """
 
-    def __init__(self, channel=None):
+    def __init__(self, channel=0):
         self.channel = channel
 
     @property
     def name(self):
         name = self.__class__.__name__
-        return f"{name} - Channel {self.channel}" if self.channel else name
+        return f"{name} - Channel {self.channel}"
 
     def __call__(self, pred, target):
         pred = to_numpy(pred)
@@ -37,20 +37,25 @@ class MeanSquaredError(Metric):
         return ((pred - target) ** 2).mean()
 
 
-class PowerSpectralDensity(Metric):
-    def __init__(self, fs, channel=0):
+class SpectralDensity(Metric, ABC):
+    def __init__(self, fs, channel=0, log_eps=1e-8):
         super().__init__(channel)
         self.fs = fs
+        self.log_eps = log_eps
+
+    @abstractmethod
+    def spectral_density(self, signal):
+        pass
 
     def compute(self, pred, target):
-        pred_psd = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
-        target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
+        pred_sd = self.spectral_density(pred)
+        target_sd = self.spectral_density(target)
 
-        # Compute mean and std of PSD in log scale
-        pred_mean = np.log(pred_psd).mean(axis=0)
-        target_mean = np.log(target_psd).mean(axis=0)
-        pred_std = np.log(pred_psd).std(axis=0)
-        target_std = np.log(target_psd).std(axis=0)
+        # Compute mean and std of SD in log scale
+        pred_mean = pred_sd.mean(axis=0)
+        target_mean = target_sd.mean(axis=0)
+        pred_std = pred_sd.std(axis=0)
+        target_std = target_sd.std(axis=0)
 
         # Frechét distance between isotropic Gaussians (Wasserstein-2)
         fid = np.sum((pred_mean - target_mean) ** 2, axis=-1) + np.sum(
@@ -58,3 +63,17 @@ class PowerSpectralDensity(Metric):
         )
 
         return fid
+
+
+class AmplitudeSpectralDensity(SpectralDensity):
+    def spectral_density(self, signal):
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
+
+
+class PowerSpectralDensity(SpectralDensity):
+    def spectral_density(self, signal):
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = 2 * np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
