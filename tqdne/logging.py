@@ -1,6 +1,7 @@
 import time
 import warnings
 
+import numpy as np
 import torch
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
@@ -55,8 +56,11 @@ class LogCallback(Callback):
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
-        batch = {k: torch.cat([b[k] for b in batches], dim=0) for k in batches[0].keys()}
-        pred = torch.cat(preds, dim=0)
+        pred = np.concatenate(preds, axis=0)
+        batch = {
+            k: torch.cat([b[k] for b in batches], dim=0).numpy(force=True)
+            for k in batches[0].keys()
+        }
 
         # Log metrics
         for metric in self.metrics:
@@ -68,7 +72,7 @@ class LogCallback(Callback):
             fig = plot(
                 pred=pred,
                 target=batch["waveform"],
-                cond_signal=batch["cond_waveform"],
+                cond_signal=batch["cond_waveform"] if "cond_waveform" in batch else None,
                 cond=batch["cond"] if "cond" in batch else None,
             )
             try:

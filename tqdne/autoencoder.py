@@ -240,7 +240,21 @@ class LithningAutoencoder(pl.LightningModule):
         self.log(f"{stage}/reconstruction_loss", recon_loss.item())
         self.log(f"{stage}/kl_divergence", kl_div.item())
         self.log(f"{stage}/loss", loss.item())
-        return loss
+        
+        if "cond_signal" not in batch:
+            return loss
+
+        # Conditional signal
+        cond_x = batch["cond_signal"]
+        cond_latent, cond_mean, cond_log_std = self._encode(cond_x)
+        cond_x_recon = self.decode(cond_latent)
+        cond_recon_loss = torch.mean((cond_x - cond_x_recon) ** 2)
+        cond_kl_div = self.kl_divergence(cond_mean, cond_log_std).mean()
+        cond_loss = cond_recon_loss + self.kl_weight * cond_kl_div
+        self.log(f"{stage}/cond_reconstruction_loss", cond_recon_loss.item())
+        self.log(f"{stage}/cond_kl_divergence", cond_kl_div.item())
+        self.log(f"{stage}/cond_loss", cond_loss.item())
+        return loss + cond_loss
 
     def training_step(self, batch, batch_idx):
         return self.step(batch, stage="training")
