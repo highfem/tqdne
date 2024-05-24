@@ -48,10 +48,10 @@ class SamplePlot(Plot):
 
     def plot(self, pred, target=None, cond_signal=None, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, pred[0], "g", label="Reconstructed")
+        fig, ax = plt.subplots(figsize=(18, 6))
+        ax.plot(time, pred[0], "b", label="Predicted")
         if self.plot_target:
-            ax.plot(time, target[0], "r", label="Target")
+            ax.plot(time, target[0], "orange", label="Target")
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -70,9 +70,9 @@ class UpsamplingSamplePlot(Plot):
     def plot(self, pred, target, cond_signal, cond=None):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(18, 6))
-        ax.plot(time, cond_signal[0], "b", label="Input")
-        ax.plot(time, target[0], "r", label="Target")
-        ax.plot(time, pred[0], "g", label="Reconstructed")
+        ax.plot(time, cond_signal[0], "g", label="Input")
+        ax.plot(time, target[0], "orange", label="Target")
+        ax.plot(time, pred[0], "b", label="Predicted")
         ax.set_title(self.name)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -81,15 +81,16 @@ class UpsamplingSamplePlot(Plot):
         return fig
 
 
-class SpectralDensity(Plot, ABC):
+class AmplitudeSpectralDensity(Plot, ABC):
     def __init__(self, fs, channel=0, log_eps=1e-8):
         super().__init__(channel)
         self.fs = fs
         self.log_eps = log_eps
 
-    @abstractmethod
     def spectral_density(self, signal):
-        pass
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
 
     def plot(self, pred, target, cond_signal=None, cond=None):
         pred_sd = self.spectral_density(pred)
@@ -104,32 +105,18 @@ class SpectralDensity(Plot, ABC):
         # Plot
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(freq, pred_mean, "g", label="Predicted")
-        ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="g", alpha=0.2)
-        ax.plot(freq, target_mean, "r", label="Target")
+        ax.plot(freq, pred_mean, "b", label="Predicted")
+        ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
+        ax.plot(freq, target_mean, "orange", label="Target")
         ax.fill_between(
-            freq, target_mean - target_std, target_mean + target_std, color="r", alpha=0.2
+            freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
         )
         ax.set_title(self.name)
         ax.set_xlabel("Frequency (Hz)")
-        ax.set_ylabel("Log Power")
+        ax.set_ylabel("Log Fourier Amplitude Spectral Density")
         ax.legend()
         fig.tight_layout()
         return fig
-
-
-class AmplitudeSpectralDensity(SpectralDensity):
-    def spectral_density(self, signal):
-        sd = np.abs(np.fft.rfft(signal, axis=-1))
-        log_sd = np.log(np.clip(sd, self.log_eps, None))
-        return log_sd
-
-
-class PowerSpectralDensity(SpectralDensity):
-    def spectral_density(self, signal):
-        sd = np.abs(np.fft.rfft(signal, axis=-1))
-        log_sd = 2 * np.log(np.clip(sd, self.log_eps, None))
-        return log_sd
 
 
 class BinPlot(Plot):

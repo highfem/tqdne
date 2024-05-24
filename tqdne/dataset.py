@@ -125,13 +125,12 @@ class RandomDataset(torch.utils.data.Dataset):
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, representaion, cut=None, cond=False, config=Config()):
+    def __init__(self, h5_path, representaion, cut=None, cond=False):
         super().__init__()
         self.h5_path = h5_path
         self.cut = cut
         self.cond = cond
         self.representation = representaion
-        self.sigma_in = config.sigma_in
 
         self.file = h5py.File(h5_path, "r")
         self.waveform = self.file["waveform"]
@@ -154,14 +153,19 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         waveform = self.waveform[index]
 
-        # features
-        features = self.features[index]
-        features = (features - self.features_means) / self.features_stds
-
         if self.cut:
             waveform = waveform[:, : self.cut]
 
         signal = self.representation.get_representation(waveform)
+
+        if not self.cond:
+            return {
+                "waveform": torch.tensor(waveform, dtype=torch.float32),
+                "signal": torch.tensor(signal, dtype=torch.float32),
+            }
+
+        features = self.features[index]
+        features = (features - self.features_means) / self.features_stds
 
         return {
             "waveform": torch.tensor(waveform, dtype=torch.float32),
@@ -228,7 +232,7 @@ class UpsamplingDataset(torch.utils.data.Dataset):
 
 
 class SeisbenchDataset(torch.utils.data.Dataset):
-    def __init__(self, obs_path, syn_path, representaion, cut=None, cond=False, config=Config()):
+    def __init__(self, obs_path, syn_path, representaion, cut, cond=False, config=Config()):
         super().__init__()
         self.cond = cond
         self.cut = cut
@@ -236,10 +240,22 @@ class SeisbenchDataset(torch.utils.data.Dataset):
         self.obs_data = WaveformDataset(obs_path)
         self.syn_data = WaveformDataset(syn_path)
 
-        # sort out waveforms shorter than cut
-        self.indices = np.array(
-            [i for i in range(len(self.obs_data)) if self.obs_data.get_sample(i)[0].shape[1] >= cut]
-        )
+        # filter out bad samples
+        def save_filter(fn):
+            def filter(x):
+                try:
+                    return all(fn(np.array(eval(x))))
+                except Exception:
+                    return True
+
+            return filter
+
+        snr_mask = self.obs_data.metadata["trace_snr"].apply(save_filter(lambda x: x > 1.5))
+        snr_mask &= self.syn_data.metadata["trace_snr"].apply(save_filter(lambda x: x > 1.5))
+        ratio_mask = self.obs_data.metadata["data_ratio"].apply(save_filter(lambda x: x < 10))
+        ratio_mask &= self.syn_data.metadata["data_ratio"].apply(save_filter(lambda x: x < 10))
+        mask = snr_mask & ratio_mask
+        self.indices = np.nonzero(mask)[0]
 
     def __len__(self):
         return len(self.indices)
@@ -251,6 +267,12 @@ class SeisbenchDataset(torch.utils.data.Dataset):
         if self.cut:
             obs = obs[:, : self.cut]
             syn = syn[:, : self.cut]
+
+            # zero pad if necessary
+            if obs.shape[1] < self.cut:
+                obs = np.pad(obs, ((0, 0), (0, self.cut - obs.shape[1])), "constant")
+            if syn.shape[1] < self.cut:
+                syn = np.pad(syn, ((0, 0), (0, self.cut - syn.shape[1])), "constant")
 
         obs = np.nan_to_num(obs)
         syn = np.nan_to_num(syn)

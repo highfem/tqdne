@@ -55,6 +55,7 @@ def get_pl_trainer(
                 auto_insert_metric_name=False,
                 mode="min",
                 save_top_k=3,
+                save_last=True,
             )
         )
 

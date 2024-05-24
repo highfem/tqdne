@@ -37,15 +37,16 @@ class MeanSquaredError(Metric):
         return ((pred - target) ** 2).mean()
 
 
-class SpectralDensity(Metric, ABC):
+class AmplitudeSpectralDensity(Metric, ABC):
     def __init__(self, fs, channel=0, log_eps=1e-8):
         super().__init__(channel)
         self.fs = fs
         self.log_eps = log_eps
 
-    @abstractmethod
     def spectral_density(self, signal):
-        pass
+        sd = np.abs(np.fft.rfft(signal, axis=-1))
+        log_sd = np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
 
     def compute(self, pred, target):
         pred_sd = self.spectral_density(pred)
@@ -63,17 +64,3 @@ class SpectralDensity(Metric, ABC):
         )
 
         return fid
-
-
-class AmplitudeSpectralDensity(SpectralDensity):
-    def spectral_density(self, signal):
-        sd = np.abs(np.fft.rfft(signal, axis=-1))
-        log_sd = np.log(np.clip(sd, self.log_eps, None))
-        return log_sd
-
-
-class PowerSpectralDensity(SpectralDensity):
-    def spectral_density(self, signal):
-        sd = np.abs(np.fft.rfft(signal, axis=-1))
-        log_sd = 2 * np.log(np.clip(sd, self.log_eps, None))
-        return log_sd
