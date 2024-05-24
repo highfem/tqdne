@@ -1,6 +1,5 @@
 import pytorch_lightning as pl
 import torch
-from torch.nn import functional as F
 
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.nn import append_dims
@@ -61,10 +60,13 @@ class LightningEDM(pl.LightningModule):
         A PyTorch neural network.
     optimizer_params : dict
         A dictionary of parameters for the optimizer.
-    cond_signal_input : bool, optional
-        Whether low resolution input is provided.
-    cond_input : bool, optional
-        Whether conditional input is provided.
+    num_sampling_steps : int, optional
+        The number of sampling steps during inference.
+    deterministic_sampling : bool, optional
+        If True, use deterministic sampling instead of stochastic sampling.
+        Stochastic sampling can be more accurate but usually requires more (e.g. 256) steps.
+    edm : EDM, optional
+        The EDM model parameters.
     autoencoder : None | LithningAutoencoder, optional
         If provided, the autoencoder used to obtain the latent representations.
         The diffusion model will then generate these latent representations instead of the original signal [2].
@@ -79,10 +81,8 @@ class LightningEDM(pl.LightningModule):
         self,
         net: torch.nn.Module,
         optimizer_params: dict,
-        prediction_type: str = "epsilon",
-        cond_signal_input: bool = False,
-        cond_input: bool = False,
-        num_sampling_steps: int = 256,
+        num_sampling_steps: int = 25,
+        deterministic_sampling: bool = True,
         edm: EDM = EDM(),
         autoencoder: None | LithningAutoencoder = None,
     ):
@@ -90,14 +90,12 @@ class LightningEDM(pl.LightningModule):
 
         self.net = net
         self.optimizer_params = optimizer_params
-        self.prediction_type = prediction_type
-        self.cond_signal_input = cond_signal_input
-        self.cond_input = cond_input
         self.num_sampling_steps = num_sampling_steps
+        self.deterministic_sampling = deterministic_sampling
         self.edm = edm
-        self._autoencoder = autoencoder  # use underscore to not save in checkpoints
-        if self._autoencoder:
-            for param in self._autoencoder.parameters():
+        self.autoencoder = autoencoder
+        if self.autoencoder:
+            for param in self.autoencoder.parameters():
                 param.requires_grad = False
 
         self.save_hyperparameters()
@@ -118,10 +116,10 @@ class LightningEDM(pl.LightningModule):
         cond_sample = batch["cond_signal"] if "cond_signal" in batch else None
         cond = batch["cond"] if "cond" in batch else None
 
-        if self._autoencoder:
-            sample = self._autoencoder.encode(sample)
-            if cond_sample:
-                cond_sample = self._autoencoder.encode(cond_sample)
+        if self.autoencoder:
+            sample = self.autoencoder.encode(sample)
+            if cond_sample is not None:
+                cond_sample = self.autoencoder.encode(cond_sample)
 
         eps = torch.randn(sample.shape[0], device=self.device)
         sigma = self.edm.sigma(eps)
@@ -143,54 +141,90 @@ class LightningEDM(pl.LightningModule):
         self.log("validation/loss", loss.item())
         return loss
 
+    @torch.no_grad()
     def sample(self, shape, cond_sample=None, cond=None):
         """Sample using Heun's second order method."""
-        if self._autoencoder:
-            if cond_sample:
-                cond_sample = self._autoencoder.encode(cond_sample)
+        if self.autoencoder:
+            if cond_sample is not None:
+                cond_sample = self.autoencoder.encode(cond_sample)
 
             # infer latent shape
             dummy = torch.zeros(shape, device=self.device)
-            latent = self._autoencoder.encode(dummy)
+            latent = self.autoencoder.encode(dummy)
             shape = latent.shape
 
         sigmas = self.edm.sampling_sigmas(self.num_sampling_steps, device=self.device)
+        eps = torch.randn(shape, device=self.device, dtype=torch.float64) * sigmas[0]
+        if self.deterministic_sampling:
+            sample = self.sample_deterministically(eps, sigmas, cond_sample, cond)
+        else:
+            sample = self.sample_stochastically(eps, sigmas, cond_sample, cond)
 
-        sample_next = torch.randn(shape, device=self.device, dtype=torch.float64) * sigmas[0]
+        sample = sample.to(torch.float32)
+        if self.autoencoder:
+            return self.autoencoder.decode(sample)
+        return sample
+
+    def sample_deterministically(self, eps, sigmas, cond_sample=None, cond=None):
+        sample_next = eps
+        for i, (sigma, sigma_next) in enumerate(zip(sigmas[:-1], sigmas[1:])):
+            sample_curr = sample_next
+            pred_curr = self(
+                sample_curr.to(self.dtype),
+                sigma.to(self.dtype).repeat(len(sample_curr)),
+                cond_sample,
+                cond,
+            ).to(torch.float64)
+            d_cur = (sample_curr - pred_curr) / sigma
+            sample_next = sample_curr + d_cur * (sigma_next - sigma)
+
+            # second order correction
+            if i < self.num_sampling_steps - 1:
+                pred_next = self(
+                    sample_next.to(self.dtype),
+                    sigma_next.to(self.dtype).repeat(len(sample_curr)),
+                    cond_sample,
+                    cond,
+                ).to(torch.float64)
+                d_prime = (sample_next - pred_next) / sigma_next
+                sample_next = sample_curr + (sigma_next - sigma) * (0.5 * d_cur + 0.5 * d_prime)
+
+        return sample_next
+
+    def sample_stochastically(self, eps, sigmas, cond_sample=None, cond=None):
+        sample_next = eps
         for i, (sigma, sigma_next) in enumerate(zip(sigmas[:-1], sigmas[1:])):
             sample_curr = sample_next
 
             # increase noise temporarily
             sigma_hat = self.edm.sigma_hat(sigma, self.num_sampling_steps)
-            noise = torch.randn(shape, device=self.device, dtype=torch.float64) * self.edm.S_noise
+            noise = torch.randn_like(sample_curr) * self.edm.S_noise
             sample_hat = sample_curr + noise * (sigma_hat**2 - sigma**2) ** 0.5
 
             # euler step
             pred_hat = self(
                 sample_hat.to(self.dtype),
-                sigma.to(self.dtype).repeat(len(sample_hat)),
+                sigma_hat.to(self.dtype).repeat(len(sample_hat)),
                 cond_sample,
                 cond,
             ).to(torch.float64)
-            d_cur = (sample_curr - pred_hat) / sigma_hat
-            x_next = sample_curr + d_cur * (sigma_next - sigma_hat)
+            d_cur = (sample_hat - pred_hat) / sigma_hat
+            sample_next = sample_hat + d_cur * (sigma_next - sigma_hat)
 
             # second order correction
             if i < self.num_sampling_steps - 1:
                 pred_next = self(
-                    x_next.to(self.dtype),
+                    sample_next.to(self.dtype),
                     sigma_next.to(self.dtype).repeat(len(sample_hat)),
                     cond_sample,
                     cond,
                 ).to(torch.float64)
-                d_next = (x_next - pred_next) / sigma_next
-                sample_next = sample_hat + (sigma_next - sigma_hat) * (0.5 * d_cur + 0.5 * d_next)
+                d_prime = (sample_next - pred_next) / sigma_next
+                sample_next = sample_hat + (sigma_next - sigma_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
-        sample = sample_next.to(self.dtype)
-        if self._autoencoder:
-            return self._autoencoder.decode(sample)
-        return sample
+        return sample_next
 
+    @torch.no_grad()
     def evaluate(self, batch):
         """Evaluate the model on a batch of data."""
         sample = batch["signal"]
@@ -199,5 +233,15 @@ class LightningEDM(pl.LightningModule):
         return self.sample(sample.shape, cond_sample, cond)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), **self.optimizer_params)
-        return optimizer
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.optimizer_params["max_steps"]
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": lr_scheduler,
+                "interval": "step",
+            },
+        }
