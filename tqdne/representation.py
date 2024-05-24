@@ -19,6 +19,14 @@ class Representation(NumpyArgMixin):
         pass
 
 
+class Identity(Representation):
+    def get_representation(self, signal):
+        return signal
+
+    def invert_representation(self, representation):
+        return representation
+
+
 class LogSpectrogram(Representation):
     """Represents a signal as a log-spectrogram.
 

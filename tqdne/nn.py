@@ -4,10 +4,8 @@ Various utilities for neural networks.
 
 import math
 
-import numpy as np
 import torch as th
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class GroupNorm32(nn.GroupNorm):
@@ -26,13 +24,6 @@ def conv_nd(dims, *args, **kwargs):
     elif dims == 3:
         return nn.Conv3d(*args, **kwargs)
     raise ValueError(f"unsupported dimensions: {dims}")
-
-
-def linear(*args, **kwargs):
-    """
-    Create a linear module.
-    """
-    return nn.Linear(*args, **kwargs)
 
 
 def avg_pool_nd(dims, *args, **kwargs):
@@ -90,9 +81,7 @@ def append_dims(x, target_dims):
     """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
     dims_to_append = target_dims - x.ndim
     if dims_to_append < 0:
-        raise ValueError(
-            f"input has {x.ndim} dims but target_dims is {target_dims}, which is less"
-        )
+        raise ValueError(f"input has {x.ndim} dims but target_dims is {target_dims}, which is less")
     return x[(...,) + (None,) * dims_to_append]
 
 
@@ -178,17 +167,3 @@ class CheckpointFunction(th.autograd.Function):
         del ctx.input_params
         del output_tensors
         return (None, None) + input_grads
-
-
-class GaussianFourierProjection(nn.Module):
-    """Gaussian Fourier projection layer."""
-
-    def __init__(self, channels: int, scale: float = 0.02) -> None:
-        super().__init__()
-        self.W = nn.Parameter(th.randn(channels // 2) * scale, requires_grad=False)
-
-    def forward(self, x):
-        h = x[:, None] * self.W[None, :] * 2 * th.pi
-
-        h = th.cat([th.sin(h), th.cos(h)], dim=-1)
-        return h
