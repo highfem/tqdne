@@ -243,7 +243,7 @@ class Encoder(nn.Module):
         model_channels,
         out_channels,
         num_res_blocks,
-        attention_resolutions=[],
+        attention_resolutions=(),
         channel_mult=(1, 2, 4, 8),
         conv_kernel_size=3,
         conv_resample=True,
@@ -281,18 +281,11 @@ class Encoder(nn.Module):
                 ds *= 2
         self.down_blocks = nn.Sequential(*down_blocks)
 
-        self.middle_blocks = nn.Sequential(
-            ResBlock(ch, kernel_size=conv_kernel_size, dims=dims),
-            AttentionBlock(ch, num_heads=num_heads, dims=dims, flash_attention=flash_attention),
-            ResBlock(ch, kernel_size=conv_kernel_size, dims=dims),
-        )
-
         self.output_layer = conv_nd(dims, ch, out_channels, conv_kernel_size, padding="same")
 
     def forward(self, x):
         x = self.input_layer(x)
         x = self.down_blocks(x)
-        x = self.middle_blocks(x)
         x = self.output_layer(x)
         return x
 
@@ -304,7 +297,7 @@ class Decoder(nn.Module):
         model_channels,
         out_channels,
         num_res_blocks,
-        attention_resolutions=[],
+        attention_resolutions=(),
         channel_mult=(1, 2, 4, 8),
         conv_kernel_size=3,
         conv_resample=True,
@@ -315,12 +308,6 @@ class Decoder(nn.Module):
         super().__init__()
         ch = int(channel_mult[-1] * model_channels)
         self.input_layer = conv_nd(dims, in_channels, ch, conv_kernel_size, padding="same")
-
-        self.middle_blocks = nn.Sequential(
-            ResBlock(ch, kernel_size=conv_kernel_size, dims=dims),
-            AttentionBlock(ch, num_heads=num_heads, dims=dims, flash_attention=flash_attention),
-            ResBlock(ch, kernel_size=conv_kernel_size, dims=dims),
-        )
 
         ds = 2 ** (len(channel_mult) - 1)
         up_blocks = []
@@ -352,7 +339,6 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         x = self.input_layer(x)
-        x = self.middle_blocks(x)
         x = self.up_blocks(x)
         x = self.output_layer(x)
         return x
