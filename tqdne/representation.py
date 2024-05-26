@@ -27,6 +27,40 @@ class Identity(Representation):
         return representation
 
 
+class Normalization(Representation):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def get_representation(self, signal):
+        return (signal - self.mean) / self.std
+
+    def invert_representation(self, representation):
+        return representation * self.std + self.mean
+
+
+class MovingAverageEnvelope(Representation):
+    def __init__(self, window_size=128, log_eps=1e-6, eps=1e-6):
+        self.window_size = window_size
+        self.log_eps = log_eps
+        self.eps = eps
+
+    def get_representation(self, signal):
+        env = np.apply_along_axis(
+            lambda x: np.convolve(x, np.ones(self.window_size) / self.window_size, mode="same"),
+            axis=-1,
+            arr=np.abs(signal),
+        )
+        scaled_signal = signal / (env + self.eps)
+        log_env = np.log(env + self.log_eps) - np.log(self.log_eps) / 2
+        return np.concatenate([scaled_signal, log_env], axis=-2)
+
+    def invert_representation(self, representation):
+        scaled_signal, log_env = np.split(representation, 2, axis=-2)
+        env = np.exp(log_env + np.log(self.log_eps) / 2)
+        return scaled_signal * (env + self.eps)
+
+
 class LogSpectrogram(Representation):
     """Represents a signal as a log-spectrogram.
 
