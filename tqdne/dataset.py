@@ -158,19 +158,55 @@ class Dataset(torch.utils.data.Dataset):
 
         signal = self.representation.get_representation(waveform)
 
-        if not self.cond:
-            return {
-                "waveform": torch.tensor(waveform, dtype=torch.float32),
-                "signal": torch.tensor(signal, dtype=torch.float32),
-            }
+        out = {
+            "waveform": torch.tensor(waveform, dtype=torch.float32),
+            "signal": torch.tensor(signal, dtype=torch.float32),
+        }
 
-        features = self.features[index]
-        features = (features - self.features_means) / self.features_stds
+        if self.cond:
+            features = self.features[index]
+            features = (features - self.features_means) / self.features_stds
+            out["cond"] = torch.tensor(features, dtype=torch.float32)
+
+        return out
+
+
+class ClassificationDataset(torch.utils.data.Dataset):
+    def __init__(self, h5_path, representaion, mag_bins, dist_bins, cut=None):
+        super().__init__()
+        self.h5_path = h5_path
+        self.cut = cut
+        self.representation = representaion
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+
+        self.file = h5py.File(h5_path, "r")
+        self.waveform = self.file["waveform"]
+
+        # compute labels
+        # labels = dist_bin * len(mag_bins) + mag_bin
+        dist = self.file["features"][:, 0]
+        mag = self.file["features"][:, 3]
+        self.labels = np.digitize(dist, dist_bins) * len(mag_bins) + np.digitize(mag, mag_bins)
+
+    def __del__(self):
+        self.file.close()
+
+    def __len__(self):
+        return len(self.waveform)
+
+    def __getitem__(self, index):
+        waveform = self.waveform[index]
+
+        if self.cut:
+            waveform = waveform[:, : self.cut]
+
+        signal = self.representation.get_representation(waveform)
 
         return {
             "waveform": torch.tensor(waveform, dtype=torch.float32),
             "signal": torch.tensor(signal, dtype=torch.float32),
-            "cond": torch.tensor(features, dtype=torch.float32),
+            "label": torch.tensor(self.labels[index], dtype=torch.long),
         }
 
 
