@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-import torch
+import torch as th
 
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.nn import append_dims
@@ -37,12 +37,12 @@ class EDM:
 
     def sampling_sigmas(self, num_steps, device=None):
         rho_inv = 1 / self.rho
-        step_idxs = torch.arange(num_steps, dtype=torch.float64, device=device)
+        step_idxs = th.arange(num_steps, dtype=th.float64, device=device)
         sigmas = (
             self.sigma_max**rho_inv
             + step_idxs / (num_steps - 1) * (self.sigma_min**rho_inv - self.sigma_max**rho_inv)
         ) ** self.rho
-        return torch.cat([sigmas, torch.zeros_like(sigmas[:1])])  # add sigma=0
+        return th.cat([sigmas, th.zeros_like(sigmas[:1])])  # add sigma=0
 
     def sigma_hat(self, sigma, num_steps):
         gamma = (
@@ -52,12 +52,12 @@ class EDM:
 
 
 class LightningEDM(pl.LightningModule):
-    """A PyTorch Lightning module of the EDM model [1].
+    """A Pyth Lightning module of the EDM model [1].
 
     Parameters
     ----------
-    net : torch.nn.Module
-        A PyTorch neural network.
+    net : th.nn.Module
+        A Pyth neural network.
     optimizer_params : dict
         A dictionary of parameters for the optimizer.
     num_sampling_steps : int, optional
@@ -79,7 +79,7 @@ class LightningEDM(pl.LightningModule):
 
     def __init__(
         self,
-        net: torch.nn.Module,
+        net: th.nn.Module,
         optimizer_params: dict,
         num_sampling_steps: int = 25,
         deterministic_sampling: bool = True,
@@ -104,7 +104,7 @@ class LightningEDM(pl.LightningModule):
         """Make a forward pass through the network with skip connection."""
         dim = sample.dim()
         sample_in = sample * append_dims(self.edm.in_scaling(sigma), dim)
-        input = sample_in if cond_sample is None else torch.cat((sample_in, cond_sample), dim=1)
+        input = sample_in if cond_sample is None else th.cat((sample_in, cond_sample), dim=1)
         noise_cond = self.edm.noise_conditioning(sigma)
         out = self.net(input, noise_cond, cond=cond)
         skip = append_dims(self.edm.skip_scaling(sigma), dim) * sample
@@ -121,9 +121,9 @@ class LightningEDM(pl.LightningModule):
             if cond_sample is not None:
                 cond_sample = self.autoencoder.encode(cond_sample)
 
-        eps = torch.randn(sample.shape[0], device=self.device)
+        eps = th.randn(sample.shape[0], device=self.device)
         sigma = self.edm.sigma(eps)
-        noise = torch.randn_like(sample) * append_dims(sigma, sample.dim())
+        noise = th.randn_like(sample) * append_dims(sigma, sample.dim())
         pred = self(sample + noise, sigma, cond_sample, cond)
 
         loss = (pred - sample) ** 2
@@ -141,7 +141,7 @@ class LightningEDM(pl.LightningModule):
         self.log("validation/loss", loss.item())
         return loss
 
-    @torch.no_grad()
+    @th.no_grad()
     def sample(self, shape, cond_sample=None, cond=None):
         """Sample using Heun's second order method."""
         if self.autoencoder:
@@ -149,18 +149,18 @@ class LightningEDM(pl.LightningModule):
                 cond_sample = self.autoencoder.encode(cond_sample)
 
             # infer latent shape
-            dummy = torch.zeros(shape, device=self.device)
+            dummy = th.zeros(shape, device=self.device)
             latent = self.autoencoder.encode(dummy)
             shape = latent.shape
 
         sigmas = self.edm.sampling_sigmas(self.num_sampling_steps, device=self.device)
-        eps = torch.randn(shape, device=self.device, dtype=torch.float64) * sigmas[0]
+        eps = th.randn(shape, device=self.device, dtype=th.float64) * sigmas[0]
         if self.deterministic_sampling:
             sample = self.sample_deterministically(eps, sigmas, cond_sample, cond)
         else:
             sample = self.sample_stochastically(eps, sigmas, cond_sample, cond)
 
-        sample = sample.to(torch.float32)
+        sample = sample.to(th.float32)
         if self.autoencoder:
             return self.autoencoder.decode(sample)
         return sample
@@ -174,7 +174,7 @@ class LightningEDM(pl.LightningModule):
                 sigma.to(self.dtype).repeat(len(sample_curr)),
                 cond_sample,
                 cond,
-            ).to(torch.float64)
+            ).to(th.float64)
             d_cur = (sample_curr - pred_curr) / sigma
             sample_next = sample_curr + d_cur * (sigma_next - sigma)
 
@@ -185,7 +185,7 @@ class LightningEDM(pl.LightningModule):
                     sigma_next.to(self.dtype).repeat(len(sample_curr)),
                     cond_sample,
                     cond,
-                ).to(torch.float64)
+                ).to(th.float64)
                 d_prime = (sample_next - pred_next) / sigma_next
                 sample_next = sample_curr + (sigma_next - sigma) * (0.5 * d_cur + 0.5 * d_prime)
 
@@ -198,7 +198,7 @@ class LightningEDM(pl.LightningModule):
 
             # increase noise temporarily
             sigma_hat = self.edm.sigma_hat(sigma, self.num_sampling_steps)
-            noise = torch.randn_like(sample_curr) * self.edm.S_noise
+            noise = th.randn_like(sample_curr) * self.edm.S_noise
             sample_hat = sample_curr + noise * (sigma_hat**2 - sigma**2) ** 0.5
 
             # euler step
@@ -207,7 +207,7 @@ class LightningEDM(pl.LightningModule):
                 sigma_hat.to(self.dtype).repeat(len(sample_hat)),
                 cond_sample,
                 cond,
-            ).to(torch.float64)
+            ).to(th.float64)
             d_cur = (sample_hat - pred_hat) / sigma_hat
             sample_next = sample_hat + d_cur * (sigma_next - sigma_hat)
 
@@ -218,13 +218,13 @@ class LightningEDM(pl.LightningModule):
                     sigma_next.to(self.dtype).repeat(len(sample_hat)),
                     cond_sample,
                     cond,
-                ).to(torch.float64)
+                ).to(th.float64)
                 d_prime = (sample_next - pred_next) / sigma_next
                 sample_next = sample_hat + (sigma_next - sigma_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
         return sample_next
 
-    @torch.no_grad()
+    @th.no_grad()
     def evaluate(self, batch):
         """Evaluate the model on a batch of data."""
         sample = batch["signal"]
@@ -233,15 +233,12 @@ class LightningEDM(pl.LightningModule):
         return self.sample(sample.shape, cond_sample, cond)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
+        lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=self.optimizer_params["max_steps"]
         )
 
         return {
             "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": lr_scheduler,
-                "interval": "step",
-            },
+            "lr_scheduler": {"scheduler": lr_scheduler, "interval": "step"},
         }

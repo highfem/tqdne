@@ -128,7 +128,7 @@ class AttentionBlock(nn.Module):
     def _forward(self, x):
         b, _, *spatial = x.shape
         qkv = self.qkv(self.norm(x)).view(b, -1, np.prod(spatial))
-        h = self.attention(qkv)
+        h = self.attention(qkv.contiguous())
         h = h.view(b, -1, *spatial)
         h = self.proj_out(h)
         return x + h

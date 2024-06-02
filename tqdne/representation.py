@@ -2,13 +2,10 @@ from abc import abstractmethod
 
 import numpy as np
 
-from tqdne.conf import Config
 from tqdne.utils import NumpyArgMixin
 
 
 class Representation(NumpyArgMixin):
-    def __init__(self, config=Config()):
-        self.config = config
 
     @abstractmethod
     def get_representation(self, signal):
@@ -81,14 +78,7 @@ class LogSpectrogram(Representation):
         Reconstruction accuracy in terms of spectral content is similar for both libraries.
     """
 
-    def __init__(
-        self,
-        stft_channels=512,
-        hop_size=None,
-        clip=1e-8,
-        log_max=3,
-        library="librosa",
-    ):
+    def __init__(self, stft_channels=512, hop_size=None, clip=1e-8, log_max=3, library="librosa"):
         self.clip = clip
         self.log_clip = np.log(clip)
         self.log_max = log_max

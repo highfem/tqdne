@@ -8,7 +8,7 @@ from pathlib import Path
 
 from torch.utils.data import DataLoader
 
-from tqdne.conf import Config
+from tqdne.config import Config
 from tqdne.consistency_model import LithningConsistencyModel
 from tqdne.dataset import Dataset
 from tqdne.metric import PowerSpectralDensity
