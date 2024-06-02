@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-import torch
+import torch as th
 from torch import nn
 from torchmetrics import Metric, MetricCollection
 
@@ -21,6 +21,10 @@ class LithningClassifier(pl.LightningModule):
         The loss function.
     metrics : list
         A list of torchmetrics.Metric instances.
+    optimizer_params : dict
+        The parameters for the optimizer.
+    output_MLP : nn.Module
+        An optional MLP to apply after the encoder and before the output layer.
     """
 
     def __init__(
@@ -29,19 +33,24 @@ class LithningClassifier(pl.LightningModule):
         output_layer: nn.Module,
         loss: nn.Module,
         metrics: list[Metric],
-        lr=1e-5,
+        optimizer_params: dict,
+        output_MLP=None,
     ):
         super().__init__()
         self.encoder = encoder
         self.output_layer = output_layer
         self.loss = loss
         self.metrics = MetricCollection(metrics)
-        self.lr = lr
+        self.optimizer_params = optimizer_params
+        self.output_MLP = output_MLP
         self.save_hyperparameters()
 
     def embed(self, x):
         h = self.encoder(x)  # batch_size x channels x ...
-        return torch.mean(h, dim=list(range(2, len(h.shape))))
+        h = th.mean(h, dim=list(range(2, len(h.shape))))
+        if self.output_MLP is not None:
+            h = self.output_MLP(h)
+        return h
 
     def forward(self, x):
         h = self.embed(x)
@@ -64,4 +73,15 @@ class LithningClassifier(pl.LightningModule):
         self.log_dict(self.metrics, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
+        lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.optimizer_params["max_steps"]
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": lr_scheduler,
+                "interval": "step",
+            },
+        }

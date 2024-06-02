@@ -104,14 +104,14 @@ class AmplitudeSpectralDensity(Plot, ABC):
 
         # Plot
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
-        fig, ax = plt.subplots(figsize=(9, 6))
+        fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(freq, pred_mean, "b", label="Predicted")
         ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
         ax.plot(freq, target_mean, "orange", label="Target")
         ax.fill_between(
             freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
         )
-        ax.set_title(self.name)
+        ax.set_title("Log-Amplitude Spectral Density")
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Log Fourier Amplitude Spectral Density")
         ax.legend()
