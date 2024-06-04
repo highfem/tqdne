@@ -32,6 +32,12 @@ def get_config():
             flash_attention=False,  # flash attention not tested (potentially faster),
             cond_emb_scale=None, 
         ),
+        # extra_loss_terms=new_dict(
+        #     signal_mean=new_dict(
+        #         weight=10.0,
+        #     )
+        # )
+
     )
 
     config.optimizer_params=new_dict(
@@ -58,27 +64,32 @@ def get_config():
     )
 
         
-    # config.data_repr = new_dict(
-    #     name="LogSpectrogram",
-    #     params=new_dict(
-    #         stft_channels = 128,
-    #         hop_size = 16,
-    #     )
-    # )
-
     config.data_repr = new_dict(
-        name="SignalWithEnvelope",
+        name="LogSpectrogram",
         params=new_dict(
-            env_function="moving_average",
-            env_function_params=new_dict(),
-            env_transform="none",
-            env_transform_params=new_dict(),
-            scaling=new_dict(
-                type="normalize",
-                scalar=True
-            ),
+            stft_channels = 128,
+            hop_size = 32,
         )
     )
+
+    # config.data_repr = new_dict(
+    #     name="SignalWithEnvelope",
+    #     params=new_dict(
+    #         env_function="moving_average",
+    #         env_function_params=new_dict(
+    #             scale=2
+    #         ),
+    #         env_transform="log",
+    #         env_transform_params=new_dict(
+    #             log_offset=1e-7
+    #         ),
+    #         scaling=new_dict(
+    #             type="standardize",
+    #             scalar=True,
+    #             dataset_stats_file="/users/abosisio/scratch/tqdne/outputs/log-env-stats_log-offset-1e-5_mov-avg-1_ds-2.pkl"
+    #         ),
+    #     )
+    # )
 
     # config.data_repr = new_dict(
     #     name="Signal",
@@ -96,6 +107,7 @@ def get_config():
     config.metrics = new_dict(
         psd=-1, 
         logenv=-1,
+        mean=-1,
     )
 
     # TODO: not sure if it is the best way to do it

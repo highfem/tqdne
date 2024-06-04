@@ -2,6 +2,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Type
+from pathlib import Path
 
 import h5py
 import PIL
@@ -10,6 +11,7 @@ import pytorch_lightning as pl
 from scipy import signal
 import torch
 import matplotlib.pyplot as plt
+
 
 from tqdne.conf import Config
 
@@ -40,20 +42,14 @@ def get_data_representation(configs):
         configs.model.net_params.dims = 1
         return SignalWithEnvelope(**repr_params)
     elif repr_name == "LogSpectrogram":
-        max_ch_mult = configs.model.net_params.channel_mult[-1]
-        def closest_divisible_by_divisor(n, divisor):
-            return round(n / divisor) * divisor
-        output_shape = (closest_divisible_by_divisor(repr_params["stft_channels"] // 2, max_ch_mult), closest_divisible_by_divisor(general_config.signal_length // repr_params["hop_size"], max_ch_mult))
         configs.model.net_params.dims = 2
-        return LogSpectrogram(**repr_params, output_shape=output_shape)
+        return LogSpectrogram(**repr_params)
     elif repr_name == "Signal":
         configs.model.net_params.dims = 1
         return Signal(**repr_params)
     else:
         raise ValueError(f"Unknown representation name: {repr_name}")
 
-
-from pathlib import Path
 
 def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     """
@@ -110,6 +106,19 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
     data_repr = get_data_representation(ml_configs)
     model.eval()
     return model, data_repr, ckpt
+
+@staticmethod
+
+
+def adjust_signal_length(original_signal_length: int, unet: pl.LightningModule, data_repr: Type[Representation], downsample_factor: int = 1):
+
+    def closest_divisible_number(n, div):
+        return round(n / div) * div
+
+    unet_max_divisor = 2 * len(unet.channel_mult) # count the number of down/up blocks in the UNet, which is the number of times the signal is downsampled (i.e., divided by 2)
+    data_repr_divisor = data_repr.adjust_length_params(unet_max_divisor) * downsample_factor
+
+    return closest_divisible_number(original_signal_length, data_repr_divisor)
 
 
 def plot_envelope(signal, envelope_function, title=None, **envelope_params):
@@ -555,7 +564,7 @@ def divide_data_by_bins(data: dict[str, np.ndarray], magnitude_bins: list[tuple]
     """
     divided_data = {}
     cond_input = data['cond']
-    data_waveforms = data['waveforms'] if 'waveforms' in data.keys() else data['representation']
+    data_waveforms = data['waveforms'] if 'waveforms' in data.keys() else data['repr']
     for i, dist_bin in enumerate(distance_bins):
         for j, mag_bin in enumerate(magnitude_bins):
             bins_indexes = (cond_input[:, 0] >= dist_bin[0]) & (cond_input[:, 0] < dist_bin[1]) & (cond_input[:, 2] >= mag_bin[0]) & (cond_input[:, 2] < mag_bin[1])
@@ -677,26 +686,3 @@ def plot_raw_waveform(raw_waveform, cond, data_representation, inverted_waveform
 def plot_raw_output_distribution(pred_raw_waveforms, test_raw_waveforms, model_data_repr):
     model_data_repr.plot_distribution(pred_raw_waveforms, test_raw_waveforms)
 
-class OnlineStats:
-    def __init__(self):
-        self.n = 0
-        self.mean = 0
-        self.M2 = 0
-
-    def update(self, x):
-        self.n += 1
-        delta = x - self.mean
-        self.mean += delta / self.n
-        delta2 = x - self.mean
-        self.M2 += delta * delta2
-
-    @property
-    def variance(self):
-        if self.n < 2:
-            return float('nan')
-        else:
-            return self.M2 / (self.n - 1)
-
-    @property
-    def std_dev(self):
-        return np.sqrt(self.variance)   

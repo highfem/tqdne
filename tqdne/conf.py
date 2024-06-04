@@ -122,7 +122,7 @@ class Config:
         # Get the first sample
         example_signal = file["waveform"][0]
         num_channels: int = example_signal.shape[0]
-        signal_length: int = (example_signal.shape[1] // 32) * 32 # is it something that one should change?
+        signal_length: int = example_signal.shape[1] 
 
     # Train Dataset statistics
     # TODO: this shouldn't be here. It should be a parameter of the class SignalWithEnvelope, that should be passed to the init method 

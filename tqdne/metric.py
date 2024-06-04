@@ -3,9 +3,10 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from scipy import signal
+from scipy.linalg import sqrtm
 
-from tqdne.conf import Config
 from tqdne.representations import to_numpy
+
 
 
 @staticmethod
@@ -25,6 +26,9 @@ def get_metrics_list(metrics_config, general_config, data_representation=None):
         elif metric == "mse":
             for c in channels:
                 metrics.append(MeanSquaredError(channel=c, data_representation=data_representation))
+        elif metric == "mean":
+            for c in channels:
+                metrics.append(SignalMeanMSE(channel=c, data_representation=data_representation))        
         else:
             raise ValueError(f"Unknown metric name: {metric}")
     return metrics    
@@ -33,49 +37,47 @@ def get_metrics_list(metrics_config, general_config, data_representation=None):
 @staticmethod
 def compute_fid(preds, target):
     """
-    Compute the Fréchet Inception Distance (FID) between two sets of samples.
+    Compute the Fréchet Inception Distance (FID) between two sets of embeddings.
 
-    Args:
-        preds (tuple or numpy.ndarray): Predicted samples. If a tuple, it should contain two elements: the mean and standard deviation of the predictions. If a numpy array, the mean and standard deviation will be computed from the array.
-        target (tuple or numpy.ndarray): Target samples. If a tuple, it should contain two elements: the mean and standard deviation of the targets. If a numpy array, the mean and standard deviation will be computed from the array.
+    Parameters:
+    preds (ndarray or tuple): The predicted embeddings. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
+    target (ndarray or tuple): The target embeddings. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
 
     Returns:
-        float: The Fréchet Inception Distance (FID) between the two sets of samples.
+    float: The computed Fréchet Inception Distance.
     """
+
     if isinstance(preds, tuple):
         preds_mean = preds[0]
-        preds_std = preds[1]
+        preds_cov = preds[1]
     else:    
         preds_mean = np.mean(preds, axis=0)
-        preds_std = np.std(preds, axis=0)
+        preds_cov = np.cov(preds, rowvar=False)
 
     if isinstance(target, tuple):
         target_mean = target[0]
-        target_std = target[1]
+        target_cov = target[1]
     else:    
         target_mean = np.mean(target, axis=0)
-        target_std = np.std(target, axis=0)
+        target_cov = np.cov(target, rowvar=False)
 
-    return compute_frechet_distance(preds_mean, preds_std, target_mean, target_std)
+    return compute_frechet_distance(preds_mean, preds_cov, target_mean, target_cov)
 
 @staticmethod
-def compute_frechet_distance(mean_1, std_1, mean_2, std_2):
+def compute_frechet_distance(mu_1, sigma_1, mu_2, sigma_2):
     """
-    Compute the Fréchet Distance between two Gaussian distributions.
+    Compute the Frechet distance between two multivariate Gaussian distributions.
 
-    Args:
-        mean_1 (numpy.ndarray): The mean of the first Gaussian distribution.
-        std_1 (numpy.ndarray): The standard deviation of the first Gaussian distribution.
-        mean_2 (numpy.ndarray): The mean of the second Gaussian distribution.
-        std_2 (numpy.ndarray): The standard deviation of the second Gaussian distribution.
+    Parameters:
+    mu_1 (ndarray): Mean of the first multivariate Gaussian distribution.
+    sigma_1 (ndarray): Covariance matrix of the first multivariate Gaussian distribution.
+    mu_2 (ndarray): Mean of the second multivariate Gaussian distribution.
+    sigma_2 (ndarray): Covariance matrix of the second multivariate Gaussian distribution.
 
     Returns:
-        float: The Fréchet Distance between the two Gaussian distributions.
+    float: The Frechet distance between the two multivariate Gaussian distributions.
     """
-    fid = np.sum((mean_1 - mean_2) ** 2, axis=-1) + np.sum(
-        std_1**2 + std_2**2 - 2 * std_1 * std_2, axis=-1
-    )
-    return fid
+    return np.sum((mu_1 - mu_2) ** 2) + np.trace(sigma_1 + sigma_2 - 2.0 * sqrtm(sigma_1.dot(sigma_2)))
 
 @staticmethod
 def compute_inception_score(preds, preds_2=None):
@@ -155,13 +157,18 @@ class Metric(ABC):
     def get_preds_and_target_stats(self):
         return self.preds_mean, self.preds_std, self.target_mean, self.target_std
 
+class SignalMeanMSE(Metric):
+    ''' Mean Squared Error between the mean of the predictions and the mean of the targets (sample-wise).'''
+    def compute(self, preds, target):
+        return ((preds.mean(axis=-1) - target.mean(axis=-1)) ** 2).mean()
 
 class MeanSquaredError(Metric):
+    ''' Mean Squared Error between the predictions and the targets (sample-wise).'''
     def compute(self, preds, target):
         return ((preds - target) ** 2).mean()
 
-
 class PowerSpectralDensity(Metric):
+    ''' Fréchet distance between the PSD of the predictions and the PSD of the targets.'''
     def __init__(self, fs, channel=0, data_representation=None, invert_representation=True):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
@@ -174,18 +181,14 @@ class PowerSpectralDensity(Metric):
         eps = 1e-7
         self.preds_mean = np.log(preds_psd + eps).mean(axis=0)
         self.target_mean = np.log(target_psd + eps).mean(axis=0)
-        self.preds_std = np.log(preds_psd + eps).std(axis=0)
-        self.target_std = np.log(target_psd + eps).std(axis=0)
+        self.preds_cov = np.cov(np.log(preds_psd + eps), rowvar=False)
+        self.target_cov = np.cov(np.log(target_psd + eps), rowvar=False)
 
-        # Frechét distance between isotropic Gaussians (Wasserstein-2)
-        fid = np.sum((self.preds_mean - self.target_mean) ** 2, axis=-1) + np.sum(
-            self.preds_std**2 + self.target_std**2 - 2 * self.preds_std * self.target_std, axis=-1
-        )
-
-        return fid
+        return compute_frechet_distance(self.preds_mean, self.preds_cov, self.target_mean, self.target_cov)
     
 
 class LogEnvelope(Metric):
+    ''' Fréchet distance between the log envelope of the predictions and the log envelope of the targets.'''
     def __init__(self, channel=0, data_representation=None, invert_representation=True):
         super().__init__(channel, data_representation, invert_representation)
 
@@ -210,20 +213,14 @@ class LogEnvelope(Metric):
         return np.log(env_function(data, **env_function_params) + eps)        
 
     def compute(self, preds, target):
-        
-        pred_logenv = self.get_log_envelope(preds)
-        target_logenv = self.get_log_envelope(target)
+        preds_logenv = self.get_log_envelope(preds)
+        targets_logenv = self.get_log_envelope(target)
 
-        self.pred_mean = pred_logenv.mean(axis=0)
-        self.target_mean = target_logenv.mean(axis=0)
-        self.pred_std = pred_logenv.std(axis=0)
-        self.target_std = target_logenv.std(axis=0)
+        self.preds_mean = preds_logenv.mean(axis=0)
+        self.targets_mean = targets_logenv.mean(axis=0)
+        self.preds_cov = np.cov(preds_logenv, rowvar=False)
+        self.targets_cov = np.cov(targets_logenv, rowvar=False)
 
-        # Frechét distance between isotropic Gaussians (Wasserstein-2)
-        fid = np.sum((self.pred_mean - self.target_mean) ** 2, axis=-1) + np.sum(
-            self.pred_std**2 + self.target_std**2 - 2 * self.pred_std * self.target_std, axis=-1
-        )
-
-        return fid
+        return compute_frechet_distance(self.preds_mean, self.preds_cov, self.targets_mean, self.targets_cov)
 
         

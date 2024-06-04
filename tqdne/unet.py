@@ -10,8 +10,6 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
-import pytorch_lightning as pl
-
 from .nn import (
     GaussianFourierProjection,
     append_dims,
@@ -581,6 +579,20 @@ class UNetModel(ModelMixin, ConfigMixin):
             h = module(h, emb)  
         return self.out(h) 
     
+    def get_signal_length(self, original_signal_length: int) -> int:
+        """
+        Calculates the adjusted signal length based on the maximum channel multiplier.
+
+        Parameters:
+            original_signal_length (int): The original length of the signal.
+
+        Returns:
+            int: The adjusted signal length.
+        """
+        max_ch_mult = max(self.channel_mult)
+        return round(original_signal_length / max_ch_mult) * max_ch_mult
+
+
 
 class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
     @register_to_config

@@ -273,7 +273,7 @@ class SampleDataset(torch.utils.data.Dataset):
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_repr, cut=None, downsample=1):
+    def __init__(self, h5_path, data_repr, pad=None, downsample=1):
         super().__init__()
         self.h5_path = h5_path
         self.representation = data_repr
@@ -288,9 +288,14 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         # Remove the third feature (log10snr)
         self.features = self.features[:, [0, 1, 3, 4]] 
 
+        # Remove samples with VS30 <= 0
+        idxs = self.features[:, 3] > 0
+        self.features = self.features[idxs]
+        self.waveforms = self.waveforms[idxs]
+
         self.n = len(self.features)
         assert self.n == len(self.waveforms)
-        self.cut = cut
+        self.pad = pad
         self.downsample = downsample
 
     def __del__(self):
@@ -309,8 +314,11 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         # cannot be scaled because BinMetric uses non-scaled features
         # features = (features - self.features_means) / (self.features_stds + 1e-6) 
 
-        if self.cut:
-            signal = signal[:, : self.cut]
+        if self.pad:
+            if self.pad < signal.shape[-1]:
+                signal = signal[:, : self.pad]
+            else:
+                signal = np.concatenate([signal, np.zeros((signal.shape[0], self.pad - signal.shape[1]))], axis=1)    
 
         if self.downsample > 1:
             signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False)   

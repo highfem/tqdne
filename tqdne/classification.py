@@ -80,50 +80,36 @@ class LightningClassifier(pl.LightningModule):
         )
         return optimizer
     
-    def get_embeddings(self, data, data_represenation=None, return_stats=False):
+    def get_embeddings(self, data, data_represenation=None):
             """
             Get the embeddings for the input data.
 
             Args:
                 data (np.ndarray or torch.utils.data.DataLoader): The input data.
                 data_represenation (Representation, optional): The data representation used by the classifier.
-                return_stats (bool, optional): Whether to return the mean and standard deviation of the embeddings instead of the embeddings themselves. Defaults to False.
 
             Returns:
                 torch.Tensor: The embeddings for the input data.
             """ 
-            print("Getting embeddings")
-            if return_stats:
-                pass
-                # Compute the mean and standard deviation of the embeddings online
-                # TODO: Delete
-                # from tqdne.utils import OnlineStats
-                # stats = OnlineStats()
-                # with torch.no_grad():
-                #     for batch in x.split(self.ml_config.optimizer_params.batch_size):
-                #         batch = batch.to(self.device)
-                #         embeddings = self.net.get_embeddings(batch)
-                #         stats.update(embeddings)
-                # return (stats.mean, stats.std)
-            else:    
-                embeddings_list = []
-                with torch.no_grad():
-                    if isinstance(data, torch.utils.data.DataLoader):
-                        for batch in tqdm(data):
-                            if data_represenation is not None:
-                                batch = data_represenation.get_representation(batch['repr'])
-                            batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                            embeddings = self.net.get_embeddings(batch) 
-                            embeddings_list.append(to_numpy(embeddings))
-                    else:  
-                        for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
-                            if data_represenation is not None:
-                                batch = data_represenation.get_representation(batch)           
-                            batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                            embeddings = self.net.get_embeddings(batch) 
-                            embeddings_list.append(to_numpy(embeddings))
-                            
-                return np.concatenate(embeddings_list, axis=0)
+
+            embeddings_list = []
+            with torch.no_grad():
+                if isinstance(data, torch.utils.data.DataLoader):
+                    for batch in tqdm(data):
+                        if data_represenation is not None:
+                            batch = data_represenation.get_representation(batch['repr'])
+                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
+                        embeddings = self.net.get_embeddings(batch) 
+                        embeddings_list.append(to_numpy(embeddings))
+                else:  
+                    for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
+                        if data_represenation is not None:
+                            batch = data_represenation.get_representation(batch)           
+                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
+                        embeddings = self.net.get_embeddings(batch) 
+                        embeddings_list.append(to_numpy(embeddings))
+                        
+            return np.concatenate(embeddings_list, axis=0)
 
     def get_probabilities(self, data, data_represenation=None):
             """

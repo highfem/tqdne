@@ -75,7 +75,7 @@ def main(argv):
     num_cores = multiprocessing.cpu_count()
     # Set the number of workers based on the number of CPU cores
     num_workers = num_cores - 1 if num_cores > 1 else 0
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
 

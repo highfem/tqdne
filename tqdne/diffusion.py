@@ -121,6 +121,21 @@ class LightningDiffusion(pl.LightningModule):
         pred = self.forward(noisy_signal, timesteps, cond_signal_batch, cond_batch)
         target = noise if self.prediction_type == "epsilon" else signal_batch
         loss = F.mse_loss(pred, target)
+        if "extra_loss_terms" in self.ml_config.model:
+            if "signal_mean" in self.ml_config.model.extra_loss_terms:
+                if self.ml_config.model.net_params.dims > 1:
+                    from warnings import warn
+                    warn("Signal mean loss term is only implemented for 1D data representations. Skipping extra loss term...")
+                else:
+                    pred_signal = pred if self.prediction_type == "epsilon" else noisy_signal - pred
+                    target_signal = signal_batch
+                    loss_weight = self.ml_config.model.extra_loss_terms.signal_mean.weight if "weight" in self.ml_config.model.extra_loss_terms.signal_mean else 1.0
+                    signal_mean_loss = F.mse_loss(torch.mean(pred_signal, dim=-1), torch.mean(target_signal, dim=-1))
+                    self.log_value(signal_mean_loss, "signal_mean_loss", train=train, prog_bar=True)
+                    loss += loss_weight * signal_mean_loss
+            else:
+                raise ValueError("Unknown extra loss term")    
+
         self.log_value(loss, "loss", train=train, prog_bar=True)
 
         return loss

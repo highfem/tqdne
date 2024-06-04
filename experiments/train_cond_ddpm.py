@@ -47,8 +47,8 @@ if __name__ == "__main__":
     #path_test = Path("/users/abosisio/scratch/tqdne/datasets/small_data_upsample_test.h5")
 
     # TODO: maybe SignalWithEnvelope should be a parameter of the model instead of the dataset
-    train_dataset = EnvelopeDataset(path_train, SignalWithEnvelope(config), cut=t) # to check
-    test_dataset = EnvelopeDataset(path_test, SignalWithEnvelope(config), cut=t) # to check
+    train_dataset = EnvelopeDataset(path_train, SignalWithEnvelope(config), pad=t) # to check
+    test_dataset = EnvelopeDataset(path_test, SignalWithEnvelope(config), pad=t) # to check
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)

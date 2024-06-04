@@ -83,7 +83,21 @@ class Representation(ABC):
 
     def get_name(self, FLAGS, name=None):
         return self._get_name(FLAGS, name)   
+    
+    def _get_num_channels(self, original_num_channels: int) -> int:
+        return original_num_channels
 
+    def get_num_channels(self, original_num_channels: int) -> int:
+        return self._get_num_channels(original_num_channels)
+    
+    def _adjust_length_params(self, unet_max_mult: int):
+        return unet_max_mult
+
+    def adjust_length_params(self, unet_max_mult: int):
+        return self._adjust_length_params(unet_max_mult)
+
+
+    # TODO: remove this method
     def update_stats(self, config: Config):
         return self._update_stats(config)
 
@@ -124,7 +138,7 @@ class Signal(Representation):
         if name:
             return name + f"_{self.__class__.__name__}"
         return f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.scaling.type}-scalar:{FLAGS.config.data_repr.params.scaling.scalar}".replace(" ", "").replace("\n", "")
-       
+
     def _get_representation(self, signal):
         if self.scaling is not None:
             return self.scaling_function(signal)
@@ -189,12 +203,18 @@ class SignalWithEnvelope(Representation):
         self.trans_function, self.inv_trans_function = self._get_trans_function_by_name(env_transform)
         self.env_transform_params = env_transform_params
         self.scaling = scaling
+        # if key dataset_stats_file exist
+        if "dataset_stats_file" in self.scaling:
+            import pickle
+            with open(self.scaling["dataset_stats_file"], 'rb') as pickle_file:
+                dataset_stats_dict = pickle.load(pickle_file)
+        else:
+            dataset_stats_dict = config.signal_statistics 
 
         if self.scaling["type"] == "normalize":
             if self.scaling["scalar"]:
                 # Signal statistics for normalization
                 # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0.
-                dataset_stats_dict = config.signal_statistics 
                 max_env_peak_per_channel = np.array([dataset_stats_dict[ch]['max'] for ch in dataset_stats_dict.keys()])[:, np.newaxis]
                 min_env_peak_per_channel = np.array([0 for _ in max_env_peak_per_channel])[:, np.newaxis]
                 max_trans_env_peak_per_channel = self.trans_function(max_env_peak_per_channel, **env_transform_params)
@@ -207,15 +227,18 @@ class SignalWithEnvelope(Representation):
 
         elif self.scaling["type"] == "standardize":
             if self.scaling["scalar"]:
-                raise NotImplementedError("Scalar standardization is not implemented yet -- missing statistics")
+                env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
+                trans_env_mean_per_channel = np.array([env_stats['mean'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
+                trans_env_std_per_channel = np.array([env_stats['std_dev'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
+                self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel) / trans_env_std_per_channel 
+                self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel + trans_env_mean_per_channel
+                
             else:
                 # Statistics of the transformed envelope (computer over a subset of the training dataset)
                 # TODO: manage. maybe remove it, as one should need to compute the statistics over the whole dataset for each envelope function and related params
-                import logging 
-                logging.warning("To be used only with hilbert envelope function and log transformation with eps=1e-5!.")
                 env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
-                trans_env_mean_per_channel = np.array([env_stats['mean'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
-                trans_env_std_per_channel = np.array([env_stats['std_dev'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+                trans_env_mean_per_channel = np.array([env_stats['mean_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+                trans_env_std_per_channel = np.array([env_stats['std_dev_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
                 # Standardize the transformed envelope 
                 self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel[:, : trans_env.shape[-1]]) / trans_env_std_per_channel[:, : trans_env.shape[-1]] 
                 self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel[:, : std_trans_env.shape[-1]] + trans_env_mean_per_channel[:, : std_trans_env.shape[-1]]
@@ -229,11 +252,14 @@ class SignalWithEnvelope(Representation):
 
     def _get_name(self, FLAGS, name=None):
         if FLAGS.config.data_repr.params.scaling.type == "none":
-            name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}".replace(" ", "").replace("\n", "")
+            name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_function_params}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}".replace(" ", "").replace("\n", "")
         else:
-            name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}-{FLAGS.config.data_repr.params.scaling.type}-scalar:{FLAGS.config.data_repr.params.scaling.scalar}".replace(" ", "").replace("\n", "")  
+            name = f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.env_function}-{FLAGS.config.data_repr.params.env_function_params}-{FLAGS.config.data_repr.params.env_transform}-{FLAGS.config.data_repr.params.env_transform_params}-{FLAGS.config.data_repr.params.scaling.type}-scalar:{FLAGS.config.data_repr.params.scaling.scalar}".replace(" ", "").replace("\n", "")  
         return name             
     
+    def _get_num_channels(self, original_num_channels):
+        return 2 * original_num_channels
+
     _trans_functions = ["log", "none"]
     _env_functions = ["hilbert", "moving_average", "moving_average_shifted", "first_order_lp", "constant_max", "constant_mean", "constant_one"]
 
@@ -270,8 +296,9 @@ class SignalWithEnvelope(Representation):
         return np.abs(hilbert(signal))
     
     @staticmethod
-    def _moving_average_env(signal, window_size=100):
-        return np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
+    def _moving_average_env(signal, window_size=100, scale=1):
+        return scale * np.apply_along_axis(lambda s: np.convolve(np.abs(s), np.ones(window_size)/window_size, mode='same'), axis=-1, arr=signal)
+ 
     
     @staticmethod
     def _moving_average_env_shifted(signal, window_size=100):
@@ -420,36 +447,12 @@ class SignalWithEnvelope(Representation):
         
 
 class LogSpectrogram(Representation):
-    """Represents a signal as a log-spectrogram.
-
-    Parameters
-    ----------
-    stft_channels : int, default=512
-        Number of channels to use in the Short-Time Fourier Transform (STFT).
-    hop_size : int, default=16
-        Hop size in the STFT.
-    clip : float, default=1e-8
-        Clip value for spectrogram before taking the logarithm.
-    log_max : float, default=3
-        Empirical maximum value for the log-spectrogram. Used to normalize the log-spectrogram.
-    output_shape : tuple, default=None
-        Shape of the returned spectrogram.
-        If given, the spectrogram will be padded or truncated to this shape.
-    internal_shape : tuple, default=None
-        Shape of the spectrogram passed to the inverse transform.
-        If not given, it will be inferred during the first call to `get_representation`.
-    library : str, default="librosa"
-        Library to use for the STFT. Currently `librosa` and `tifresi` are supported.
-    """
-
     def __init__(
         self,
         stft_channels=512,
-        hop_size=16,
+        hop_size=None,
         clip=1e-8,
         log_max=3,
-        output_shape=None,
-        internal_shape=None,
         library="librosa",
         config=Config(),
     ):
@@ -457,60 +460,58 @@ class LogSpectrogram(Representation):
         self.clip = clip
         self.log_clip = np.log(clip)
         self.log_max = log_max
-        self.output_shape = output_shape
-        self.internal_shape = internal_shape
         self.stft_channels = stft_channels
         self.hop_size = hop_size
+        self.library = library
 
-        if library == "librosa":
-            from librosa import griffinlim
-            from librosa.core import stft
+        self._set_stft_functions()
 
-            self.stft = lambda x: stft(x, n_fft=stft_channels, hop_length=hop_size)
+    def _set_stft_functions(self):
+        if self.library == "librosa":
+            from librosa import griffinlim, stft
+
+            self.stft = lambda x: stft(x, n_fft=self.stft_channels, hop_length=self.hop_size)[:, 1:] # Discard the first frame to have an even number of frames
             self.istft = lambda x: griffinlim(
-                x, hop_length=hop_size, n_fft=stft_channels, n_iter=128, random_state=0
+                x, hop_length=self.hop_size, n_fft=self.stft_channels, n_iter=128, random_state=0
             )
 
-        elif library == "tifresi":
+        elif self.library == "tifresi":
             from tifresi.stft import GaussTruncTF
 
-            stft_system = GaussTruncTF(hop_size=hop_size, stft_channels=stft_channels)
+            stft_system = GaussTruncTF(hop_size=self.hop_size, stft_channels=self.stft_channels)
             self.stft = stft_system.spectrogram
             self.istft = stft_system.invert_spectrogram
+            
+
+    def _adjust_length_params(self, unet_max_divisor: int):
+        # Adjust the number of channels to be divisible by the maximum divisor of the UNet
+        new_stft_channels = round(self.stft_channels / unet_max_divisor) * unet_max_divisor
+        if new_stft_channels != self.stft_channels:
+            self.stft_channels = new_stft_channels
+            self._set_stft_functions()
+        
+        stft_time_divisor = self.hop_size * unet_max_divisor
+        return stft_time_divisor
+
     
     def _get_name(self, FLAGS, name=None):
         if name:
             return name + f"_{self.__class__.__name__}-stft_ch:{self.stft_channels}-hop_size:{self.hop_size}"
         return f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-stft_ch:{self.stft_channels}-hop_size:{self.hop_size}".replace(" ", "").replace("\n", "")
 
-    def _adjust_to_shape(self, x, shape=None):
-        if not shape:
-            return x
-        if x.shape[1] < shape[0]:
-            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[1]), (0, 0)), mode="constant")
-        elif x.shape[1] > shape[0]:
-            x = x[:, :shape[0], :]
-        if x.shape[2] < shape[1]:
-            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[2])), mode="constant")
-        elif x.shape[2] > shape[1]:
-            x = x[:, :, :shape[1]]
-
-        return x
-
     def _get_spectrogram(self, signal):
         shape = signal.shape
         signal = signal.reshape(-1, shape[-1])  # flatten trailing dimensions
         spec = np.array([self.stft(x) for x in signal])
-        if not self.internal_shape:
-            self.internal_shape = spec.shape[1:]
-        spec = self._adjust_to_shape(spec, self.output_shape)
+        spec = spec[:, :-1]  # remove nquist frequency
+        assert spec.shape[1] % 2 == 0
         spec = spec.reshape(shape[:-1] + spec.shape[1:])  # restore trailing dimensions
         return spec
 
     def _invert_spectrogram(self, spec):
         shape = spec.shape
         spec = spec.reshape(-1, shape[-2], shape[-1])  # flatten trailing dimensions
-        spec = self._adjust_to_shape(spec, self.internal_shape)
+        spec = np.concatenate([spec, np.zeros_like(spec[:, :1])], axis=1)  # add Nyquist frequency
         signal = np.array([self.istft(x) for x in spec])
         signal = signal.reshape(shape[:-2] + signal.shape[1:])  # restore trailing dimensions
         return signal
@@ -518,7 +519,7 @@ class LogSpectrogram(Representation):
     def _get_representation(self, signal):
         spec = self._get_spectrogram(signal)
         spec = np.abs(spec)
-        log_spec = np.log(np.clip(spec, self.clip, None))  # [log_clip, log_max] # TODO: ask, why log?
+        log_spec = np.log(np.clip(spec, self.clip, None))  # [log_clip, log_max]
         norm_log_spec = (log_spec - self.log_clip) / (self.log_max - self.log_clip)  # [0, 1]
         norm_log_spec = norm_log_spec * 2 - 1  # [-1, 1]
         return norm_log_spec
@@ -527,7 +528,7 @@ class LogSpectrogram(Representation):
         norm_log_spec = (representation + 1) / 2
         log_spec = norm_log_spec * (self.log_max - self.log_clip) + self.log_clip
         spec = np.exp(log_spec)
-        return self._invert_spectrogram(spec)[..., : self.config.signal_length] # TODO: check why when calling _invert_representation alone, the signal_length is not 5472
+        return self._invert_spectrogram(spec)
     
     ## --- Plotting methods --- ##
     

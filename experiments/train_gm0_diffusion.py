@@ -38,23 +38,29 @@ flags.mark_flags_as_required(["config"])
 def main(argv):
     del argv    
 
+    # Read configuration parameters
     batch_size = FLAGS.config.optimizer_params.batch_size
+    num_cond_features = len(general_config.features_keys)
 
+    # Define the data representation
     data_representation = get_data_representation(FLAGS.config) 
     name = data_representation.get_name(FLAGS)
+    data_repr_channels = data_representation.get_num_channels(general_config.num_channels)
 
-    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), cut=general_config.signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
-    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), cut=general_config.signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
+    # Build UNet model
+    logging.info("Build network...")
+    net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, cond_features=num_cond_features, **FLAGS.config.model.net_params)
+    logging.info(FLAGS.config.model.net_params)
 
-    # Get the number of channels of the data representation
-    data_repr_channels = train_dataset[0]["repr"].shape[0]
+    # Adjust signal lenght for the UNet architecture
+    signal_length = adjust_signal_length(general_config.signal_length, net, data_representation, FLAGS.downsampling_factor)
 
-    # Get the number of conditioning features
-    num_cond_features = train_dataset[0]["cond"].shape[0]
+    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
+    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
 
-    # TODO: the model is able to generate signals of different lengths: what's fs though? the one used in training? 
+    # Update configuration parameters
     general_config.fs = general_config.fs // FLAGS.downsampling_factor
-    general_config.signal_length = general_config.signal_length // FLAGS.downsampling_factor
+    general_config.signal_length = train_dataset[0]['repr'].shape[-1]
     
     # DEBUG
     if FLAGS.debug:
@@ -63,25 +69,20 @@ def main(argv):
         test_dataset = torch.utils.data.Subset(test_dataset, range(0, 20))
         logging.info(f"Train dataset size: {len(train_dataset)}")
         logging.info(f"Test dataset size: {len(test_dataset)}")
-        batch_size = 4
-        logging.info(f"Decreasing the Batch Size to: {batch_size}")
-        logging.info("DEBUG: Not storing checkpoints")
+        batch_size = 32
+        logging.info(f"DEBUG MODE: Decreasing the Batch Size to: {batch_size}")
+        logging.info("DEBUG MODE: Not storing checkpoints")
         FLAGS.config.trainer_params.update({"enable_checkpointing": False})
-        logging.info("DEBUG: not logging to wandb")
+        logging.info("DEBUG MODE: Not logging to wandb")
         FLAGS.config.trainer_params.update({"log_to_wandb": False})
-
 
 
     # Get the number of available CPU cores
     num_cores = multiprocessing.cpu_count()
     # Set the number of workers based on the number of CPU cores
     num_workers = num_cores - 1 if num_cores > 1 else 0
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
-
-    logging.info("Build network...")
-    net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, cond_features=num_cond_features, **FLAGS.config.model.net_params)
-    logging.info(FLAGS.config.model.net_params)
 
     if FLAGS.config.name == "consistency-model":
         logging.info("Build consistency model...")
