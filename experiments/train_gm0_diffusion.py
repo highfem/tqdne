@@ -65,8 +65,8 @@ def main(argv):
     # DEBUG
     if FLAGS.debug:
         logging.info("DEBUG MODE: Use only a subset of the dataset")
-        train_dataset = torch.utils.data.Subset(train_dataset, range(0, 100))
-        test_dataset = torch.utils.data.Subset(test_dataset, range(0, 20))
+        train_dataset = torch.utils.data.Subset(train_dataset, range(0, 1000))
+        test_dataset = torch.utils.data.Subset(test_dataset, range(0, 200))
         logging.info(f"Train dataset size: {len(train_dataset)}")
         logging.info(f"Test dataset size: {len(test_dataset)}")
         batch_size = 32
@@ -154,7 +154,7 @@ def main(argv):
         model,
         train_dataloaders=train_loader,
         val_dataloaders=test_loader,
-        ckpt_path=checkpoint,
+        ckpt_path=checkpoint
     )
 
     logging.info("Done!")

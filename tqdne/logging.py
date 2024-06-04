@@ -51,6 +51,8 @@ class LogCallback(Callback):
             target = batch["repr"] 
         else:
             raise ValueError(f"Unknown task: {self.task}")
+        
+        # TODO: cache the inverted representation to speed up the evaluation
 
         # Log metrics
         if isinstance(self.metrics, list):

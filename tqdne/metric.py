@@ -46,38 +46,108 @@ def compute_fid(preds, target):
     Returns:
     float: The computed Fréchet Inception Distance.
     """
+    return frechet_distance(preds, target)
 
-    if isinstance(preds, tuple):
-        preds_mean = preds[0]
-        preds_cov = preds[1]
-    else:    
-        preds_mean = np.mean(preds, axis=0)
-        preds_cov = np.cov(preds, rowvar=False)
-
-    if isinstance(target, tuple):
-        target_mean = target[0]
-        target_cov = target[1]
-    else:    
-        target_mean = np.mean(target, axis=0)
-        target_cov = np.cov(target, rowvar=False)
-
-    return compute_frechet_distance(preds_mean, preds_cov, target_mean, target_cov)
-
+# TODO: remove
 @staticmethod
-def compute_frechet_distance(mu_1, sigma_1, mu_2, sigma_2):
+def _calculate_frechet_distance(
+    mu1,
+    sigma1,
+    mu2,
+    sigma2,
+):
     """
-    Compute the Frechet distance between two multivariate Gaussian distributions.
+    Calculate the Frechet Distance between two multivariate Gaussian distributions.
 
-    Parameters:
-    mu_1 (ndarray): Mean of the first multivariate Gaussian distribution.
-    sigma_1 (ndarray): Covariance matrix of the first multivariate Gaussian distribution.
-    mu_2 (ndarray): Mean of the second multivariate Gaussian distribution.
-    sigma_2 (ndarray): Covariance matrix of the second multivariate Gaussian distribution.
+    Args:
+        mu1 (Tensor): The mean of the first distribution.
+        sigma1 (Tensor): The covariance matrix of the first distribution.
+        mu2 (Tensor): The mean of the second distribution.
+        sigma2 (Tensor): The covariance matrix of the second distribution.
 
     Returns:
-    float: The Frechet distance between the two multivariate Gaussian distributions.
+        tensor: The Fréchet Distance between the two distributions.
     """
-    return np.sum((mu_1 - mu_2) ** 2) + np.trace(sigma_1 + sigma_2 - 2.0 * sqrtm(sigma_1.dot(sigma_2)))
+    import torch
+    # Compute the squared distance between the means
+    mean_diff = mu1 - mu2
+    mean_diff_squared = mean_diff.square().sum(dim=-1)
+
+    # Calculate the sum of the traces of both covariance matrices
+    trace_sum = sigma1.trace() + sigma2.trace()
+
+    # Compute the eigenvalues of the matrix product of the real and fake covariance matrices
+    sigma_mm = torch.matmul(sigma1, sigma2)
+    eigenvals = torch.linalg.eigvals(sigma_mm)
+
+    # Take the square root of each eigenvalue and take its sum
+    sqrt_eigenvals_sum = eigenvals.sqrt().real.sum(dim=-1)
+
+    # Check if there are large negative eigenvalues
+    if not torch.allclose(eigenvals.imag, 0, atol=1e-2):
+        m = torch.max(torch.abs(eigenvals.imag))
+        print(f"Imaginary component in eigenvalues: {m}")
+
+    # Calculate the Frechet Distance using the squared distance between the means,
+    # the sum of the traces of the covariance matrices, and the sum of the square roots of the eigenvalues
+    return mean_diff_squared + trace_sum - 2 * sqrt_eigenvals_sum
+
+@staticmethod
+def frechet_distance(x, y, eps=1e-9, torch_fun=True):
+    """
+    Compute the Frechet Distance between two sets of samples.
+
+    Parameters:
+        x (ndarray or tuple): The first set of samples. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
+        y (ndarray or tuple): The second set of samples. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
+        eps (float, optional): A small value to add to the covariance matrix. Defaults to 1e-9.
+
+    Returns:
+        float: The computed Frechet Distance.
+    """        
+
+    # TODO: remove or rearrange (it works in the sense it doesn't raise an error. Still have to test whether it works as expected.)
+    if torch_fun:
+        import torch
+        assert isinstance(x, tuple) and isinstance(y, tuple), "x and y must be tuples"
+        mu1 = torch.tensor(x[0])
+        sigma1 = torch.tensor(x[1])
+        mu2 = torch.tensor(y[0])
+        sigma2 = torch.tensor(y[1])
+        return _calculate_frechet_distance(mu1, sigma1, mu2, sigma2)
+
+    if isinstance(x, tuple):
+        mu_x = x[0]
+        cov_x = x[1]
+    else:
+        mu_x = x.mean(axis=0)
+        cov_x = np.cov(x, rowvar=False)
+
+    if isinstance(y, tuple):
+        mu_y = y[0]
+        cov_y = y[1]
+    else:        
+        mu_y = y.mean(axis=0)
+        cov_y = np.cov(y, rowvar=False)
+
+    # Product might be almost singular
+    covmean, _ = sqrtm(cov_x @ cov_y, disp=False)
+    if not np.isfinite(covmean).all() or np.all(np.abs(covmean) > 1e20):
+        msg = (
+            "fid calculation produces singular product; " "adding %s to diagonal of cov estimates"
+        ) % eps
+        print(msg)
+        offset = np.eye(cov_x.shape[0]) * eps
+        covmean = sqrtm((cov_x + offset) @ (cov_y + offset))
+
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-2):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component in covmean: %s" % m)
+        covmean = covmean.real
+
+    return np.sum((mu_x - mu_y) ** 2) + np.trace(cov_x) + np.trace(cov_y) - 2 * np.trace(covmean)
 
 @staticmethod
 def compute_inception_score(preds, preds_2=None):
@@ -184,7 +254,7 @@ class PowerSpectralDensity(Metric):
         self.preds_cov = np.cov(np.log(preds_psd + eps), rowvar=False)
         self.target_cov = np.cov(np.log(target_psd + eps), rowvar=False)
 
-        return compute_frechet_distance(self.preds_mean, self.preds_cov, self.target_mean, self.target_cov)
+        return frechet_distance((self.preds_mean, self.preds_cov), (self.target_mean, self.target_cov))
     
 
 class LogEnvelope(Metric):
@@ -221,6 +291,6 @@ class LogEnvelope(Metric):
         self.preds_cov = np.cov(preds_logenv, rowvar=False)
         self.targets_cov = np.cov(targets_logenv, rowvar=False)
 
-        return compute_frechet_distance(self.preds_mean, self.preds_cov, self.targets_mean, self.targets_cov)
+        return frechet_distance((self.preds_mean, self.preds_cov), (self.targets_mean, self.targets_cov))
 
         

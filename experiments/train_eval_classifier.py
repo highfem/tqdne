@@ -46,7 +46,7 @@ def main(argv):
     # Bins decided based on the distribution of the data (see dataset_stats.ipynb)
     mag_bins = [(4.5, 4.8), (4.8, 5), (5, 5.5), (5.5, 6.), (6., 6.5), (6.5, 9.1)]
     dist_bins = [(0, 50), (50, 100), (100, 150), (150, 200)]
-    train_dataset = SampleDataset(h5_path=Path(FLAGS.train_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins) 
+    train_dataset = SampleDataset(h5_path=Path(FLAGS.train_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins, shuffle=True) 
     test_dataset = SampleDataset(h5_path=Path(FLAGS.test_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins)
 
     # Loss function with class weights

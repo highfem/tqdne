@@ -111,10 +111,10 @@ class Config:
     )
     # TODO: check if they are correct
     conditional_params_range = {
-        "hypocentral_distance": (3.9, 180.),
+        "hypocentral_distance": (0, 180.), # in the dataset: (4, 180) [km]
         "is_shallow_crustal": (0., 1.), # 0: False, 1: True
-        "magnitude": (4.5, 9.1),
-        "vs30": (-1., 2100.)
+        "magnitude": (4.5, 10), # in the dataset: (4.5, 9.1) [Mw]
+        "vs30": (70., 2100.) # in the dataset (when removing vs30<=0): (76, 2100) [m/s]
     }
     
     # Open the h5 file
