@@ -40,19 +40,28 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
 
 
 class ResBlock(TimestepBlock):
-    """
-    A residual block that can optionally change the number of channels.
+    """A residual block that can optionally change the number of channels.
 
-    :param channels: the number of input channels.
-    :param emb_channels: the number of timestep embedding channels.
-    :param dropout: the rate of dropout.
-    :param out_channels: if specified, the number of out channels.
-    :param kernel_size: the size of the spatial convolution kernel.
-    :param use_conv: if True and out_channels is specified, use a spatial
-        convolution instead of a smaller 1x1 convolution to change the
-        channels in the skip connection.
-    :param dims: determines if the signal is 1D, 2D, or 3D.
-    :param use_checkpoint: if True, use gradient checkpointing on this module.
+    Parameters
+    ----------
+    channels : int
+        The number of input channels.
+    emb_channels : int
+        The number of timestep embedding channels.
+    dropout : float
+        The rate of dropout.
+    out_channels : int, optional
+        If specified, the number of output channels. Default is None.
+    kernel_size : int, optional
+        The size of the spatial convolution kernel. Default is 3.
+    use_conv : bool, optional
+        If True and out_channels is specified, use a spatial convolution instead
+        of a smaller 1x1 convolution to change the channels in the skip connection.
+        Default is False.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D. Default is 2.
+    use_checkpoint : bool, optional
+        If True, use gradient checkpointing on this module. Default is False.
     """
 
     def __init__(
@@ -114,12 +123,19 @@ class ResBlock(TimestepBlock):
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
     def forward(self, x, emb):
-        """
-        Apply the block to a Tensor, conditioned on a timestep embedding.
+        """Apply the block to a Tensor, conditioned on a timestep embedding.
 
-        :param x: an [N x C x ...] Tensor of features.
-        :param emb: an [N x emb_channels] Tensor of timestep embeddings.
-        :return: an [N x C x ...] Tensor of outputs.
+        Parameters
+        ----------
+        x : ndarray
+            An [N x C x ...] array of features.
+        emb : ndarray
+            An [N x emb_channels] array of timestep embeddings.
+
+        Returns
+        -------
+        ndarray
+            An [N x C x ...] array of outputs.
         """
         return checkpoint(self._forward, (x, emb), self.parameters(), self.use_checkpoint)
 
@@ -139,32 +155,45 @@ class ResBlock(TimestepBlock):
 
 
 class UNetModel(nn.Module):
-    """
-    The full UNet model with attention and timestep embedding.
+    """The full UNet model with attention and timestep embedding.
 
-    :param in_channels: channels in the input Tensor.
-    :param model_channels: base channel count for the model.
-    :param out_channels: channels in the output Tensor.
-    :param num_res_blocks: number of residual blocks per downsample.
-    :param attention_resolutions: a collection of downsample rates at which
-        attention will take place. May be a set, list, or tuple.
-        For example, if this contains 4, then at 4x downsampling, attention
-        will be used.
-    :param dropout: the dropout probability.
-    :param channel_mult: channel multiplier for each level of the UNet.
-    :param conv_kernel_size: kernel size for the spatial convolutions.
-    :param conv_resample: if True, use learned convolutions for upsampling and
-        downsampling.
-    :param dims: determines if the signal is 1D, 2D, or 3D.
-    :param num_cond_features: if specified (as an int), then this model will use
-        this number of features for conditioning.
+    Parameters
+    ----------
+    in_channels : int
+        Channels in the input Tensor.
+    model_channels : int
+        Base channel count for the model.
+    out_channels : int
+        Channels in the output Tensor.
+    num_res_blocks : int
+        Number of residual blocks per downsample.
+    attention_resolutions : collection
+        A collection of downsample rates at which attention will take place.
+        May be a set, list, or tuple.
+        For example, if this contains 4, then at 4x downsampling, attention will be used.
+    dropout : float, optional
+        The dropout probability.
+    channel_mult : tuple, optional
+        Channel multiplier for each level of the UNet.
+    conv_kernel_size : int, optional
+        Kernel size for the spatial convolutions.
+    conv_resample : bool, optional
+        If True, use learned convolutions for upsampling and downsampling.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D.
+    cond_features : int, optional
+        If specified, this model will use this number of features for conditioning.
         They will be embedded and added to timestep embeddings.
-    :param cond_emb_scale: if specified (as a float), conditional inputs will be
-        embedded with fourier embeddings of this scale.
-    :param use_checkpoint: use gradient checkpointing to reduce memory usage.
-    :param num_heads: the number of attention heads in each attention layer.
-    :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
-    :param flash_attention: use the flash attention implementation.
+    cond_emb_scale : float, optional
+        If specified, conditional inputs will be embedded with Fourier embeddings of this scale.
+    use_checkpoint : bool, optional
+        Use gradient checkpointing to reduce memory usage.
+    num_heads : int, optional
+        The number of attention heads in each attention layer.
+    use_scale_shift_norm : bool, optional
+        Use a FiLM-like conditioning mechanism.
+    flash_attention : bool, optional
+        Use the flash attention implementation.
     """
 
     def __init__(
@@ -340,10 +369,19 @@ class UNetModel(nn.Module):
         """
         Apply the model to an input batch.
 
-        :param x: an [N x C x ...] Tensor of inputs.
-        :param timesteps: a 1-D batch of timesteps.
-        :param cond: an [N x cond_features] Tensor of conditioning features.
-        :return: an [N x C x ...] Tensor of outputs.
+        Parameters
+        ----------
+        x : torch.Tensor
+            An [N x C x ...] Tensor of inputs.
+        timesteps : torch.Tensor
+            A 1-D batch of timesteps.
+        cond : torch.Tensor, optional
+            An [N x cond_features] Tensor of conditioning features.
+
+        Returns
+        -------
+        torch.Tensor
+            An [N x C x ...] Tensor of outputs.
         """
         assert (cond is not None) == (
             self.cond_features is not None

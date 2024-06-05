@@ -41,10 +41,7 @@ def frechet_distance(x: np.ndarray, y: np.ndarray, isotropic=False, eps=1e-6):
 
 
 class Metric(ABC):
-    """Abstract metric class.
-
-    All metrics should inherit from this class.
-    """
+    """Abstract metric class."""
 
     def __init__(self, channel=0):
         self.channel = channel
@@ -96,7 +93,7 @@ class AmplitudeSpectralDensity(Metric):
         return frechet_distance(pred_sd, target_sd, isotropic=self.isotropic)
 
 
-class NeuralMetric(ABC):
+class NeuralMetric(Metric):
     """Abstract neural metric class.
 
     Used to compute metrics based on the output of a pre-trained classifier.
@@ -106,29 +103,19 @@ class NeuralMetric(ABC):
         self.classifier = classifier.eval()
         self.batch_size = batch_size
 
-    @th.no_grad()
-    def __call__(self, pred, target=None):
-        pred = th.tensor(pred, dtype=self.classifier.dtype, device=self.classifier.device)
-        target = (
-            th.tensor(target, dtype=self.classifier.dtype, device=self.classifier.device)
-            if target is not None
-            else None
-        )
-
-        emb = self.classifier.embed(pred)
-        logits = self.classifier.output_layer(emb)
-        prob = th.softmax(logits, dim=-1)
-
-        return self.compute(prob.numpy(force=True), emb.numpy(force=True))
+    @property
+    def name(self):
+        return self.__class__.__name__
 
     @abstractmethod
-    def compute(self, prob, emb):
+    def __call__(self, pred, target=None):
         pass
 
 
 class FrechetInceptionDistance(NeuralMetric):
     """Frechet Inception Distance (FID) metric."""
 
+    @th.no_grad()
     def __call__(self, pred, target):
         pred = th.tensor(pred, dtype=self.classifier.dtype, device=self.classifier.device)
         target = th.tensor(target, dtype=self.classifier.dtype, device=self.classifier.device)
@@ -151,6 +138,7 @@ class FrechetInceptionDistance(NeuralMetric):
 class InceptionScore(NeuralMetric):
     """Inception Score (IS) metric."""
 
+    @th.no_grad()
     def __call__(self, pred, target=None):
         pred = th.tensor(pred, dtype=self.classifier.dtype, device=self.classifier.device)
         prob = np.concatenate(

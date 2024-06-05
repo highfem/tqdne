@@ -6,6 +6,7 @@ from tqdne.utils import NumpyArgMixin
 
 
 class Representation(NumpyArgMixin):
+    """Abstract representation class."""
 
     @abstractmethod
     def get_representation(self, signal):

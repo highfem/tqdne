@@ -13,12 +13,20 @@ class LogCallback(Callback):
     """
     Callback for logging metrics and visualizations during training and validation.
 
-    Args:
-        val_loader (torch.utils.data.DataLoader): Validation data loader.
-        representation (tqdne.representation.Representation): Representation object.
-        metrics (list): List of metrics to compute and log.
-        limit_batches (int): Limit the number of validation batches to process (-1 for all).
-        every (int): Log metrics and visualizations every `every` validation epochs.
+    Parameters
+    ----------
+    val_loader : torch.utils.data.DataLoader
+        Validation data loader.
+    representation : tqdne.representation.Representation
+        Representation object.
+    metrics : list
+        List of metrics to compute and log.
+    plots : list
+        List of plots to compute and log.
+    limit_batches : int, optional
+        Limit the number of validation batches to process (-1 for all).
+    every : int, optional
+        Log metrics and visualizations every `every` validation epochs.
     """
 
     def __init__(self, val_loader, representation, metrics, plots, limit_batches=1, every=1):
@@ -32,13 +40,6 @@ class LogCallback(Callback):
         self.every = every
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        """
-        Called when the validation epoch ends.
-
-        Args:
-            trainer (pytorch_lightning.Trainer): PyTorch Lightning trainer object.
-            pl_module (pytorch_lightning.LightningModule): PyTorch Lightning module.
-        """
         if pl_module.current_epoch % self.every != 0:
             return
 
@@ -86,19 +87,9 @@ class LogCallback(Callback):
                 warnings.warn(f"Failed to log plot: {e}")
 
     def on_train_batch_start(self, *args, **kwargs):
-        """
-        Called when the train batch starts.
-        """
         self.start_time = time.time()
 
     def on_train_batch_end(self, trainer, pl_module, *args, **kwargs):
-        """
-        Called when the train batch ends.
-
-        Args:
-            trainer (pytorch_lightning.Trainer): PyTorch Lightning trainer object.
-            pl_module (pytorch_lightning.LightningModule): PyTorch Lightning module.
-        """
         batch_time = time.time() - self.start_time
         self.total_time += batch_time
         pl_module.log("traintime", self.total_time, on_step=True, on_epoch=False)

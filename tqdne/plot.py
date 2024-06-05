@@ -12,6 +12,11 @@ class Plot(ABC):
     """Abstract plot class.
 
     All plots should inherit from this class.
+
+    Parameters
+    ----------
+    channel : int, optional
+        The channel number. Default is 0.
     """
 
     def __init__(self, channel=0):
@@ -23,6 +28,24 @@ class Plot(ABC):
         return f"{name} - Channel {self.channel}"
 
     def __call__(self, pred, target=None, cond_signal=None, cond=None):
+        """Call the plot.
+
+        Parameters
+        ----------
+        pred : numpy.ndarray
+            The predicted values.
+        target : numpy.ndarray, optional
+            The target values. Default is None.
+        cond_signal : numpy.ndarray, optional
+            The conditional signal values. Default is None.
+        cond : numpy.ndarray, optional
+            The conditional values. Default is None.
+
+        Returns
+        -------
+        pyplot.Figure
+            The figure object.
+        """
         pred = to_numpy(pred)
         target = to_numpy(target)
         cond_signal = to_numpy(cond_signal)

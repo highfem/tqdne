@@ -57,7 +57,7 @@ class LightningEDM(pl.LightningModule):
     Parameters
     ----------
     net : th.nn.Module
-        A Pyth neural network.
+        A PyTorch neural network.
     optimizer_params : dict
         A dictionary of parameters for the optimizer.
     num_sampling_steps : int, optional
@@ -67,7 +67,7 @@ class LightningEDM(pl.LightningModule):
         Stochastic sampling can be more accurate but usually requires more (e.g. 256) steps.
     edm : EDM, optional
         The EDM model parameters.
-    autoencoder : None | LithningAutoencoder, optional
+    autoencoder : None or LithningAutoencoder, optional
         If provided, the autoencoder used to obtain the latent representations.
         The diffusion model will then generate these latent representations instead of the original signal [2].
 
