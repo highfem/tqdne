@@ -14,9 +14,7 @@ class GroupNorm32(nn.GroupNorm):
 
 
 def conv_nd(dims, *args, **kwargs):
-    """
-    Create a 1D, 2D, or 3D convolution module.
-    """
+    """Create a 1D, 2D, or 3D convolution module."""
     if dims == 1:
         return nn.Conv1d(*args, **kwargs)
     elif dims == 2:
@@ -27,9 +25,7 @@ def conv_nd(dims, *args, **kwargs):
 
 
 def avg_pool_nd(dims, *args, **kwargs):
-    """
-    Create a 1D, 2D, or 3D average pooling module.
-    """
+    """Create a 1D, 2D, or 3D average pooling module."""
     if dims == 1:
         return nn.AvgPool1d(*args, **kwargs)
     elif dims == 2:
@@ -40,40 +36,42 @@ def avg_pool_nd(dims, *args, **kwargs):
 
 
 def update_ema(target_params, source_params, rate=0.99):
-    """
-    Update target parameters to be closer to those of source parameters using
-    an exponential moving average.
+    """Update target parameters to be closer to those of source parameters
+    using an exponential moving average.
 
-    :param target_params: the target parameter sequence.
-    :param source_params: the source parameter sequence.
-    :param rate: the EMA rate (closer to 1 means slower).
+    Parameters
+    ----------
+    target_params : list
+        The target parameter sequence.
+    source_params : list
+        The source parameter sequence.
+    rate : float, optional
+        The EMA rate (closer to 1 means slower).
+
+    Returns
+    -------
+    None
     """
     for targ, src in zip(target_params, source_params):
         targ.detach().mul_(rate).add_(src, alpha=1 - rate)
 
 
 def zero_module(module):
-    """
-    Zero out the parameters of a module and return it.
-    """
+    """Zero out the parameters of a module and return it."""
     for p in module.parameters():
         p.detach().zero_()
     return module
 
 
 def scale_module(module, scale):
-    """
-    Scale the parameters of a module and return it.
-    """
+    """Scale the parameters of a module and return it."""
     for p in module.parameters():
         p.detach().mul_(scale)
     return module
 
 
 def mean_flat(tensor):
-    """
-    Take the mean over all non-batch dimensions.
-    """
+    """Take the mean over all non-batch dimensions."""
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
 
@@ -93,8 +91,16 @@ def normalization(channels):
     """
     Make a standard normalization layer.
 
-    :param channels: number of input channels.
-    :return: an nn.Module for normalization.
+    Parameters
+    ----------
+    channels : int
+        Number of input channels.
+
+    Returns
+    -------
+    nn.Module
+        A module for normalization.
+
     """
     return GroupNorm32(32, channels)
 
@@ -103,11 +109,19 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.
 
-    :param timesteps: a 1-D Tensor of N indices, one per batch element.
-                      These may be fractional.
-    :param dim: the dimension of the output.
-    :param max_period: controls the minimum frequency of the embeddings.
-    :return: an [N x dim] Tensor of positional embeddings.
+    Parameters
+    ----------
+    timesteps : torch.Tensor
+        A 1-D tensor of N indices, one per batch element. These may be fractional.
+    dim : int
+        The dimension of the output.
+    max_period : int, optional
+        Controls the minimum frequency of the embeddings.
+
+    Returns
+    -------
+    torch.Tensor
+        An [N x dim] tensor of positional embeddings.
     """
     half = dim // 2
     freqs = th.exp(
@@ -125,11 +139,22 @@ def checkpoint(func, inputs, params, flag):
     Evaluate a function without caching intermediate activations, allowing for
     reduced memory at the expense of extra compute in the backward pass.
 
-    :param func: the function to evaluate.
-    :param inputs: the argument sequence to pass to `func`.
-    :param params: a sequence of parameters `func` depends on but does not
-                   explicitly take as arguments.
-    :param flag: if False, disable gradient checkpointing.
+    Parameters
+    ----------
+    func : callable
+        The function to evaluate.
+    inputs : tuple
+        The argument sequence to pass to `func`.
+    params : tuple
+        A sequence of parameters `func` depends on but does not explicitly take as arguments.
+    flag : bool
+        If False, disable gradient checkpointing.
+
+    Returns
+    -------
+    Any
+        The result of evaluating the function.
+
     """
     if flag:
         args = tuple(inputs) + tuple(params)
@@ -139,6 +164,27 @@ def checkpoint(func, inputs, params, flag):
 
 
 class CheckpointFunction(th.autograd.Function):
+    """A PyTorch autograd function that performs checkpointing during the forward and backward passes.
+
+    Parameters
+    ----------
+    run_function : function
+        The function to be run during the forward pass.
+    length : int
+        The number of input tensors.
+    *args : tensors
+        The input tensors and parameters.
+
+    Returns
+    -------
+    output_tensors : tensor
+        The output tensors from the run_function.
+
+    Notes
+    -----
+    This function is used to enable memory optimization by checkpointing intermediate tensors during the forward and backward passes.
+    """
+
     @staticmethod
     def forward(ctx, run_function, length, *args):
         ctx.run_function = run_function

@@ -30,12 +30,19 @@ class Upsample(nn.Module):
     """
     An upsampling layer with an optional convolution.
 
-    :param channels: channels in the inputs and outputs.
-    :param use_conv: a bool determining if a convolution is applied.
-    :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
-                 upsampling occurs in the inner-two dimensions.
-    :param out_channels: if specified, the number of out channels.
-    :param kernel_size: kernel size for the spatial convolutions.
+    Parameters
+    ----------
+    channels : int
+        Number of channels in the inputs and outputs.
+    use_conv : bool
+        Determines if a convolution is applied.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D. If 3D, then
+        upsampling occurs in the inner-two dimensions.
+    out_channels : int, optional
+        Number of output channels.
+    kernel_size : int, optional
+        Kernel size for the spatial convolutions.
     """
 
     def __init__(self, channels, use_conv, dims=2, out_channels=None, kernel_size=3):
@@ -60,15 +67,20 @@ class Upsample(nn.Module):
 
 
 class Downsample(nn.Module):
-    """
-    A downsampling layer with an optional convolution.
+    """A downsampling layer with an optional convolution.
 
-    :param channels: channels in the inputs and outputs.
-    :param use_conv: a bool determining if a convolution is applied.
-    :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
-                 downsampling occurs in the inner-two dimensions.
-    :param out_channels: if specified, the number of out channels.
-    :param kernel_size: kernel size for the spatial convolutions.
+    Parameters
+    ----------
+    channels : int
+        Channels in the inputs and outputs.
+    use_conv : bool
+        Determines if a convolution is applied.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D. If 3D, then downsampling occurs in the inner-two dimensions.
+    out_channels : int, optional
+        Number of output channels. If not specified, it is set to the same as the input channels.
+    kernel_size : int, optional
+        Kernel size for the spatial convolutions.
     """
 
     def __init__(self, channels, use_conv, dims=2, out_channels=None, kernel_size=3):
@@ -97,9 +109,7 @@ class Downsample(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-    """
-    An attention block that allows spatial positions to attend to each other.
-    """
+    """An attention block that allows spatial positions to attend to each other."""
 
     def __init__(
         self,
@@ -135,20 +145,24 @@ class AttentionBlock(nn.Module):
 
 
 class QKVAttention(nn.Module):
-    """
-    A module which performs QKV attention. Fallback from Blocksparse if use_fp16=False
-    """
+    """A module which performs QKV attention. Fallback from Blocksparse if use_fp16=False"""
 
     def __init__(self, n_heads):
         super().__init__()
         self.n_heads = n_heads
 
     def forward(self, qkv):
-        """
-        Apply QKV attention.
+        """Apply QKV attention.
 
-        :param qkv: an [N x (3 * H * C) x T] tensor of Qs, Ks, and Vs.
-        :return: an [N x (H * C) x T] tensor after attention.
+        Parameters
+        ----------
+        qkv : ndarray
+            An [N x (3 * H * C) x T] tensor of Qs, Ks, and Vs.
+
+        Returns
+        -------
+        ndarray
+            An [N x (H * C) x T] tensor after attention.
         """
         bs, width, length = qkv.shape
         assert width % (3 * self.n_heads) == 0
@@ -206,9 +220,7 @@ class QKVFlashAttention(nn.Module):
 
 
 class ResBlock(nn.Module):
-    """
-    A residual block similar to the one used in the UNet but without conditional embeddings and dropout.
-    """
+    """A residual block similar to the one used in the UNet but without conditional embeddings and dropout."""
 
     def __init__(self, channels, out_channels=None, kernel_size=3, dims=2):
         super().__init__()
