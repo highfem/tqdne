@@ -69,7 +69,7 @@ class Dataset(th.utils.data.Dataset):
         }
 
         if self.cond:
-            out["cond"] = th.tensor(self.cond[index], dtype=th.float32)
+            out["cond"] = th.tensor(self.cond[self.indices[index]], dtype=th.float32)
 
         return out
 
