@@ -23,12 +23,12 @@ def get_config():
         ),
         net_params=new_dict(
             dims=1, 
-            conv_kernel_size=5,  # might want to change to 5
+            conv_kernel_size=5,  
             model_channels=32,
             channel_mult=(1, 2, 4, 8),
             num_res_blocks=2,
             num_heads=4,
-            dropout=0.2,
+            dropout=0.1,
             flash_attention=False,  # flash attention not tested (potentially faster),
             cond_emb_scale=None, 
         ),
@@ -55,29 +55,30 @@ def get_config():
         accelerator="auto",
         devices="auto",
         num_nodes=1,
-        max_epochs=150,
+        max_epochs=300,
         eval_every=2,
         log_to_wandb=True,
         num_sanity_val_steps=0,
         fast_dev_run=False,
         detect_anomaly=False,
+        #profiler='simple' # TODO REMOVE!!
     )
 
         
-    config.data_repr = new_dict(
-        name="LogSpectrogram",
-        params=new_dict(
-            stft_channels = 128,
-            hop_size = 32,
-        )
-    )
+    # config.data_repr = new_dict(
+    #     name="LogSpectrogram",
+    #     params=new_dict(
+    #         stft_channels = 128,
+    #         hop_size = 32,
+    #     )
+    # )
 
     # config.data_repr = new_dict(
     #     name="SignalWithEnvelope",
     #     params=new_dict(
     #         env_function="moving_average",
     #         env_function_params=new_dict(
-    #             scale=2
+    #             scale=1.5
     #         ),
     #         env_transform="log",
     #         env_transform_params=new_dict(
@@ -91,15 +92,15 @@ def get_config():
     #     )
     # )
 
-    # config.data_repr = new_dict(
-    #     name="Signal",
-    #     params=new_dict(
-    #         scaling=new_dict(
-    #             type="normalize",
-    #             scalar=True
-    #         ),
-    #     )
-    # )
+    config.data_repr = new_dict(
+        name="Signal",
+        params=new_dict(
+            scaling=new_dict(
+                type="normalize",
+                scalar=True
+            ),
+        )
+    )
 
 
     # TODO: not sure if it is the best way to do it
@@ -115,7 +116,7 @@ def get_config():
         sample=-1,
         psd=-1,
         logenv=-1,
-        debug=-1,
+        #debug=-1,
         # bin=new_dict(
         #      num_mag_bins=4,
         #      num_dist_bins=4,

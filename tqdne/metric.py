@@ -80,20 +80,29 @@ def _calculate_frechet_distance(
     sigma_mm = torch.matmul(sigma1, sigma2)
     eigenvals = torch.linalg.eigvals(sigma_mm)
 
-    # Take the square root of each eigenvalue and take its sum
-    sqrt_eigenvals_sum = eigenvals.sqrt().real.sum(dim=-1)
-
     # Check if there are large negative eigenvalues
-    if not torch.allclose(eigenvals.imag, 0, atol=1e-2):
-        m = torch.max(torch.abs(eigenvals.imag))
-        print(f"Imaginary component in eigenvalues: {m}")
+    for _ in range(5):
+        if not torch.allclose(eigenvals.imag, torch.tensor([0.0], dtype=eigenvals.imag.dtype), atol=1e-3):
+            m = torch.max(torch.abs(eigenvals.imag))
+            print(f"Imaginary component in eigenvalues: {m}")
+
+            # Add a small value to the diagonal of the covariance matrices
+            print("FID calculation produces singular product; adding 1e-6 to diagonal of cov estimates")
+            offset = torch.eye(sigma1.shape[0]) * 1e-6
+            sigma_mm = torch.matmul(sigma1 + offset, sigma2 + offset)
+            eigenvals = torch.linalg.eigvals(sigma_mm)
+        else:
+            break    
+
+    # Take the square root of each eigenvalue and take its sum
+    sqrt_eigenvals_sum = eigenvals.sqrt().real.sum(dim=-1)    
 
     # Calculate the Frechet Distance using the squared distance between the means,
     # the sum of the traces of the covariance matrices, and the sum of the square roots of the eigenvalues
     return mean_diff_squared + trace_sum - 2 * sqrt_eigenvals_sum
 
 @staticmethod
-def frechet_distance(x, y, eps=1e-9, torch_fun=True):
+def frechet_distance(x, y, eps=1e-6, torch_fun=False):
     """
     Compute the Frechet Distance between two sets of samples.
 
@@ -132,7 +141,7 @@ def frechet_distance(x, y, eps=1e-9, torch_fun=True):
 
     # Product might be almost singular
     covmean, _ = sqrtm(cov_x @ cov_y, disp=False)
-    if not np.isfinite(covmean).all() or np.all(np.abs(covmean) > 1e20):
+    if np.any(np.abs(covmean) > 1e10):
         msg = (
             "fid calculation produces singular product; " "adding %s to diagonal of cov estimates"
         ) % eps
@@ -142,7 +151,7 @@ def frechet_distance(x, y, eps=1e-9, torch_fun=True):
 
     # Numerical error might give slight imaginary component
     if np.iscomplexobj(covmean):
-        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-2):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
             raise ValueError("Imaginary component in covmean: %s" % m)
         covmean = covmean.real

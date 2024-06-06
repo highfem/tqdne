@@ -128,6 +128,38 @@ class RandomDataset(torch.utils.data.Dataset):
             "cond_signal": torch.tensor(lowpass.reshape(1, -1), dtype=torch.float32),
         }
 
+class LowFreqDataset(torch.utils.data.Dataset):
+    def __init__(self, n = 1024 * 8, t = 5472, fs=100):
+        super().__init__()
+        self.n = n
+        self.t = t
+        self.fs = fs
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, index):
+        noise = np.random.randn(self.t)
+        time = np.arange(self.t) / self.fs
+        # random scalar parameters between -3 and 3
+        a = np.random.rand() * 6 - 3
+        b = np.random.rand() * 6 - 3
+        c = np.random.rand() * 6 - 3
+        d = np.random.rand() * 6 - 3
+
+        sin1 = a * np.sin(2 * np.pi * 0.5*(3+d) * time)
+        sin2 = b * np.sin(2 * np.pi * 2*(3+c) * time)
+        sin3 = c * np.sin(2 * np.pi * 4*(3+d+3+b) * time)
+        sin4 = d * np.sin(2 * np.pi * 7*(3+a) * time)
+
+        signal = sin1+sin2/2+sin4/4 + sin2*np.exp(-time) + sin3/(1+time) + sin4*time/5 + noise
+        cond = np.array([a, b, c, d])
+
+        return {
+            "repr": torch.tensor(signal.reshape(1, -1), dtype=torch.float32),
+            "cond": torch.tensor(cond, dtype=torch.float32),
+        }
+    
 
 class UpsamplingDataset(torch.utils.data.Dataset):
     def __init__(self, h5_path, cut=None, cond=False, config=Config()):
@@ -273,7 +305,7 @@ class SampleDataset(torch.utils.data.Dataset):
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_repr, pad=None, downsample=1):
+    def __init__(self, h5_path, data_repr, max_amplitude, pad=None, downsample=1):
         super().__init__()
         self.h5_path = h5_path
         self.representation = data_repr
@@ -293,10 +325,18 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         self.features = self.features[idxs]
         self.waveforms = self.waveforms[idxs]
 
+        # TODO: REMOVE - ONLY TO TEST MODEL WITH NO ENVELOPE
+        # Take only samples with amplitude < max_amplitude
+        if max_amplitude is not None:
+            idxs_low_amp = np.abs(self.waveforms).max(axis=(1, 2)) < max_amplitude
+            self.features = self.features[idxs_low_amp]
+            self.waveforms = self.waveforms[idxs_low_amp]
+
         self.n = len(self.features)
         assert self.n == len(self.waveforms)
         self.pad = pad
         self.downsample = downsample
+
 
     def __del__(self):
         pass

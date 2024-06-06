@@ -96,17 +96,29 @@ class SamplePlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    # TODO: handle 2d stft representation (plot heatmap)
     def plot(self, preds, target=None, cond_signal=None, cond=None):
         time = np.arange(0, preds.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, preds[0], label="Generated")
-        if not self.invert_representation:
-            ax.plot(time, target[0], alpha=0.5, label="Target")
+
+        if preds[0].ndim == 1:
+            ax.plot(time, preds[0], label="Generated")
+            if not self.invert_representation:
+                assert target[0].ndim == 1, "Target must be 1D too"
+                ax.plot(time, target[0], alpha=0.5, label="Target")
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel("Amplitude")
+        elif preds[0].ndim == 2:
+            ax.imshow(preds[0], aspect="auto", origin="lower")
+            if not self.invert_representation:
+                assert target[0].ndim == 2, "Target must be 2D too"
+                ax.imshow(target[0], aspect="auto", origin="lower", alpha=0.5)
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel("Frequency (Hz)")    
+        else:
+            raise ValueError("Invalid shape for preds (and target): must be 1D or 2D but got {preds.ndim}D")
+
         title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
         ax.set_title(title)
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Amplitude")
         ax.legend()
         fig.tight_layout()
         return fig

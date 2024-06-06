@@ -55,8 +55,9 @@ def main(argv):
     # Adjust signal lenght for the UNet architecture
     signal_length = adjust_signal_length(general_config.signal_length, net, data_representation, FLAGS.downsampling_factor)
 
-    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
-    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
+    # TODO: REMOVE max_amplitude
+    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, max_amplitude=1, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
+    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, max_amplitude=1, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
 
     # Update configuration parameters
     general_config.fs = general_config.fs // FLAGS.downsampling_factor
