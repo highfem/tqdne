@@ -55,6 +55,7 @@ def _calculate_frechet_distance(
     sigma1,
     mu2,
     sigma2,
+    eps=1e-6,
 ):
     """
     Calculate the Frechet Distance between two multivariate Gaussian distributions.
@@ -64,6 +65,7 @@ def _calculate_frechet_distance(
         sigma1 (Tensor): The covariance matrix of the first distribution.
         mu2 (Tensor): The mean of the second distribution.
         sigma2 (Tensor): The covariance matrix of the second distribution.
+        eps (float, optional): A small value to add to the diagonal of the covariance matrices. Defaults to 1e-6.
 
     Returns:
         tensor: The Fréchet Distance between the two distributions.
@@ -73,36 +75,38 @@ def _calculate_frechet_distance(
     mean_diff = mu1 - mu2
     mean_diff_squared = mean_diff.square().sum(dim=-1)
 
-    # Calculate the sum of the traces of both covariance matrices
-    trace_sum = sigma1.trace() + sigma2.trace()
-
     # Compute the eigenvalues of the matrix product of the real and fake covariance matrices
     sigma_mm = torch.matmul(sigma1, sigma2)
     eigenvals = torch.linalg.eigvals(sigma_mm)
 
     # Check if there are large negative eigenvalues
-    for _ in range(5):
+    for i in range(5):
         if not torch.allclose(eigenvals.imag, torch.tensor([0.0], dtype=eigenvals.imag.dtype), atol=1e-3):
             m = torch.max(torch.abs(eigenvals.imag))
             print(f"Imaginary component in eigenvalues: {m}")
 
             # Add a small value to the diagonal of the covariance matrices
-            print("FID calculation produces singular product; adding 1e-6 to diagonal of cov estimates")
-            offset = torch.eye(sigma1.shape[0]) * 1e-6
-            sigma_mm = torch.matmul(sigma1 + offset, sigma2 + offset)
+            print(f"FID calculation produces singular product ({i}); adding {eps} to diagonal of cov estimates")
+            offset = torch.eye(sigma1.shape[0]) * eps
+            sigma1 = sigma1 + offset
+            sigma2 = sigma2 + offset
+            sigma_mm = torch.matmul(sigma1, sigma2)
             eigenvals = torch.linalg.eigvals(sigma_mm)
         else:
             break    
 
     # Take the square root of each eigenvalue and take its sum
-    sqrt_eigenvals_sum = eigenvals.sqrt().real.sum(dim=-1)    
+    sqrt_eigenvals_sum = eigenvals.sqrt().real.sum(dim=-1)   
+
+    # Calculate the sum of the traces of both covariance matrices
+    trace_sum = sigma1.trace() + sigma2.trace() 
 
     # Calculate the Frechet Distance using the squared distance between the means,
     # the sum of the traces of the covariance matrices, and the sum of the square roots of the eigenvalues
     return mean_diff_squared + trace_sum - 2 * sqrt_eigenvals_sum
 
 @staticmethod
-def frechet_distance(x, y, eps=1e-6, torch_fun=False):
+def frechet_distance(x, y, eps=1e-6, torch_fun=True):
     """
     Compute the Frechet Distance between two sets of samples.
 
@@ -209,7 +213,6 @@ class Metric(ABC):
         self.data_representation = data_representation
         self.invert_representation = invert_representation
         assert data_representation is not None or invert_representation is False, "invert_representation can only be True if data_representation is not None"
-        self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
         self.preds_mean = None, 
         self.preds_std = None,
         self.target_mean = None,
@@ -221,9 +224,12 @@ class Metric(ABC):
         return f"{name} - Channel {self.channel}" if self.channel is not None else name
 
     def __call__(self, preds, target):
-        if self.data_representation is not None:
-            preds = self.invert_representation_fun(preds)
-            target = self.invert_representation_fun(target) 
+        if self.invert_representation:
+            preds = self.data_representation.invert_representation(preds)
+            target = to_numpy(target["waveform"]) if isinstance(target, dict) else self.data_representation.invert_representation(target)
+        else:
+            preds = to_numpy(preds)
+            target = to_numpy(target["repr"]) if isinstance(target, dict) else to_numpy(target)
         if self.channel is not None:
             preds = preds[:, self.channel]
             target = target[:, self.channel]

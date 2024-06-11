@@ -43,7 +43,7 @@ def get_config():
     config.optimizer_params=new_dict(
         learning_rate=3e-4,
         scheduler_name="cosine",
-        lr_warmup_steps=500,
+        lr_warmup_steps=400,
         batch_size=128,
         seed=0,
     )
@@ -55,7 +55,7 @@ def get_config():
         accelerator="auto",
         devices="auto",
         num_nodes=1,
-        max_epochs=300,
+        max_epochs=400,
         eval_every=2,
         log_to_wandb=True,
         num_sanity_val_steps=0,
@@ -65,20 +65,21 @@ def get_config():
     )
 
         
-    # config.data_repr = new_dict(
-    #     name="LogSpectrogram",
-    #     params=new_dict(
-    #         stft_channels = 128,
-    #         hop_size = 32,
-    #     )
-    # )
+    config.data_repr = new_dict(
+        name="LogSpectrogram",
+        params=new_dict(
+            stft_channels = 128,
+            hop_size = 64,
+            library="librosa",
+        )
+    )
 
     # config.data_repr = new_dict(
     #     name="SignalWithEnvelope",
     #     params=new_dict(
     #         env_function="moving_average",
     #         env_function_params=new_dict(
-    #             scale=1.5
+    #             scale=2
     #         ),
     #         env_transform="log",
     #         env_transform_params=new_dict(
@@ -87,20 +88,20 @@ def get_config():
     #         scaling=new_dict(
     #             type="standardize",
     #             scalar=True,
-    #             dataset_stats_file="/users/abosisio/scratch/tqdne/outputs/log-env-stats_log-offset-1e-5_mov-avg-1_ds-2.pkl"
+    #             dataset_stats_file="/users/abosisio/scratch/tqdne/outputs/log-env-stats_log-offset-1e-7_mov-avg-2_ds-2.pkl"
     #         ),
     #     )
     # )
 
-    config.data_repr = new_dict(
-        name="Signal",
-        params=new_dict(
-            scaling=new_dict(
-                type="normalize",
-                scalar=True
-            ),
-        )
-    )
+    # config.data_repr = new_dict(
+    #     name="Signal",
+    #     params=new_dict(
+    #         scaling=new_dict(
+    #             type="normalize",
+    #             scalar=True
+    #         ),
+    #     )
+    # )
 
 
     # TODO: not sure if it is the best way to do it
@@ -116,7 +117,7 @@ def get_config():
         sample=-1,
         psd=-1,
         logenv=-1,
-        #debug=-1,
+        debug=-1,
         # bin=new_dict(
         #      num_mag_bins=4,
         #      num_dist_bins=4,

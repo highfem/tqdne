@@ -6,6 +6,7 @@ import numpy as np
 
 from scipy.signal import hilbert
 import torch
+from librosa.util import fix_length
 
 from tqdne.conf import Config
 
@@ -89,12 +90,18 @@ class Representation(ABC):
 
     def get_num_channels(self, original_num_channels: int) -> int:
         return self._get_num_channels(original_num_channels)
-    
-    def _adjust_length_params(self, unet_max_mult: int):
-        return unet_max_mult
 
-    def adjust_length_params(self, unet_max_mult: int):
-        return self._adjust_length_params(unet_max_mult)
+    def _get_length_divisor(self, unet_max_divisor: int) -> int:
+        return unet_max_divisor    
+
+    def get_length_divisor(self, unet_max_divisor: int) -> int:
+        return self._get_length_divisor(unet_max_divisor)    
+    
+    def _adjust_length_params(self, unet_max_divisor: int, new_signal_length: int) -> None:
+        pass
+
+    def adjust_length_params(self, unet_max_divisor: int, new_signal_length: int) -> None:
+        return self._adjust_length_params(unet_max_divisor, new_signal_length)
 
 
     # TODO: remove this method
@@ -451,6 +458,8 @@ class LogSpectrogram(Representation):
         self,
         stft_channels=512,
         hop_size=None,
+        output_shape=None,
+        internal_shape=None,
         clip=1e-8,
         log_max=3,
         library="librosa",
@@ -461,16 +470,18 @@ class LogSpectrogram(Representation):
         self.log_clip = np.log(clip)
         self.log_max = log_max
         self.stft_channels = stft_channels
-        self.hop_size = hop_size
+        self.hop_size = hop_size 
+        self.output_shape = output_shape
+        self.internal_shape = internal_shape
         self.library = library
 
         self._set_stft_functions()
 
-    def _set_stft_functions(self):
+    def _set_stft_functions(self, new_signal_length=None):
         if self.library == "librosa":
             from librosa import griffinlim, stft
 
-            self.stft = lambda x: stft(x, n_fft=self.stft_channels, hop_length=self.hop_size)[:, 1:] # Discard the first frame to have an even number of frames
+            self.stft = lambda x: stft(x, n_fft=self.stft_channels, hop_length=self.hop_size)
             self.istft = lambda x: griffinlim(
                 x, hop_length=self.hop_size, n_fft=self.stft_channels, n_iter=128, random_state=0
             )
@@ -478,22 +489,41 @@ class LogSpectrogram(Representation):
         elif self.library == "tifresi":
             from tifresi.stft import GaussTruncTF
 
+            print("Warning: Tifresi is not yet fully supported")
             stft_system = GaussTruncTF(hop_size=self.hop_size, stft_channels=self.stft_channels)
             self.stft = stft_system.spectrogram
             self.istft = stft_system.invert_spectrogram
+
+        elif self.library == "torch":
+            from torchaudio.transforms import GriffinLim
+            self.stft = lambda x: torch.stft(torch.tensor(x), n_fft=self.stft_channels, hop_length=self.hop_size, return_complex=True).numpy()
+            griffinlim = GriffinLim(n_fft=self.stft_channels, hop_length=self.hop_size, power=1)
+            self.istft = lambda x: griffinlim(torch.tensor(x)).numpy()
+
+    @staticmethod
+    def _adjust_to_shape(x, shape=None):
+        if not shape:
+            return x
+        if x.shape[1] < shape[0]:
+            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[1]), (0, 0)), mode="constant")
+        if x.shape[2] < shape[1]:
+            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[2])), mode="constant")
+
+        return x[:, : shape[0], : shape[1]]        
+
+
+    def _get_length_divisor(self, unet_max_divisor: int):
+        stft_length_divisor = self.hop_size * unet_max_divisor
+        return stft_length_divisor
             
 
-    def _adjust_length_params(self, unet_max_divisor: int):
+    def _adjust_length_params(self, unet_max_divisor: int, new_signal_length: int):
         # Adjust the number of channels to be divisible by the maximum divisor of the UNet
         new_stft_channels = round(self.stft_channels / unet_max_divisor) * unet_max_divisor
-        if new_stft_channels != self.stft_channels:
-            self.stft_channels = new_stft_channels
-            self._set_stft_functions()
+        self.stft_channels = new_stft_channels
+        self.output_shape = (new_stft_channels // 2, new_signal_length // self.hop_size)
         
-        stft_time_divisor = self.hop_size * unet_max_divisor
-        return stft_time_divisor
 
-    
     def _get_name(self, FLAGS, name=None):
         if name:
             return name + f"_{self.__class__.__name__}-stft_ch:{self.stft_channels}-hop_size:{self.hop_size}"
@@ -503,15 +533,16 @@ class LogSpectrogram(Representation):
         shape = signal.shape
         signal = signal.reshape(-1, shape[-1])  # flatten trailing dimensions
         spec = np.array([self.stft(x) for x in signal])
-        spec = spec[:, :-1]  # remove nquist frequency
-        assert spec.shape[1] % 2 == 0
+        if not self.internal_shape:
+            self.internal_shape = spec.shape[1:]
+        spec = self._adjust_to_shape(spec, self.output_shape)
         spec = spec.reshape(shape[:-1] + spec.shape[1:])  # restore trailing dimensions
         return spec
 
     def _invert_spectrogram(self, spec):
         shape = spec.shape
         spec = spec.reshape(-1, shape[-2], shape[-1])  # flatten trailing dimensions
-        spec = np.concatenate([spec, np.zeros_like(spec[:, :1])], axis=1)  # add Nyquist frequency
+        spec = self._adjust_to_shape(spec, self.internal_shape)
         signal = np.array([self.istft(x) for x in spec])
         signal = signal.reshape(shape[:-2] + signal.shape[1:])  # restore trailing dimensions
         return signal

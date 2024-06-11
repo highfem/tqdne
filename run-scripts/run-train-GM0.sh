@@ -13,4 +13,4 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 mamba activate tqdne
 
-python experiments/train_gm0_diffusion.py --config=tqdne/configs/ddim.py  --downsampling_factor=2 --config.data_repr.params.scaling.type=none --config.optimizer_params.batch_size=160 --train_datapath=datasets/GM0-dataset-split/data_train.h5 --test_datapath=datasets/GM0-dataset-split/data_test.h5
+python experiments/train_gm0_diffusion.py --config=tqdne/configs/ddim.py --downsampling_factor=2 --config.data_repr.params.library=librosa --config.optimizer_params.batch_size=200 --train_datapath=datasets/GM0-dataset-split/data_train.h5 --test_datapath=datasets/GM0-dataset-split/data_test.h5

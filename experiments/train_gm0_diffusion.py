@@ -31,6 +31,7 @@ flags.DEFINE_string("checkpoint_file", None, "checkpoint file of the previously 
 flags.DEFINE_string("train_datapath", str(general_config.datasetdir / general_config.data_train), "path to the training data")
 flags.DEFINE_string("test_datapath", str(general_config.datasetdir / general_config.data_test), "path to the test data")
 flags.DEFINE_integer("downsampling_factor", 1, "downsampling factor")
+flags.DEFINE_integer("max_amplitude", None, "maximum amplitude of the signals in the dataset")
 flags.DEFINE_string("outdir", str(general_config.outputdir) , "out directory, i.e., place where results are written to")
 flags.mark_flags_as_required(["config"])
 
@@ -50,18 +51,18 @@ def main(argv):
     # Build UNet model
     logging.info("Build network...")
     net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, cond_features=num_cond_features, **FLAGS.config.model.net_params)
-    logging.info(FLAGS.config.model.net_params)
+    logging.info(f"Unet Params:\n  {FLAGS.config.model.net_params}")
 
     # Adjust signal lenght for the UNet architecture
     signal_length = adjust_signal_length(general_config.signal_length, net, data_representation, FLAGS.downsampling_factor)
 
     # TODO: REMOVE max_amplitude
-    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, max_amplitude=1, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
-    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, max_amplitude=1, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
+    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
+    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
 
     # Update configuration parameters
     general_config.fs = general_config.fs // FLAGS.downsampling_factor
-    general_config.signal_length = train_dataset[0]['repr'].shape[-1]
+    general_config.signal_length = data_representation.invert_representation(train_dataset[0]['repr']).shape[-1]
     
     # DEBUG
     if FLAGS.debug:
@@ -107,7 +108,7 @@ def main(argv):
             scheduler.set_timesteps(num_inference_steps=FLAGS.config.model.scheduler_params.num_inference_steps)
         else:
             raise ValueError(f"Unknown model name: {FLAGS.config.name}")    
-        logging.info(scheduler.config)
+        logging.info(f"Scheduler params: \n {scheduler.config}")
         logging.info("Build lightning module...")
 
         FLAGS.config.optimizer_params.update(

@@ -110,15 +110,16 @@ def load_model(model_ckpt_path: Path, use_ddim: bool = True, **kwargs):
 @staticmethod
 
 
-def adjust_signal_length(original_signal_length: int, unet: pl.LightningModule, data_repr: Type[Representation], downsample_factor: int = 1):
-
+def adjust_signal_length(original_signal_length: int, unet: pl.LightningModule, data_repr: Type[Representation], downsample_factor: int = 1) -> int:
     def closest_divisible_number(n, div):
         return round(n / div) * div
 
     unet_max_divisor = 2 * len(unet.channel_mult) # count the number of down/up blocks in the UNet, which is the number of times the signal is downsampled (i.e., divided by 2)
-    data_repr_divisor = data_repr.adjust_length_params(unet_max_divisor) * downsample_factor
-
-    return closest_divisible_number(original_signal_length, data_repr_divisor)
+    data_repr_divisor = data_repr.get_length_divisor(unet_max_divisor) * downsample_factor
+    adjusted_signal_length = closest_divisible_number(original_signal_length, data_repr_divisor)
+    new_signal_length = int(adjusted_signal_length / downsample_factor)
+    data_repr.adjust_length_params(unet_max_divisor=unet_max_divisor, new_signal_length=new_signal_length)
+    return adjusted_signal_length
 
 
 def plot_envelope(signal, envelope_function, title=None, **envelope_params):
@@ -157,7 +158,9 @@ def print_model_info(model, model_data_repr, ckpt):
         print(f"Downsampling factor: {downsampling_factor}. The model was trained on signals with length {general_config.signal_length // downsampling_factor}, as the sampling rate used was {general_config.fs // downsampling_factor} instead of {general_config.fs}" )
     else: 
         print(f"The model was trained on signals with length {general_config.signal_length}, as the sampling rate used was {general_config.fs}, whihc is the original sampling rate." )
-    print(f"Data representation shape: {model_data_repr.get_shape((1, general_config.num_channels, general_config.signal_length))} (batch_size, channels, signal_length)")
+    data_repr_shape = model_data_repr.get_shape((1, general_config.num_channels, general_config.signal_length))
+    data_repr_dims_names = "(batch_size, channels, signal_length)" if len(data_repr_shape) == 3 else "(batch_size, channels, freq_bins, time_frames)"
+    print(f"Data representation shape: {data_repr_shape} - {data_repr_dims_names}")
     print(f"Data representation name: {model_data_repr.__class__.__name__}")
     if hasattr(model.hparams.ml_config.data_repr, "env_function"):
         print(f"Data representation envelope function: {model.hparams.ml_config.data_repr.params.env_function}") 

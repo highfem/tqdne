@@ -305,7 +305,7 @@ class SampleDataset(torch.utils.data.Dataset):
 
 
 class EnvelopeDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_repr, max_amplitude, pad=None, downsample=1):
+    def __init__(self, h5_path, data_repr, max_amplitude=None, pad=None, downsample=1):
         super().__init__()
         self.h5_path = h5_path
         self.representation = data_repr
@@ -358,14 +358,19 @@ class EnvelopeDataset(torch.utils.data.Dataset):
             if self.pad < signal.shape[-1]:
                 signal = signal[:, : self.pad]
             else:
-                signal = np.concatenate([signal, np.zeros((signal.shape[0], self.pad - signal.shape[1]))], axis=1)    
+                # Pad at the end with the last value
+                signal = np.concatenate([signal, signal[:, -1, np.newaxis] * np.ones((signal.shape[0], self.pad - signal.shape[-1]))], axis=-1)                
 
         if self.downsample > 1:
-            signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False)   
+            #original_signal_gain = np.abs(signal).mean(axis=-1)[..., np.newaxis]
+            signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False) 
+            #downsampled_signal_gain = np.abs(signal).mean(axis=-1)[..., np.newaxis]
+            #signal = signal / downsampled_signal_gain * original_signal_gain
 
         repr = self.representation.get_representation(signal)    
 
         return {
+            "waveform": torch.tensor(signal, dtype=torch.float32),
             "repr": torch.tensor(repr, dtype=torch.float32),
             "cond": torch.tensor(features, dtype=torch.float32),
         }
@@ -381,36 +386,20 @@ class EnvelopeDataset(torch.utils.data.Dataset):
         Returns:
             ndarray: Array of waveforms based on the conditional input.
         """
+
+
         if cond_input is None:
             idxs = np.ones(self.features.shape[0], dtype=bool)
         else:
             idxs = np.where(np.all(self.features[:, None] == cond_input, axis=2))[0]
-        if self.cut is None:
-            self.cut = self.waveforms.shape[1]
-        if self.downsample > 1:
-            return np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in idxs])
-        else:
-            return np.array([self.waveforms[i, :, :self.cut] for i in idxs])
 
-    # TODO: maybe remove
-    def get_waveforms(self):
-        if self.cut is None:
-            self.cut = self.waveforms.shape[1]
-        if self.downsample > 1:
-            return np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in range(self.waveforms.shape[0])])   
-        return self.waveforms[:, :, :self.cut]
-        
+        return self[idxs]        
     
     def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
-        bins_indexes = (self.features[:, 0] >= distance_bin[0]) & (self.features[:, 0] < distance_bin[1]) & (self.features[:, 2] >= magnitude_bin[0]) & (self.features[:, 2] < magnitude_bin[1])
+        bins_idxs = (self.features[:, 0] >= distance_bin[0]) & (self.features[:, 0] < distance_bin[1]) & (self.features[:, 2] >= magnitude_bin[0]) & (self.features[:, 2] < magnitude_bin[1])
         if is_shallow_crustal is not None:
-            bins_indexes = bins_indexes & (self.features[:, 1] == is_shallow_crustal)
-        if np.any(bins_indexes):
-            if self.cut is None:
-                self.cut = self.waveforms.shape[1]
-            if self.downsample > 1:
-                return {"waveforms": np.array([scipy.signal.decimate(self.waveforms[i, :, :self.cut], self.downsample, axis=1, zero_phase=False) for i in np.where(bins_indexes)[0]]), "cond": self.features[bins_indexes]}
-            else:    
-                return {"waveforms": self.waveforms[bins_indexes, :, :self.cut], "cond": self.features[bins_indexes]}
+            bins_idxs = bins_idxs & (self.features[:, 1] == is_shallow_crustal)
+        if np.any(bins_idxs):
+            return self[bins_idxs]
         raise ValueError("No data in the given bins")
         

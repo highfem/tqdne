@@ -47,10 +47,8 @@ class LogCallback(Callback):
         pred = torch.cat(preds, dim=0)
         if self.task == "classification":
             target = batch["classes"]
-        elif self.task == "generation":
-            target = batch["repr"] 
-        else:
-            raise ValueError(f"Unknown task: {self.task}")
+        else: 
+            target = batch    
         
         # TODO: cache the inverted representation to speed up the evaluation
 

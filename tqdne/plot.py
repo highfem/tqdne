@@ -64,7 +64,6 @@ class Plot(ABC):
             assert not invert_representation or data_representation is not None, "Data representation must be provided if invert_representation is True"
             self.data_representation = data_representation
             self.invert_representation = invert_representation
-            self.invert_representation_fun = data_representation.invert_representation if invert_representation else to_numpy  
 
     @property
     def name(self):
@@ -74,8 +73,12 @@ class Plot(ABC):
         return name
 
     def __call__(self, preds, target=None, cond_signal=None, cond=None):
-        preds = self.invert_representation_fun(preds)
-        target = self.invert_representation_fun(target) 
+        if self.invert_representation:
+            preds = self.data_representation.invert_representation(preds)
+            target = to_numpy(target["waveform"]) if isinstance(target, dict) else self.data_representation.invert_representation(target)
+        else:
+            preds = to_numpy(preds)
+            target = to_numpy(target["repr"]) if isinstance(target, dict) else to_numpy(target)
         cond = to_numpy(cond)
         if self.channel is not None:
             preds = preds[:, self.channel]
@@ -97,29 +100,31 @@ class SamplePlot(Plot):
         self.fs = fs
 
     def plot(self, preds, target=None, cond_signal=None, cond=None):
-        time = np.arange(0, preds.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(9, 6))
-
+        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
         if preds[0].ndim == 1:
+            fig, ax = plt.subplots(figsize=(9, 6))
+            time = np.arange(0, preds.shape[-1]) / self.fs
             ax.plot(time, preds[0], label="Generated")
-            if not self.invert_representation:
-                assert target[0].ndim == 1, "Target must be 1D too"
-                ax.plot(time, target[0], alpha=0.5, label="Target")
+            assert target[0].ndim == 1, "Target must be 1D too"
+            ax.plot(time, target[0], alpha=0.5, label="Target")
             ax.set_xlabel("Time (s)")
             ax.set_ylabel("Amplitude")
+            ax.set_title(title)
+            ax.legend()
         elif preds[0].ndim == 2:
-            ax.imshow(preds[0], aspect="auto", origin="lower")
-            if not self.invert_representation:
-                assert target[0].ndim == 2, "Target must be 2D too"
-                ax.imshow(target[0], aspect="auto", origin="lower", alpha=0.5)
-            ax.set_xlabel("Time (s)")
-            ax.set_ylabel("Frequency (Hz)")    
+            fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+            axs[0].imshow(preds[0], aspect="auto", origin="lower", cmap="viridis")
+            axs[0].set_title("Generated")
+            assert target[0].ndim == 2, "Target must be 2D too"
+            axs[1].imshow(target[0], aspect="auto", origin="lower", cmap="viridis")
+            axs[1].set_title("Target")
+            for ax in axs:
+                ax.set_xlabel("Time bins")
+                ax.set_ylabel("Frequency bins")
+            fig.suptitle(title)    
         else:
             raise ValueError("Invalid shape for preds (and target): must be 1D or 2D but got {preds.ndim}D")
 
-        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
-        ax.set_title(title)
-        ax.legend()
         fig.tight_layout()
         return fig
 
@@ -154,8 +159,6 @@ class LogEnvelopePlot(Plot):
 
         preds_logenv = utils.get_log_envelope(preds)
         target_logenv = utils.get_log_envelope(target)
-
-        # TODO: mean or median?
 
         preds_logenv_median = np.median(preds_logenv, axis=0)
         preds_logenv_p25 = np.percentile(preds_logenv, 25, axis=0)
