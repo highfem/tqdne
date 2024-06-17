@@ -3,6 +3,7 @@ import torch as th
 
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.nn import append_dims
+from tqdne.unet import UNetModel
 
 
 class EDM:
@@ -56,8 +57,8 @@ class LightningEDM(pl.LightningModule):
 
     Parameters
     ----------
-    net : th.nn.Module
-        A PyTorch neural network.
+    unet_config : dict
+        The configuration for the U-Net model.
     optimizer_params : dict
         A dictionary of parameters for the optimizer.
     num_sampling_steps : int, optional
@@ -79,7 +80,7 @@ class LightningEDM(pl.LightningModule):
 
     def __init__(
         self,
-        net: th.nn.Module,
+        unet_config: dict,
         optimizer_params: dict,
         num_sampling_steps: int = 25,
         deterministic_sampling: bool = True,
@@ -88,17 +89,17 @@ class LightningEDM(pl.LightningModule):
     ):
         super().__init__()
 
-        self.net = net
+        self.unet = UNetModel(**unet_config)
         self.optimizer_params = optimizer_params
         self.num_sampling_steps = num_sampling_steps
         self.deterministic_sampling = deterministic_sampling
         self.edm = edm
-        self.autoencoder = autoencoder
+        self.autoencoder = autoencoder.eval() if autoencoder else None
         if self.autoencoder:
             for param in self.autoencoder.parameters():
                 param.requires_grad = False
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=("autoencoder"))
 
     def forward(self, sample, sigma, cond_sample=None, cond=None):
         """Make a forward pass through the network with skip connection."""
@@ -106,7 +107,7 @@ class LightningEDM(pl.LightningModule):
         sample_in = sample * append_dims(self.edm.in_scaling(sigma), dim)
         input = sample_in if cond_sample is None else th.cat((sample_in, cond_sample), dim=1)
         noise_cond = self.edm.noise_conditioning(sigma)
-        out = self.net(input, noise_cond, cond=cond)
+        out = self.unet(input, noise_cond, cond=cond)
         skip = append_dims(self.edm.skip_scaling(sigma), dim) * sample
         return out * append_dims(self.edm.out_scaling(sigma), dim) + skip
 

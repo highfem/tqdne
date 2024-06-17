@@ -5,6 +5,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from tqdne.config import Config
+from tqdne.ema import EMA
 from tqdne.logging import LogCallback
 
 
@@ -14,6 +15,7 @@ def get_pl_trainer(
     representation,
     metrics=None,
     plots=None,
+    ema_decay=0.0,
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
@@ -28,6 +30,8 @@ def get_pl_trainer(
 
     # learning rate logger
     callbacks = [LearningRateMonitor()]
+    if ema_decay > 0:
+        callbacks.append(EMA(decay=ema_decay))
 
     # log callback
     if metrics or plots:

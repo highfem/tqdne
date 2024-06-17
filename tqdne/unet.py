@@ -77,10 +77,7 @@ class ResBlock(TimestepBlock):
         use_checkpoint=False,
     ):
         super().__init__()
-        self.channels = channels
-        self.emb_channels = emb_channels
-        self.dropout = dropout
-        self.out_channels = out_channels or channels
+        out_channels = out_channels or channels
         self.use_conv = use_conv
         self.use_checkpoint = use_checkpoint
         self.use_scale_shift_norm = use_scale_shift_norm
@@ -88,39 +85,31 @@ class ResBlock(TimestepBlock):
         self.in_layers = nn.Sequential(
             normalization(channels),
             nn.SiLU(),
-            conv_nd(dims, channels, self.out_channels, kernel_size, padding="same"),
+            conv_nd(dims, channels, out_channels, kernel_size, padding="same"),
         )
 
         self.emb_layers = nn.Sequential(
             nn.SiLU(),
             nn.Linear(
                 emb_channels,
-                2 * self.out_channels if use_scale_shift_norm else self.out_channels,
+                2 * out_channels if use_scale_shift_norm else out_channels,
             ),
         )
         self.out_layers = nn.Sequential(
-            normalization(self.out_channels),
+            normalization(out_channels),
             nn.SiLU(),
             nn.Dropout(p=dropout),
-            zero_module(
-                conv_nd(
-                    dims,
-                    self.out_channels,
-                    self.out_channels,
-                    kernel_size,
-                    padding="same",
-                )
-            ),
+            zero_module(conv_nd(dims, out_channels, out_channels, kernel_size, padding="same")),
         )
 
-        if self.out_channels == channels:
+        if out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
             self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, kernel_size, padding="same"
+                dims, channels, out_channels, kernel_size, padding="same"
             )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
+            self.skip_connection = conv_nd(dims, channels, out_channels, 1)
 
     def forward(self, x, emb):
         """Apply the block to a Tensor, conditioned on a timestep embedding.

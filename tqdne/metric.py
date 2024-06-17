@@ -4,6 +4,8 @@ import numpy as np
 import torch as th
 from scipy import linalg
 
+from tqdne.representation import Representation
+
 from .classifier import LithningClassifier
 from .utils import to_numpy
 
@@ -97,10 +99,27 @@ class NeuralMetric(Metric):
     """Abstract neural metric class.
 
     Used to compute metrics based on the output of a pre-trained classifier.
+
+    Parameters
+    ----------
+    classifier : LithningClassifier
+        Pre-trained classifier.
+    representation : Representation, optional
+        Representation to convert the input to before passing it to the classifier.
+        Needs to be the same representation used to train the classifier.
+    batch_size : int, optional
+        Batch size used by the classifier.
+        If None, the entire input is passed to the classifier at once.
     """
 
-    def __init__(self, classifier: LithningClassifier, batch_size):
+    def __init__(
+        self,
+        classifier: LithningClassifier,
+        representation: Representation,
+        batch_size: None | int = None,
+    ):
         self.classifier = classifier.eval()
+        self.representation = representation
         self.batch_size = batch_size
 
     @property
@@ -109,16 +128,19 @@ class NeuralMetric(Metric):
 
     @abstractmethod
     def __call__(self, pred, target=None):
-        pass
+        pred = self.representation.get_representation(pred)
+        pred = th.tensor(pred, device=self.classifier.device)
+        if target is not None:
+            target = self.representation.get_representation(target)
+            target = th.tensor(target, device=self.classifier.device)
+        return self.compute(pred, target)
 
 
 class FrechetInceptionDistance(NeuralMetric):
     """Frechet Inception Distance (FID) metric."""
 
     @th.no_grad()
-    def __call__(self, pred, target):
-        pred = th.tensor(pred, dtype=self.classifier.dtype, device=self.classifier.device)
-        target = th.tensor(target, dtype=self.classifier.dtype, device=self.classifier.device)
+    def compute(self, pred, target):
         pred_emb = np.concatenate(
             [
                 self.classifier.embed(pred[i : i + self.batch_size]).numpy(force=True)
@@ -139,16 +161,10 @@ class InceptionScore(NeuralMetric):
     """Inception Score (IS) metric."""
 
     @th.no_grad()
-    def __call__(self, pred, target=None):
-        pred = th.tensor(pred, dtype=self.classifier.dtype, device=self.classifier.device)
+    def compute(self, pred, target=None):
         prob = np.concatenate(
             [
-                th.softmax(
-                    self.classifier.output_layer(
-                        self.classifier.embed(pred[i : i + self.batch_size])
-                    ),
-                    dim=-1,
-                ).numpy(force=True)
+                th.softmax(self.classifier(pred[i : i + self.batch_size]), dim=-1).numpy(force=True)
                 for i in range(0, len(pred), self.batch_size)
             ]
         )
