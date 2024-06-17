@@ -13,43 +13,45 @@ class LithningClassifier(pl.LightningModule):
 
     Parameters
     ----------
-    encoder : Encoder
-        The encoder module.
-    output_layer : nn.Module
-        The output layer projecting the latent to the number of classes.
+    encoder_config : dict
+        The configuration for the encoder.
+    num_classes : int
+        The number of classes to predict.
     loss : nn.Module
         The loss function.
     metrics : list
         A list of torchmetrics.Metric instances.
     optimizer_params : dict
         The parameters for the optimizer.
-    output_MLP : nn.Module
-        An optional MLP to apply after the encoder and before the output layer.
     """
 
     def __init__(
         self,
-        encoder: Encoder,
-        output_layer: nn.Module,
+        encoder_config: dict,
+        num_classes: int,
         loss: nn.Module,
         metrics: list[Metric],
         optimizer_params: dict,
-        output_MLP=None,
     ):
         super().__init__()
-        self.encoder = encoder
-        self.output_layer = output_layer
+        self.encoder = Encoder(**encoder_config)
+        out_channels = encoder_config["out_channels"]
+        self.output_MLP = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(out_channels, out_channels),
+            nn.SiLU(),
+            nn.Linear(out_channels, out_channels),
+        )
+        self.output_layer = nn.Linear(out_channels, num_classes)
         self.loss = loss
         self.metrics = MetricCollection(metrics)
         self.optimizer_params = optimizer_params
-        self.output_MLP = output_MLP
         self.save_hyperparameters()
 
     def embed(self, x):
         h = self.encoder(x)  # batch_size x channels x ...
         h = th.mean(h, dim=list(range(2, len(h.shape))))
-        if self.output_MLP is not None:
-            h = self.output_MLP(h)
+        h = self.output_MLP(h)
         return h
 
     def forward(self, x):

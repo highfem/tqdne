@@ -9,11 +9,10 @@ class LithningAutoencoder(pl.LightningModule):
 
     Parameters
     ----------
-    encoder : Encoder
-        The encoder module.
-        It should output a tensor with twice the number of latent channels.
-    decoder : Decoder
-        The decoder module.
+    encoder_config : dict
+        The configuration for the encoder.
+    decoder_config : dict
+        The configuration for the decoder.
     optimizer_params : dict
         The parameters for the optimizer.
     kl_weight : float, optional
@@ -21,11 +20,15 @@ class LithningAutoencoder(pl.LightningModule):
     """
 
     def __init__(
-        self, encoder: Encoder, decoder: Decoder, optimizer_params: dict, kl_weight: float = 1e-6
+        self,
+        encoder_config: dict,
+        decoder_config: dict,
+        optimizer_params: dict,
+        kl_weight: float = 1e-6,
     ):
         super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = Encoder(**encoder_config)
+        self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
         self.kl_weight = kl_weight
         self.save_hyperparameters()

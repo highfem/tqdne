@@ -9,7 +9,6 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from tqdne.blocks import Encoder
 from tqdne.classifier import LithningClassifier
 from tqdne.config import SpectrogramClassificationConfig
 from tqdne.dataset import ClassificationDataset
@@ -43,7 +42,9 @@ if __name__ == "__main__":
         cut=config.t,
         split="test",
     )
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=5, shuffle=True)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, num_workers=5, shuffle=True, drop_last=True
+    )
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
 
     # loss and metrics
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     logging.info("Set parameters...")
 
     # Parameters
-    encoder_params = {
+    encoder_config = {
         "in_channels": config.channels,
         "model_channels": 64,
         "channel_mult": (1, 2, 4, 4),
@@ -69,6 +70,7 @@ if __name__ == "__main__":
         "dims": 2,
         "conv_kernel_size": 3,
         "num_heads": 4,
+        "dropout": 0.1,
         "flash_attention": False,
     }
 
@@ -80,21 +82,13 @@ if __name__ == "__main__":
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
         "max_steps": max_steps,
-        "limit_val_batches": 10,
     }
 
     logging.info("Build lightning module...")
-    output_MLP = torch.nn.Sequential(
-        torch.nn.SiLU(),
-        torch.nn.Linear(256, 256),
-        torch.nn.SiLU(),
-        torch.nn.Linear(256, 128),
-    )
     output_layer = torch.nn.Linear(128, len(class_weights))
     classifier = LithningClassifier(
-        encoder=Encoder(**encoder_params),
-        output_MLP=output_MLP,
-        output_layer=output_layer,
+        encoder_config=encoder_config,
+        num_classes=len(class_weights),
         loss=loss,
         metrics=metrics,
         optimizer_params={"learning_rate": lr, "max_steps": max_steps},

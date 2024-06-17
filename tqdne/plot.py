@@ -19,27 +19,27 @@ class Plot(ABC):
         The channel number. Default is 0.
     """
 
-    def __init__(self, channel=0):
+    def __init__(self, channel=None):
         self.channel = channel
 
     @property
     def name(self):
         name = self.__class__.__name__
+        if self.channel is None:
+            return name
         return f"{name} - Channel {self.channel}"
 
-    def __call__(self, pred, target=None, cond_signal=None, cond=None):
+    def __call__(self, pred, target=None, cond_signal=None, **kwargs):
         """Call the plot.
 
         Parameters
         ----------
         pred : numpy.ndarray
-            The predicted values.
+            The predicted waveform.
         target : numpy.ndarray, optional
-            The target values. Default is None.
+            The target waveform. Default is None.
         cond_signal : numpy.ndarray, optional
-            The conditional signal values. Default is None.
-        cond : numpy.ndarray, optional
-            The conditional values. Default is None.
+            The conditional waveform. Default is None.
 
         Returns
         -------
@@ -49,12 +49,12 @@ class Plot(ABC):
         pred = to_numpy(pred)
         target = to_numpy(target)
         cond_signal = to_numpy(cond_signal)
-        cond = to_numpy(cond)
         if self.channel is not None:
             pred = pred[:, self.channel]
             target = target[:, self.channel]
             cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
-        return self.plot(pred, target, cond_signal, cond)
+        kwargs = {k: to_numpy(v) for k, v in kwargs.items()}
+        return self.plot(pred, target, cond_signal, **kwargs)
 
     @abstractmethod
     def plot(self, pred, target=None, cond_signal=None, cond=None):
@@ -69,7 +69,7 @@ class SamplePlot(Plot):
         self.plot_target = plot_target
         self.fs = fs
 
-    def plot(self, pred, target=None, cond_signal=None, cond=None):
+    def plot(self, pred, target=None, *args, **kwargs):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(18, 6))
         ax.plot(time, pred[0], "b", label="Predicted")
@@ -90,7 +90,7 @@ class UpsamplingSamplePlot(Plot):
         super().__init__(channel)
         self.fs = fs
 
-    def plot(self, pred, target, cond_signal, cond=None):
+    def plot(self, pred, target, cond_signal, *args, **kwargs):
         time = np.arange(0, pred.shape[-1]) / self.fs
         fig, ax = plt.subplots(figsize=(18, 6))
         ax.plot(time, cond_signal[0], "g", label="Input")
@@ -115,7 +115,7 @@ class AmplitudeSpectralDensity(Plot, ABC):
         log_sd = np.log(np.clip(sd, self.log_eps, None))
         return log_sd
 
-    def plot(self, pred, target, cond_signal=None, cond=None):
+    def plot(self, pred, target, *args, **kwargs):
         pred_sd = self.spectral_density(pred)
         target_sd = self.spectral_density(target)
 
@@ -145,61 +145,34 @@ class AmplitudeSpectralDensity(Plot, ABC):
 class BinPlot(Plot):
     """Creates a bin plot for a given metric."""
 
-    def __init__(
-        self,
-        metric: Metric,
-        num_mag_bins=10,
-        num_dist_bins=10,
-        min_mag=4.5,
-        max_mag=9.5,
-        min_dist=0,
-        max_dist=180,
-    ):
+    def __init__(self, metric: Metric, mag_bins, dist_bins, fmt=".2f"):
         super().__init__()
         self.metric = metric
-        self.num_mag_bins = num_mag_bins
-        self.num_dist_bins = num_dist_bins
-        self.min_mag = min_mag
-        self.max_mag = max_mag
-        self.min_dist = min_dist
-        self.max_dist = max_dist
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+        self.fmt = fmt
 
     @property
     def name(self):
         return f"Bin {self.metric.name}"
 
-    def plot(self, pred, target, cond_signal, cond):
-        # extract the magnitude and distance (this is specific to the dataset)
-        mags = cond[:, 3]
-        dists = cond[:, 0]
-
-        # create the bins
-        mag_bins = np.linspace(self.min_mag, self.max_mag, self.num_mag_bins + 1)
-        dist_bins = np.linspace(self.min_dist, self.max_dist, self.num_dist_bins + 1)
-        results = np.zeros((self.num_dist_bins, self.num_mag_bins))
-
-        # fill the bins
-        for i in range(self.num_mag_bins):
-            for j in range(self.num_dist_bins):
-                mask = (mags >= mag_bins[i]) & (mags < mag_bins[i + 1])
-                mask &= (dists >= dist_bins[j]) & (dists < dist_bins[j + 1])
-                results[i, j] = self.metric(pred[mask], target[mask])
+    def plot(self, pred, target, cond_signal, mag, dist):
+        # compute metrics for each bin
+        results = []
+        for i in range(len(self.dist_bins) - 1):
+            results.append([])
+            for j in range(len(self.mag_bins) - 1):
+                mask = (dist >= self.dist_bins[i]) & (dist < self.dist_bins[i + 1])
+                mask &= (mag >= self.mag_bins[j]) & (mag < self.mag_bins[j + 1])
+                results[i].append(self.metric(pred[mask], target[mask]))
 
         # Plotting the heatmap using seaborn
-        mag_bins_center = (mag_bins[1:] + mag_bins[:-1]) / 2
-        dist_bins_center = (dist_bins[1:] + dist_bins[:-1]) / 2
-        fig, ax = plt.subplots(figsize=(8, 8))
-        sns.heatmap(
-            results,
-            annot=True,
-            fmt=".1f",
-            cmap="viridis",
-            xticklabels=[f"{mag:.1f}" for mag in mag_bins_center],
-            yticklabels=[f"{dist:.0f}" for dist in dist_bins_center],
-        )
-
-        ax.set_xlabel("Magnitude Bin")
-        ax.set_ylabel("Distance Bin (in km)")
-        ax.set_title(self.name)
-        fig.tight_layout()
-        return fig
+        plot = sns.heatmap(np.array(results), annot=True, fmt=self.fmt, cmap="viridis")
+        plot.set_xticks(np.arange(len(self.mag_bins)))
+        plot.set_xticklabels(self.mag_bins)
+        plot.set_yticks(np.arange(len(self.dist_bins)))
+        plot.set_yticklabels(self.dist_bins)
+        plot.invert_yaxis()
+        plot.set_xlabel("Magnitude bin $M_w$")
+        plot.set_ylabel("Distance bin [km]")
+        return plot

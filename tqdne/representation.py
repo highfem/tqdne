@@ -1,6 +1,7 @@
 from abc import abstractmethod
 
 import numpy as np
+from pathos.multiprocessing import Pool
 
 from tqdne.utils import NumpyArgMixin
 
@@ -9,7 +10,7 @@ class Representation(NumpyArgMixin):
     """Abstract representation class."""
 
     @abstractmethod
-    def get_representation(self, signal):
+    def get_representation(self, waveform):
         pass
 
     @abstractmethod
@@ -18,8 +19,8 @@ class Representation(NumpyArgMixin):
 
 
 class Identity(Representation):
-    def get_representation(self, signal):
-        return signal
+    def get_representation(self, waveform):
+        return waveform
 
     def invert_representation(self, representation):
         return representation
@@ -30,8 +31,8 @@ class Normalization(Representation):
         self.mean = mean
         self.std = std
 
-    def get_representation(self, signal):
-        return (signal - self.mean) / self.std
+    def get_representation(self, waveform):
+        return (waveform - self.mean) / self.std
 
     def invert_representation(self, representation):
         return representation * self.std + self.mean
@@ -43,24 +44,24 @@ class MovingAverageEnvelope(Representation):
         self.log_eps = log_eps
         self.eps = eps
 
-    def get_representation(self, signal):
+    def get_representation(self, waveform):
         env = np.apply_along_axis(
             lambda x: np.convolve(x, np.ones(self.window_size) / self.window_size, mode="same"),
             axis=-1,
-            arr=np.abs(signal),
+            arr=np.abs(waveform),
         )
-        scaled_signal = signal / (env + self.eps)
+        scaled_waveform = waveform / (env + self.eps)
         log_env = np.log(env + self.log_eps) - np.log(self.log_eps) / 2
-        return np.concatenate([scaled_signal, log_env], axis=-2)
+        return np.concatenate([scaled_waveform, log_env], axis=-2)
 
     def invert_representation(self, representation):
-        scaled_signal, log_env = np.split(representation, 2, axis=-2)
+        scaled_waveform, log_env = np.split(representation, 2, axis=-2)
         env = np.exp(log_env + np.log(self.log_eps) / 2)
-        return scaled_signal * (env + self.eps)
+        return scaled_waveform * (env + self.eps)
 
 
 class LogSpectrogram(Representation):
-    """Represents a signal as a log-spectrogram.
+    """Represents a waveform as a log-spectrogram.
 
     Parameters
     ----------
@@ -77,9 +78,19 @@ class LogSpectrogram(Representation):
         Library to use for the STFT. Currently `librosa` and `tifresi` are supported.
         `tifresi` is faster and more accurate, but installing the package is cumbersome.
         Reconstruction accuracy in terms of spectral content is similar for both libraries.
+    multiprocessing : bool, default=True
+        Whether to use multiprocessing for computing the STFT and iSTFT.
     """
 
-    def __init__(self, stft_channels=512, hop_size=None, clip=1e-8, log_max=3, library="librosa"):
+    def __init__(
+        self,
+        stft_channels=512,
+        hop_size=None,
+        clip=1e-8,
+        log_max=3,
+        library="librosa",
+        multiprocessing=True,
+    ):
         self.clip = clip
         self.log_clip = np.log(clip)
         self.log_max = log_max
@@ -102,10 +113,25 @@ class LogSpectrogram(Representation):
             self.stft = stft_system.spectrogram
             self.istft = stft_system.invert_spectrogram
 
-    def get_spectrogram(self, signal):
-        shape = signal.shape
-        signal = signal.reshape(-1, shape[-1])  # flatten trailing dimensions
-        spec = np.array([self.stft(x) for x in signal])
+        if multiprocessing:
+            self.pool = Pool()
+
+    def __del__(self):
+        if hasattr(self, "pool"):
+            self.pool.close()
+
+    def disable_multiprocessing(self):
+        if hasattr(self, "pool"):
+            self.pool.close()
+            del self.pool
+
+    def get_spectrogram(self, waveform):
+        shape = waveform.shape
+        waveform = waveform.reshape(-1, shape[-1])  # flatten trailing dimensions
+        if hasattr(self, "pool"):
+            spec = np.array(self.pool.map(self.stft, waveform))
+        else:
+            spec = np.array([self.stft(x) for x in waveform])
         spec = spec[:, :-1]  # remove nquist frequency
         assert spec.shape[1] % 2 == 0
         spec = spec.reshape(shape[:-1] + spec.shape[1:])  # restore trailing dimensions
@@ -115,12 +141,15 @@ class LogSpectrogram(Representation):
         shape = spec.shape
         spec = spec.reshape(-1, shape[-2], shape[-1])  # flatten trailing dimensions
         spec = np.concatenate([spec, np.zeros_like(spec[:, :1])], axis=1)  # add nquist frequency
-        signal = np.array([self.istft(x) for x in spec])
-        signal = signal.reshape(shape[:-2] + signal.shape[1:])  # restore trailing dimensions
-        return signal
+        if hasattr(self, "pool"):
+            waveform = np.array(self.pool.map(self.istft, spec))
+        else:
+            waveform = np.array([self.istft(x) for x in spec])
+        waveform = waveform.reshape(shape[:-2] + waveform.shape[1:])  # restore trailing dimensions
+        return waveform
 
-    def get_representation(self, signal):
-        spec = self.get_spectrogram(signal)
+    def get_representation(self, waveform):
+        spec = self.get_spectrogram(waveform)
         spec = np.abs(spec)
         log_spec = np.log(np.clip(spec, self.clip, None))  # [log_clip, log_max]
         norm_log_spec = (log_spec - self.log_clip) / (self.log_max - self.log_clip)  # [0, 1]

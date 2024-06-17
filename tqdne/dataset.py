@@ -10,7 +10,7 @@ class Dataset(th.utils.data.Dataset):
     Parameters:
     -----------
     h5_path : Path
-        Path to the HDF5 file.
+        Path to the dataset HDF5 file.
     representaion : Representation
         Representation object to transform the waveforms.
     cut : int, optional
@@ -21,14 +21,13 @@ class Dataset(th.utils.data.Dataset):
         The split of the dataset. One of "train", "test", or "full".
     """
 
-    def __init__(self, h5_path, representaion, cut=None, cond=False, split="train"):
+    def __init__(self, datapath, representaion, cut=None, cond=False, split="train"):
         super().__init__()
-        self.h5_path = h5_path
         self.representation = representaion
         self.cut = cut
         self.cond = cond
 
-        self.file = File(h5_path, "r")
+        self.file = File(datapath, "r")
         self.waveforms = self.file["waveforms"]
         self.cond = self.file["normalized_features"] if cond else None
 

@@ -220,9 +220,9 @@ class QKVFlashAttention(nn.Module):
 
 
 class ResBlock(nn.Module):
-    """A residual block similar to the one used in the UNet but without conditional embeddings and dropout."""
+    """A residual block similar to the one used in the UNet but without conditional embeddings."""
 
-    def __init__(self, channels, out_channels=None, kernel_size=3, dims=2):
+    def __init__(self, channels, dropout, out_channels=None, kernel_size=3, dims=2):
         super().__init__()
         out_channels = out_channels or channels
 
@@ -234,6 +234,7 @@ class ResBlock(nn.Module):
         self.out_layers = nn.Sequential(
             normalization(out_channels),
             nn.SiLU(),
+            nn.Dropout(p=dropout),
             zero_module(conv_nd(dims, out_channels, out_channels, kernel_size, padding="same")),
         )
 
@@ -249,13 +250,46 @@ class ResBlock(nn.Module):
 
 
 class Encoder(nn.Module):
+    """The Encoder model with attention and residual blocks.
+
+    Parameters
+    ----------
+    in_channels : int
+        Channels in the input Tensor.
+    model_channels : int
+        Base channel count for the model.
+    out_channels : int
+        Channels in the output Tensor.
+    num_res_blocks : int
+        Number of residual blocks per downsample.
+    attention_resolutions : collection, optional
+        A collection of downsample rates at which attention will take place.
+        May be a set, list, or tuple.
+        For example, if this contains 8, then at 8x downsampling, attention will be used.
+    dropout : float, optional
+        The dropout probability.
+    channel_mult : tuple, optional
+        Channel multiplier for each level of the Encoder.
+    conv_kernel_size : int, optional
+        Kernel size for the spatial convolutions.
+    conv_resample : bool, optional
+        If True, use learned convolutions for upsampling and downsampling.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D.
+    num_heads : int, optional
+        The number of attention heads in each attention layer.
+    flash_attention : bool, optional
+        Use the flash attention implementation.
+    """
+
     def __init__(
         self,
         in_channels,
         model_channels,
         out_channels,
         num_res_blocks,
-        attention_resolutions=(),
+        attention_resolutions=(8, 16, 32),
+        dropout=0,
         channel_mult=(1, 2, 4, 8),
         conv_kernel_size=3,
         conv_resample=True,
@@ -274,6 +308,7 @@ class Encoder(nn.Module):
                 down_blocks.append(
                     ResBlock(
                         ch,
+                        dropout,
                         out_channels=int(mult * model_channels),
                         kernel_size=conv_kernel_size,
                         dims=dims,
@@ -303,13 +338,46 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """The Decoder model with attention and residual blocks.
+
+    Parameters
+    ----------
+    in_channels : int
+        Channels in the input Tensor.
+    model_channels : int
+        Base channel count for the model.
+    out_channels : int
+        Channels in the output Tensor.
+    num_res_blocks : int
+        Number of residual blocks per upsample.
+    attention_resolutions : collection, optional
+        A collection of upsample rates at which attention will take place.
+        May be a set, list, or tuple.
+        For example, if this contains 8, then at 8x upsampling, attention will be used.
+    dropout : float, optional
+        The dropout probability.
+    channel_mult : tuple, optional
+        Channel multiplier for each level of the Decoder.
+    conv_kernel_size : int, optional
+        Kernel size for the spatial convolutions.
+    conv_resample : bool, optional
+        If True, use learned convolutions for upsampling and downsampling.
+    dims : int, optional
+        Determines if the signal is 1D, 2D, or 3D.
+    num_heads : int, optional
+        The number of attention heads in each attention layer.
+    flash_attention : bool, optional
+        Use the flash attention implementation.
+    """
+    
     def __init__(
         self,
         in_channels,
         model_channels,
         out_channels,
         num_res_blocks,
-        attention_resolutions=(),
+        attention_resolutions=(8, 16, 32),
+        dropout=0,
         channel_mult=(1, 2, 4, 8),
         conv_kernel_size=3,
         conv_resample=True,
@@ -333,6 +401,7 @@ class Decoder(nn.Module):
                 up_blocks.append(
                     ResBlock(
                         ch,
+                        dropout,
                         out_channels=int(mult * model_channels),
                         kernel_size=conv_kernel_size,
                         dims=dims,

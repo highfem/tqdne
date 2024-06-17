@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
 from tqdne.autoencoder import LithningAutoencoder
-from tqdne.config import LatentSpectrogramConfig
+from tqdne.config import MovingAverageEnvelopeConfig
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 from tqdne.training import get_pl_trainer
@@ -15,8 +15,7 @@ if __name__ == "__main__":
     logging.info("Set parameters...")
 
     name = "Latent-EDM-LogSpectrogram"
-    config = LatentSpectrogramConfig()
-    config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
+    config = MovingAverageEnvelopeConfig()
     max_epochs = 300
     batch_size = 2048
     lr = 1e-4
@@ -46,11 +45,11 @@ if __name__ == "__main__":
 
     # Unet parameters
     unet_config = {
-        "in_channels": config.latent_channels,
-        "out_channels": config.latent_channels,
+        "in_channels": config.channels,
+        "out_channels": config.channels,
         "cond_features": len(config.features_keys),
-        "dims": 2,
-        "conv_kernel_size": 3,
+        "dims": 1,
+        "conv_kernel_size": 5,
         "model_channels": 64,
         "channel_mult": (1, 2, 4, 4),
         "attention_resolutions": (8,),
@@ -74,7 +73,7 @@ if __name__ == "__main__":
     optimizer_params = {"learning_rate": lr, "max_steps": max_steps}
 
     logging.info("Loading autoencoder...")
-    checkpoint = config.outputdir / "Autoencoder-32x32x4-LogSpectrogram" / "0_199-val_loss=1.55e-03.ckpt"
+    checkpoint = config.outputdir / "Autoencoder-32x32x4-LogSpectrogram" / "last.ckpt"
     autoencoder = LithningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
