@@ -1,4 +1,4 @@
-"""Evaluate the latent EDM model.
+"""Evaluate the trained EDM model.
 
 This script generates waveforms using the same conditional features as the dataset. 
 The generated waveforms are saved along with original waveforms, conditional features, and classifier outputs in an HDF5 file. 
@@ -30,6 +30,24 @@ def predict(
     classifier_checkpoint,
     autoencoder_checkpoint,
 ):
+    """Evaluate the trained EDM model.
+
+    Parameters
+    ----------
+    split : str
+        Dataset split (`train`, `test`, or `full`).
+    config : str
+        One of the configuration classes in `tqdne.config`.
+    batch_size : int
+        Batch size used for the generation.
+    edm_checkpoint : str
+        Saved EDM model checkpoint. Relative to the output directory.
+    classifier_checkpoint : str
+        Saved classifier model checkpoint. Relative to the output directory.
+    autoencoder_checkpoint : str
+        Optional autoencoder model checkpoint. Needed for the Latent-EDM model. Relative to the output directory.
+    """
+
     print(f"Predicting {split} set...")
 
     dataset = Dataset(config.datapath, config.representation, cut=config.t, cond=True, split=split)
