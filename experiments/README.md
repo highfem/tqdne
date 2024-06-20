@@ -24,6 +24,14 @@ To reproduce the experiments in the paper, follow these steps:
 
 5. **Generation:**
     - Run `generate.py` with a model checkpoint as an argument to generate synthetic seismograms. The generated data will be saved as a `.h5` file in a specified subfolder in the `outputs` directory. Check the script documentation for usage details.
+   - Example call:
+     ```bash
+     python generate.py --hypocentral_distance 10.0 --is_shallow_crustal 1 --magnitude 5.5 --vs30 760 --num_samples 100 --output "generated_waveforms.h5" --batch_size 32
+     ```
 
 6. **Evaluation:**
     - Run `evaluate.py` to generate synthetic seismograms conditioned on the parameters of real seismograms and evaluate them using the classifier trained in step 2. The model and classifier checkpoints and the dataset split (train, validation, or full) must be specified. Waveforms using the conditional features of the corresponding dataset split will be saved in a `.h5` file in a specified subfolder in the `outputs` directory, along with the real waveforms and classifier predictions. This file can be read by the `evaluate.ipynb` notebook to compute metrics and generate figures as presented in the paper. Check the script documentation for usage details.
+   - Example call:
+     ```bash
+     python evaluate.py --split "test" --batch_size 32
+     ```

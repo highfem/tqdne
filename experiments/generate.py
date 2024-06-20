@@ -1,4 +1,4 @@
-"""Generate waveforms using the latent EDM model.
+"""Generate waveforms using the trained EDM model.
 
 By default, the script generates a waveform for every sample in the `gm0.h5` dataset using the corresponding conditional features.
 
@@ -24,7 +24,7 @@ from tqdne.autoencoder import LithningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 
-
+@th.no_grad()
 def generate(
     hypocentral_distance,
     is_shallow_crustal,
@@ -38,6 +38,33 @@ def generate(
     edm_checkpoint,
     autoencoder_checkpoint,
 ):
+    """Generate waveforms using the trained EDM model.
+    
+    Parameters
+    ----------
+    hypocentral_distance : float
+        Hypocentral distance.
+    is_shallow_crustal : int
+        Shallow crustal flag (0 or 1).
+    magnitude : float
+        Earthquake magnitude.
+    vs30 : float
+        Vs30 value.
+    num_samples : int
+        Number of samples to generate for the given parameters.
+    csv : str
+        CSV file with parameters.
+    output : str
+        Output file name with generated waveforms.
+    config : str
+        One of the configuration classes in `tqdne.config`.
+    batch_size : int
+        Batch size used for the generation.
+    edm_checkpoint : str
+        Saved EDM model checkpoint. Relative to the output directory.
+    autoencoder_checkpoint : str
+        Optional autoencoder model checkpoint. Needed for the Latent-EDM model. Relative to the output directory.
+    """
 
     print("Prepare conditional features...")
 
