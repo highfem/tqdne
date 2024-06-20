@@ -25,7 +25,6 @@ from tqdne.edm import LightningEDM
 def predict(
     split,
     config,
-    classifier_config,
     batch_size,
     edm_checkpoint,
     classifier_checkpoint,
@@ -33,19 +32,15 @@ def predict(
 ):
     print(f"Predicting {split} set...")
 
-    classes = (len(classifier_config.mag_bins) - 1) * (len(classifier_config.dist_bins) - 1)
-
     dataset = Dataset(config.datapath, config.representation, cut=config.t, cond=True, split=split)
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=4)
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=0)
 
     print("Loading model...")
 
     device = "cuda" if th.cuda.is_available() else "cpu"
     if autoencoder_checkpoint is not None:
-        autoencoder = (
-            LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
-            .to(device)
-            .eval()
+        autoencoder = LithningAutoencoder.load_from_checkpoint(
+            config.outputdir / autoencoder_checkpoint
         )
     edm = (
         LightningEDM.load_from_checkpoint(
@@ -61,34 +56,47 @@ def predict(
         .eval()
     )
 
+    # generate a single batch to get the output size
+    batch = next(iter(loader))
+    batch = {k: v.to("cuda") for k, v in batch.items()}
+    signal_shape = batch["signal"].shape[1:]
+    waveform_shape = batch["waveform"].shape[1:]
+    classifier_embedding = classifier.embed(batch["signal"])
+    classifier_embedding_shape = classifier_embedding.shape[1:]
+    classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
+
     outputdir = config.outputdir / "evaluation"
     outputdir.mkdir(exist_ok=True)
     with File(outputdir / f"{split}.h5", "w") as f:
         f.create_dataset("dist", data=dataset.get_feature("hypocentral_distance"))
         f.create_dataset("mag", data=dataset.get_feature("magnitude"))
         target_waveform = f.create_dataset(
-            "target_waveform", shape=(len(dataset), 3, config.t), dtype="f"
+            "target_waveform", shape=(len(dataset), *waveform_shape), dtype="f"
         )
         predicted_waveform = f.create_dataset(
-            "predicted_waveform", shape=(len(dataset), 3, config.t), dtype="f"
+            "predicted_waveform", shape=(len(dataset), *waveform_shape), dtype="f"
         )
         target_signal = f.create_dataset(
-            "target_signal", shape=(len(dataset), 3, 128, 128), dtype="f"
+            "target_signal", shape=(len(dataset), *signal_shape), dtype="f"
         )
         predicted_signal = f.create_dataset(
-            "predicted_signal", shape=(len(dataset), 3, 128, 128), dtype="f"
+            "predicted_signal", shape=(len(dataset), *signal_shape), dtype="f"
         )
         target_classifier_embedding = f.create_dataset(
-            "target_classifier_embedding", shape=(len(dataset), 128), dtype="f"
+            "target_classifier_embedding",
+            shape=(len(dataset), *classifier_embedding_shape),
+            dtype="f",
         )
         predicted_classifier_embedding = f.create_dataset(
-            "predicted_classifier_embedding", shape=(len(dataset), 128), dtype="f"
+            "predicted_classifier_embedding",
+            shape=(len(dataset), *classifier_embedding_shape),
+            dtype="f",
         )
         target_classifier_pred = f.create_dataset(
-            "target_classifier_pred", shape=(len(dataset), classes), dtype="f"
+            "target_classifier_pred", shape=(len(dataset), *classifier_pred_shape), dtype="f"
         )
         predicted_classifier_pred = f.create_dataset(
-            "predicted_classifier_pred", shape=(len(dataset), classes), dtype="f"
+            "predicted_classifier_pred", shape=(len(dataset), *classifier_pred_shape), dtype="f"
         )
 
         print(f"Generating waveforms using {device}...")
@@ -116,6 +124,7 @@ def predict(
             predicted_classifier_pred[start:end] = (
                 classifier.output_layer(pred_embedding).cpu().numpy()
             )
+            print("Done", flush=True)
 
     print("Done!")
 
@@ -125,12 +134,6 @@ if __name__ == "__main__":
     parser.add_argument("--split", type=str, default="test", help="Dataset split (train or test)")
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class for the EDM"
-    )
-    parser.add_argument(
-        "--classifier_config",
-        type=str,
-        default="SpectrogramClassificationConfig",
-        help="Config class for the classifier",
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument(
@@ -153,10 +156,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    config = getattr(conf, args.config)()
     predict(
         args.split,
-        getattr(conf, args.config)(),
-        getattr(conf, args.classifier_config)(),
+        config,
         args.batch_size,
         args.edm_checkpoint,
         args.classifier_checkpoint,

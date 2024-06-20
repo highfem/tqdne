@@ -6,7 +6,8 @@ Alternatively, a number of waveforms can be generated for a given hypocentral di
 ```
 hypocentral_distance, is_shallow_crustal, magnitude, vs30, num_samples
 ```
-where `num_samples` is the number of samples to generate for the given parameters.
+where `num_samples` is the number of samples to generate for the given parameters,
+`is_shallow_crustal` is a boolean flag (0 or 1), and the rest are floating-point values.
 
 The generated waveforms along with the corresponding conditional features are saved in an HDF5 file with the given name in the outputs directory.
 """
@@ -20,6 +21,7 @@ from tqdm import tqdm
 
 import tqdne.config as conf
 from tqdne.autoencoder import LithningAutoencoder
+from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 
 
@@ -52,11 +54,12 @@ def generate(
         vs30s = []
         with open(csv, "r") as f:
             for line in f:
-                args = line.split(",")
-                hypercentral_distances += [float(args[0])] * int(args[4])
-                is_shallow_crustals += [int(args[1])] * int(args[4])
-                magnitudes += [float(args[2])] * int(args[4])
-                vs30s += [float(args[3])] * int(args[4])
+                args = line.strip().split(",")
+                num_samples = int(args[4])
+                hypercentral_distances += [float(args[0])] * num_samples
+                is_shallow_crustals += [float(bool(args[1]))] * num_samples
+                magnitudes += [float(args[2])] * num_samples
+                vs30s += [float(args[3])] * num_samples
 
     elif (
         hypocentral_distance is not None
@@ -104,6 +107,11 @@ def generate(
         .eval()
     )
 
+    print("Load Dataset to infer output shape...")
+
+    dataset = Dataset(config.datapath, config.representation, cut=config.t)
+    signal_shape = dataset[0]["signal"].shape
+
     print(f"Generating waveforms using {device}...")
 
     with h5py.File(config.outputdir / output, "w") as f:
@@ -116,12 +124,14 @@ def generate(
 
         for i in tqdm(range(0, len(cond), batch_size)):
             cond_batch = cond[i : i + batch_size]
-            shape = [len(cond_batch), 3, 128, 128]  # specific to latent EDM
+            shape = [len(cond_batch), *signal_shape]
             with th.no_grad():
                 sample = edm.sample(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
+
+    print("Done!")
 
 
 if __name__ == "__main__":
