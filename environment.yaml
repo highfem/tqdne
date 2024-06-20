@@ -19,6 +19,9 @@ dependencies:
   - seaborn=0.13.2
   - wandb=0.16.3
   - librosa=0.10.1
+  - pathos=0.3.2
   - pip
   - pip:
+      - plotly==5.20.0
+      - seisbench==0.6.1
       - -e .
