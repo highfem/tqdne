@@ -61,11 +61,12 @@ class Upsample(nn.Module):
     :param use_conv: a bool determining if a convolution is applied.
     :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
                  upsampling occurs in the inner-two dimensions.
+    :param output_size_list: list of output sizes for the upsampling operation at each upsampling level.             
     :param out_channels: if specified, the number of out channels.
     :param kernel_size: kernel size for the spatial convolutions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, kernel_size=3):
+    def __init__(self, channels, use_conv, output_size_list, dims=2, out_channels=None, kernel_size=3):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -76,15 +77,31 @@ class Upsample(nn.Module):
             self.conv = conv_nd(
                 dims, self.channels, self.out_channels, kernel_size, padding="same"
             )
+        # Contains the output size of the upsampling operation, upddated at each downsampling level    
+        self.output_size_list = output_size_list    
 
+    # TODO REMOVE
+    # def forward(self, x):
+    #     assert x.shape[1] == self.channels
+    #     if self.dims == 3:
+    #         x = F.interpolate(
+    #             x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
+    #         )
+    #     else:
+    #         x = F.interpolate(x, scale_factor=2, mode="nearest")
+    #     if self.use_conv:
+    #         x = self.conv(x)
+    #     return x
+    
     def forward(self, x):
         assert x.shape[1] == self.channels
+        output_size = self.output_size_list.pop()
         if self.dims == 3:
             x = F.interpolate(
-                x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
+                x, (output_size[0], output_size[1] * 2, output_size[2] * 2), mode="nearest"
             )
         else:
-            x = F.interpolate(x, scale_factor=2, mode="nearest")
+            x = F.interpolate(x, size=output_size, mode="nearest")
         if self.use_conv:
             x = self.conv(x)
         return x
@@ -396,6 +413,8 @@ class UNetModel(ModelMixin, ConfigMixin):
     ):
         super().__init__()
 
+        self.dims = dims
+
         embed_dim = model_channels * 4
         self.time_embed = GaussianFourierProjection(model_channels)
         self.time_mlp = nn.Sequential(
@@ -429,6 +448,7 @@ class UNetModel(ModelMixin, ConfigMixin):
         self._feature_size = ch
         input_block_chans = [ch]
         ds = 1
+        self.upsample_output_sizes = []
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
                 layers = [
@@ -531,6 +551,7 @@ class UNetModel(ModelMixin, ConfigMixin):
                         Upsample(
                             ch,
                             conv_resample,
+                            output_size_list=self.upsample_output_sizes,
                             dims=dims,
                             out_channels=out_ch,
                             kernel_size=conv_kernel_size,
@@ -571,12 +592,14 @@ class UNetModel(ModelMixin, ConfigMixin):
 
         h = x
         for module in self.input_blocks:
+            if isinstance(module[-1], Downsample):
+                self.upsample_output_sizes.append(h.shape[-self.dims:])
             h = module(h, emb)
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
-            h = module(h, emb)  
+            h = module(h, emb)
         return self.out(h) 
     
     def get_signal_length(self, original_signal_length: int) -> int:

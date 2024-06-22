@@ -53,16 +53,13 @@ def main(argv):
     net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, cond_features=num_cond_features, **FLAGS.config.model.net_params)
     logging.info(f"Unet Params:\n  {FLAGS.config.model.net_params}")
 
-    # Adjust signal lenght for the UNet architecture
-    signal_length = adjust_signal_length(general_config.signal_length, net, data_representation, FLAGS.downsampling_factor)
-
-    # TODO: REMOVE max_amplitude
-    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), pad=signal_length, max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
-    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), pad=signal_length, max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
-
     # Update configuration parameters
     general_config.fs = general_config.fs // FLAGS.downsampling_factor
-    general_config.signal_length = data_representation.invert_representation(train_dataset[0]['repr']).shape[-1]
+    general_config.signal_length = general_config.signal_length // FLAGS.downsampling_factor
+
+    # TODO: REMOVE max_amplitude
+    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
+    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
     
     # DEBUG
     if FLAGS.debug:

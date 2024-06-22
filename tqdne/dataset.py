@@ -362,10 +362,10 @@ class EnvelopeDataset(torch.utils.data.Dataset):
                 signal = np.concatenate([signal, signal[:, -1, np.newaxis] * np.ones((signal.shape[0], self.pad - signal.shape[-1]))], axis=-1)                
 
         if self.downsample > 1:
-            #original_signal_gain = np.abs(signal).mean(axis=-1)[..., np.newaxis]
+            original_signal_length = signal.shape[-1]
             signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False) 
-            #downsampled_signal_gain = np.abs(signal).mean(axis=-1)[..., np.newaxis]
-            #signal = signal / downsampled_signal_gain * original_signal_gain
+            if signal.shape[-1] > original_signal_length // self.downsample:
+                signal = signal[:, :-1]
 
         repr = self.representation.get_representation(signal)    
 

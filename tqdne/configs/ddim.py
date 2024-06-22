@@ -55,7 +55,7 @@ def get_config():
         accelerator="auto",
         devices="auto",
         num_nodes=1,
-        max_epochs=400,
+        max_epochs=300,
         eval_every=2,
         log_to_wandb=True,
         num_sanity_val_steps=0,
@@ -65,33 +65,34 @@ def get_config():
     )
 
         
-    config.data_repr = new_dict(
-        name="LogSpectrogram",
-        params=new_dict(
-            stft_channels = 128,
-            hop_size = 64,
-            library="librosa",
-        )
-    )
-
     # config.data_repr = new_dict(
-    #     name="SignalWithEnvelope",
+    #     name="LogSpectrogram",
     #     params=new_dict(
-    #         env_function="moving_average",
-    #         env_function_params=new_dict(
-    #             scale=2
-    #         ),
-    #         env_transform="log",
-    #         env_transform_params=new_dict(
-    #             log_offset=1e-7
-    #         ),
-    #         scaling=new_dict(
-    #             type="standardize",
-    #             scalar=True,
-    #             dataset_stats_file="/users/abosisio/scratch/tqdne/outputs/log-env-stats_log-offset-1e-7_mov-avg-2_ds-2.pkl"
-    #         ),
+    #         stft_channels = 128,
+    #         hop_size = 64, 
+    #         library="torch",
+    #         device="cuda",
     #     )
     # )
+
+    config.data_repr = new_dict(
+        name="SignalWithEnvelope",
+        params=new_dict(
+            env_function="moving_average",
+            env_function_params=new_dict(
+                scale=2
+            ),
+            env_transform="log",
+            env_transform_params=new_dict(
+                log_offset=1e-7
+            ),
+            scaling=new_dict(
+                type="standardize",
+                scalar=True,
+                dataset_stats_file="/users/abosisio/scratch/tqdne/outputs/log-env-stats_log-offset-1e-7_mov-avg-2_ds-2.pkl"
+            ),
+        )
+    )
 
     # config.data_repr = new_dict(
     #     name="Signal",

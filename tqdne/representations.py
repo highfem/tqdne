@@ -1,11 +1,11 @@
+import numpy as np
+import torch
+
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 
 from matplotlib import pyplot as plt
-import numpy as np
-
 from scipy.signal import hilbert
-import torch
 from librosa.util import fix_length
 
 from tqdne.conf import Config
@@ -19,6 +19,15 @@ def to_numpy(x):
         return x.__class__((k, to_numpy(v)) for k, v in x.items())
     else:
         return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
+    
+@staticmethod
+def to_torch(x, device='cuda'):
+    if isinstance(x, Sequence):
+        return x.__class__(to_torch(v, device) for v in x)
+    elif isinstance(x, Mapping):
+        return x.__class__((k, to_torch(v, device)) for k, v in x.items())
+    else:
+        return x.to(torch.device(device)) if isinstance(x, torch.Tensor) else x
 
 
 class Representation(ABC):
@@ -30,14 +39,14 @@ class Representation(ABC):
         return f"{self.__class__.__name__} - {self.parameters}"
 
     def get_representation(self, signal):
-        return self._get_representation(to_numpy(signal))
+        return self._get_representation(signal)
 
     @abstractmethod
     def _get_representation(self, signal):
         pass
 
     def invert_representation(self, representation):
-        return self._invert_representation(to_numpy(representation))
+        return self._invert_representation(representation)
 
     @abstractmethod
     def _invert_representation(self, representation):
@@ -147,11 +156,13 @@ class Signal(Representation):
         return f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-{FLAGS.config.data_repr.params.scaling.type}-scalar:{FLAGS.config.data_repr.params.scaling.scalar}".replace(" ", "").replace("\n", "")
 
     def _get_representation(self, signal):
+        signal = to_numpy(signal)
         if self.scaling is not None:
             return self.scaling_function(signal)
         return signal
 
     def _invert_representation(self, representation):
+        representation = to_numpy(representation)
         if self.scaling is not None:
             return self.inv_scaling_function(representation)
         return representation
@@ -354,6 +365,8 @@ class SignalWithEnvelope(Representation):
     ## --- Representation methods --- ##
     
     def _get_representation(self, signal):
+        signal = to_numpy(signal)
+
         envelope = self.env_function(signal, **self.env_function_params)
         scaled_signal = np.divide(signal, envelope, out=np.zeros_like(signal), where=envelope!=0) # when envelope is 0, the signal is also 0. Hence, the scaled signal should also be 0.
         
@@ -365,6 +378,8 @@ class SignalWithEnvelope(Representation):
         return np.concatenate([scaled_envelope, scaled_signal], axis=ch_axis) # The model will learn to associated channels of the envelope with the corresponding channels of the signal
 
     def _invert_representation(self, representation):
+        representation = to_numpy(representation)
+
         num_channels = representation.shape[1] // 2
         scaled_signal = representation[:, num_channels:, :]
         scaled_trans_envelope = representation[:, :num_channels, :]
@@ -458,32 +473,64 @@ class LogSpectrogram(Representation):
         self,
         stft_channels=512,
         hop_size=None,
-        output_shape=None,
-        internal_shape=None,
+        griffin_lim_iterations=256,
         clip=1e-8,
         log_max=3,
         library="librosa",
+        device="cpu",
         config=Config(),
     ):
+        """
+        LogSpectrogram representation class.
+
+        Args:
+            stft_channels (int): Number of channels in the STFT.
+            hop_size (int): Hop size for the STFT. If None, it is set to stft_channels // 4.
+            griffin_lim_iterations (int): Number of iterations for the Griffin-Lim algorithm.
+            clip (float): Clip value for the logarithm operation.
+            log_max (float): Maximum value for the logarithm operation.
+            library (str): Library to use for the STFT and inverse STFT operations. Options are "librosa", "tifresi", and "torch".
+            device (str): Device to use for the STFT and inverse STFT operations. Options are "cpu" and "cuda".
+            config (Config): Configuration object.
+
+        """
         super().__init__(config)
         self.clip = clip
         self.log_clip = np.log(clip)
         self.log_max = log_max
         self.stft_channels = stft_channels
-        self.hop_size = hop_size 
-        self.output_shape = output_shape
-        self.internal_shape = internal_shape
+        self.hop_size = hop_size if hop_size is not None else stft_channels // 4
+        self.griffin_lim_iterations = griffin_lim_iterations
         self.library = library
 
-        self._set_stft_functions()
+        self.internal_signal_length = None
+
+        self.device = device
+        if library == 'librosa' and device != 'cpu': 
+            print(f"Warning: librosa is not CUDA compatible. The device will be set to 'cpu'.")
+            self.device = 'cpu'
+        if device != 'cpu':
+            if torch.device('cuda' if torch.cuda.is_available() else 'cpu').type == 'cpu':
+                print(f"Warning: CUDA is not available. The device will be set to 'cpu'.")
+                self.device = 'cpu'
+        self.to_array_fun = to_numpy if self.device == 'cpu' else to_torch
+
+        #self._set_stft_functions()
 
     def _set_stft_functions(self, new_signal_length=None):
+        """
+        Set the STFT and inverse STFT functions based on the selected library.
+
+        Args:
+            new_signal_length (int): New signal length for the inverse STFT.
+
+        """
         if self.library == "librosa":
             from librosa import griffinlim, stft
 
             self.stft = lambda x: stft(x, n_fft=self.stft_channels, hop_length=self.hop_size)
             self.istft = lambda x: griffinlim(
-                x, hop_length=self.hop_size, n_fft=self.stft_channels, n_iter=128, random_state=0
+                x, hop_length=self.hop_size, n_fft=self.stft_channels, length=new_signal_length, n_iter=self.griffin_lim_iterations, random_state=0
             )
 
         elif self.library == "tifresi":
@@ -495,59 +542,127 @@ class LogSpectrogram(Representation):
             self.istft = stft_system.invert_spectrogram
 
         elif self.library == "torch":
-            from torchaudio.transforms import GriffinLim
-            self.stft = lambda x: torch.stft(torch.tensor(x), n_fft=self.stft_channels, hop_length=self.hop_size, return_complex=True).numpy()
-            griffinlim = GriffinLim(n_fft=self.stft_channels, hop_length=self.hop_size, power=1)
-            self.istft = lambda x: griffinlim(torch.tensor(x)).numpy()
-
-    @staticmethod
-    def _adjust_to_shape(x, shape=None):
-        if not shape:
-            return x
-        if x.shape[1] < shape[0]:
-            x = np.pad(x, ((0, 0), (0, shape[0] - x.shape[1]), (0, 0)), mode="constant")
-        if x.shape[2] < shape[1]:
-            x = np.pad(x, ((0, 0), (0, 0), (0, shape[1] - x.shape[2])), mode="constant")
-
-        return x[:, : shape[0], : shape[1]]        
+            window = torch.hann_window(self.stft_channels, device=torch.device(self.device))
+            #window = torch.hann_window(self.stft_channels)#.to(self.device)
+            self.stft = lambda x: torch.stft(
+                torch.tensor(x, device=torch.device(self.device)),
+                n_fft=self.stft_channels, 
+                hop_length=self.hop_size, 
+                window=window, 
+                return_complex=True
+                ).numpy()
+            from torchaudio.functional import griffinlim
+            self.istft = lambda x: griffinlim(
+                torch.tensor(x, device=torch.device(self.device)), 
+                n_fft=self.stft_channels, 
+                hop_length=self.hop_size, 
+                length=new_signal_length,  
+                window=window, 
+                win_length=self.stft_channels,
+                power=1, 
+                n_iter=self.griffin_lim_iterations,
+                momentum=.99, 
+                rand_init=False
+                ).numpy()
 
 
     def _get_length_divisor(self, unet_max_divisor: int):
+        """
+        Get the length divisor based on the UNet maximum divisor.
+
+        Args:
+            unet_max_divisor (int): Maximum divisor of the UNet.
+
+        Returns:
+            int: Length divisor.
+
+        """
         stft_length_divisor = self.hop_size * unet_max_divisor
         return stft_length_divisor
             
 
     def _adjust_length_params(self, unet_max_divisor: int, new_signal_length: int):
-        # Adjust the number of channels to be divisible by the maximum divisor of the UNet
+        """
+        Adjust the length parameters based on the UNet maximum divisor and new signal length.
+
+        Args:
+            unet_max_divisor (int): Maximum divisor of the UNet.
+            new_signal_length (int): New signal length.
+
+        """
         new_stft_channels = round(self.stft_channels / unet_max_divisor) * unet_max_divisor
         self.stft_channels = new_stft_channels
-        self.output_shape = (new_stft_channels // 2, new_signal_length // self.hop_size)
+        self._set_stft_functions(new_signal_length)
         
 
     def _get_name(self, FLAGS, name=None):
+        """
+        Get the name of the representation.
+
+        Args:
+            FLAGS: Flags object.
+            name (str): Name to append to the representation name.
+
+        Returns:
+            str: Representation name.
+
+        """
         if name:
             return name + f"_{self.__class__.__name__}-stft_ch:{self.stft_channels}-hop_size:{self.hop_size}"
         return f"{FLAGS.config.name}-pred:{FLAGS.config.model.scheduler_params.prediction_type}-{FLAGS.config.model.net_params.dims}D-downsampling:{FLAGS.downsampling_factor}_{FLAGS.config.data_repr.name}-stft_ch:{self.stft_channels}-hop_size:{self.hop_size}".replace(" ", "").replace("\n", "")
 
     def _get_spectrogram(self, signal):
-        shape = signal.shape
-        signal = signal.reshape(-1, shape[-1])  # flatten trailing dimensions
-        spec = np.array([self.stft(x) for x in signal])
-        if not self.internal_shape:
-            self.internal_shape = spec.shape[1:]
-        spec = self._adjust_to_shape(spec, self.output_shape)
+        """
+        Get the spectrogram of the input signal.
+
+        Args:
+            signal (ndarray): Input signal.
+
+        Returns:
+            ndarray: Spectrogram.
+
+        """
+        if self.internal_signal_length is None:
+            self.internal_signal_length = signal.shape[-1] + self.stft_channels // 2
+            self._set_stft_functions(new_signal_length=self.internal_signal_length)
+        signal_pad = fix_length(signal, size=self.internal_signal_length)
+        shape = signal_pad.shape
+        signal_pad = signal_pad.reshape(-1, shape[-1])  # flatten trailing dimensions
+        signal_pad = self.to_array_fun(signal_pad)
+        spec = np.array([self.stft(x) for x in signal_pad])
         spec = spec.reshape(shape[:-1] + spec.shape[1:])  # restore trailing dimensions
         return spec
 
     def _invert_spectrogram(self, spec):
+        """
+        Invert the spectrogram to obtain the signal.
+
+        Args:
+            spec (ndarray): Spectrogram.
+
+        Returns:
+            ndarray: Inverted signal.
+
+        """
         shape = spec.shape
         spec = spec.reshape(-1, shape[-2], shape[-1])  # flatten trailing dimensions
-        spec = self._adjust_to_shape(spec, self.internal_shape)
+        spec = self.to_array_fun(spec)
         signal = np.array([self.istft(x) for x in spec])
         signal = signal.reshape(shape[:-2] + signal.shape[1:])  # restore trailing dimensions
+        signal = signal[..., :self.config.signal_length]  # remove padding
         return signal
 
     def _get_representation(self, signal):
+        """
+        Get the representation of the input signal.
+
+        Args:
+            signal (ndarray): Input signal.
+
+        Returns:
+            ndarray: Representation.
+
+        """
         spec = self._get_spectrogram(signal)
         spec = np.abs(spec)
         log_spec = np.log(np.clip(spec, self.clip, None))  # [log_clip, log_max]
@@ -556,14 +671,37 @@ class LogSpectrogram(Representation):
         return norm_log_spec
 
     def _invert_representation(self, representation):
+        """
+        Invert the representation to obtain the signal.
+
+        Args:
+            representation (ndarray): Representation.
+
+        Returns:
+            ndarray: Inverted signal.
+
+        """
         norm_log_spec = (representation + 1) / 2
         log_spec = norm_log_spec * (self.log_max - self.log_clip) + self.log_clip
-        spec = np.exp(log_spec)
+        try:
+            spec = torch.exp(log_spec)
+        except TypeError:
+            spec = np.exp(log_spec)
         return self._invert_spectrogram(spec)
     
     ## --- Plotting methods --- ##
     
     def _plot(self, raw_waveform, title, inverted_waveform, channel=None):
+        """
+        Plot the raw waveform and the inverted waveform.
+
+        Args:
+            raw_waveform (ndarray): Raw waveform.
+            title (str): Title for the plot.
+            inverted_waveform (ndarray): Inverted waveform.
+            channel (int): Channel to plot. If None, plot all channels.
+
+        """
         channels = [c for c in range(self.config.num_channels)] if channel is None else [channel] 
         inverted_waveform = self.invert_representation(raw_waveform[None, ...])[0] if inverted_waveform is None else inverted_waveform
         fig, axs = plt.subplots(len(channels), 2, figsize=(15, 15))
@@ -585,6 +723,13 @@ class LogSpectrogram(Representation):
         plt.show()   
 
     def _plot_representation(self, channel):
+        """
+        Plot the representation for a specific channel.
+
+        Args:
+            channel (int): Channel to plot.
+
+        """
         signal = self.config.example_signal[channel, :]
         spectrogram = self._get_representation(signal)
 
@@ -603,6 +748,14 @@ class LogSpectrogram(Representation):
 
 
     def _plot_distribution(self, pred_raw_waveforms, test_raw_waveforms):
+        """
+        Plot the distribution of the predicted and test raw waveforms.
+
+        Args:
+            pred_raw_waveforms (ndarray): Predicted raw waveforms.
+            test_raw_waveforms (ndarray): Test raw waveforms.
+
+        """
         mean_raw_pred = np.mean(pred_raw_waveforms, axis=0)
         std_raw_pred = np.std(pred_raw_waveforms, axis=0)
         mean_raw_test = np.mean(test_raw_waveforms, axis=0)
@@ -625,9 +778,26 @@ class LogSpectrogram(Representation):
     ## --- Testing methods --- ##    
 
     def _test(self, waveforms):
+        """
+        Test the inversion of the waveforms.
+
+        Args:
+            waveforms (ndarray): Waveforms to test.
+
+        Returns:
+            bool: True if the inversion is successful, False otherwise.
+
+        """
         return LogSpectrogram()._test_inversion(waveforms)    
         
     
     def _update_stats(self, config: Config):
-        pass 
+        """
+        Update the statistics based on the configuration.
+
+        Args:
+            config (Config): Configuration object.
+
+        """
+        pass
      
