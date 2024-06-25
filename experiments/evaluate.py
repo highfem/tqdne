@@ -24,7 +24,9 @@ from tqdne.edm import LightningEDM
 @torch.no_grad()
 def predict(
     split,
+    outputdir,
     config,
+    classifier_config,
     batch_size,
     edm_checkpoint,
     classifier_checkpoint,
@@ -36,7 +38,11 @@ def predict(
     ----------
     split : str
         Dataset split (`train`, `test`, or `full`).
+    outputdir : str
+        Output directory for the evaluation results.
     config : str
+        One of the configuration classes in `tqdne.config`.
+    classifier_config : str
         One of the configuration classes in `tqdne.config`.
     batch_size : int
         Batch size used for the generation.
@@ -56,10 +62,11 @@ def predict(
     print("Loading model...")
 
     device = "cuda" if th.cuda.is_available() else "cpu"
-    if autoencoder_checkpoint is not None:
-        autoencoder = LithningAutoencoder.load_from_checkpoint(
-            config.outputdir / autoencoder_checkpoint
-        )
+    autoencoder = (
+        LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
+        if autoencoder_checkpoint is not None
+        else None
+    )
     edm = (
         LightningEDM.load_from_checkpoint(
             config.outputdir / edm_checkpoint, autoencoder=autoencoder
@@ -76,18 +83,22 @@ def predict(
 
     # generate a single batch to get the output size
     batch = next(iter(loader))
-    batch = {k: v.to("cuda") for k, v in batch.items()}
     signal_shape = batch["signal"].shape[1:]
     waveform_shape = batch["waveform"].shape[1:]
-    classifier_embedding = classifier.embed(batch["signal"])
+    classifier_embedding = classifier.embed(
+        th.tensor(
+            classifier_config.representation.get_representation(batch["waveform"]), device=device
+        )
+    )
     classifier_embedding_shape = classifier_embedding.shape[1:]
     classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
 
-    outputdir = config.outputdir / "evaluation"
+    outputdir = config.outputdir / outputdir
     outputdir.mkdir(exist_ok=True)
     with File(outputdir / f"{split}.h5", "w") as f:
-        f.create_dataset("dist", data=dataset.get_feature("hypocentral_distance"))
-        f.create_dataset("mag", data=dataset.get_feature("magnitude"))
+        for key in config.features_keys:
+            f.create_dataset(key, data=dataset.get_feature(key))
+
         target_waveform = f.create_dataset(
             "target_waveform", shape=(len(dataset), *waveform_shape), dtype="f"
         )
@@ -126,23 +137,38 @@ def predict(
             # target
             target_waveform[start:end] = batch["waveform"].numpy()
             target_signal[start:end] = batch["signal"].numpy()
+
+            # pred
             batch = {k: v.to("cuda") for k, v in batch.items()}
-            target_embedding = classifier.embed(batch["signal"])
+            pred_signal = edm.evaluate(batch)
+            predicted_signal[start:end] = pred_signal.cpu().numpy()
+            pred_waveform = config.representation.invert_representation(pred_signal)
+            predicted_waveform[start:end] = pred_waveform
+
+            # classifier
+            if type(config.representation) == type(classifier_config.representation):
+                target_classifier_input = batch["signal"]
+                predicted_classifier_input = pred_signal
+            else:
+                target_classifier_input = th.tensor(
+                    classifier_config.representation.get_representation(batch["waveform"]),
+                    device=device,
+                )
+                predicted_classifier_input = th.tensor(
+                    classifier_config.representation.get_representation(pred_waveform),
+                    device=device,
+                )
+
+            target_embedding = classifier.embed(target_classifier_input)
             target_classifier_embedding[start:end] = target_embedding.cpu().numpy()
             target_classifier_pred[start:end] = (
                 classifier.output_layer(target_embedding).cpu().numpy()
             )
-
-            # pred
-            pred_signal = edm.evaluate(batch)
-            predicted_signal[start:end] = pred_signal.cpu().numpy()
-            predicted_waveform[start:end] = config.representation.invert_representation(pred_signal)
-            pred_embedding = classifier.embed(pred_signal)
+            pred_embedding = classifier.embed(predicted_classifier_input)
             predicted_classifier_embedding[start:end] = pred_embedding.cpu().numpy()
             predicted_classifier_pred[start:end] = (
                 classifier.output_layer(pred_embedding).cpu().numpy()
             )
-            print("Done", flush=True)
 
     print("Done!")
 
@@ -151,13 +177,25 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--split", type=str, default="test", help="Dataset split (train or test)")
     parser.add_argument(
+        "--outputdir",
+        type=str,
+        default="evaluation",
+        help="Output subdirectory in the output directory",
+    )
+    parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class for the EDM"
+    )
+    parser.add_argument(
+        "--classifier_config",
+        type=str,
+        default="SpectrogramClassificationConfig",
+        help="Config class for the classifier",
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument(
         "--edm_checkpoint",
         type=str,
-        default="Latent-EDM-LogSpectrogram/0_239-val_loss=1.18e+00.ckpt",
+        default="Latent-EDM-LogSpectrogram/0_299-val_loss=1.18e+00.ckpt",
         help="EDM checkpoint",
     )
     parser.add_argument(
@@ -173,11 +211,16 @@ if __name__ == "__main__":
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
     )
     args = parser.parse_args()
+    if not "latent" in args.config.lower():
+        args.autoencoder_checkpoint = None
 
     config = getattr(conf, args.config)()
+    classifier_config = getattr(conf, args.classifier_config)()
     predict(
         args.split,
+        args.outputdir,
         config,
+        classifier_config,
         args.batch_size,
         args.edm_checkpoint,
         args.classifier_checkpoint,

@@ -24,6 +24,7 @@ from tqdne.autoencoder import LithningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 
+
 @th.no_grad()
 def generate(
     hypocentral_distance,
@@ -39,7 +40,7 @@ def generate(
     autoencoder_checkpoint,
 ):
     """Generate waveforms using the trained EDM model.
-    
+
     Parameters
     ----------
     hypocentral_distance : float
@@ -106,16 +107,18 @@ def generate(
         vs30s = dataset_vs30s
 
     # normalize features
-    hypercentral_distances = (
+    hypercentral_distances_norm = (
         np.array(hypercentral_distances) - dataset_hypocentral_distances.mean()
     ) / dataset_hypocentral_distances.std()
-    is_shallow_crustals = (
+    is_shallow_crustals_norm = (
         np.array(is_shallow_crustals) - dataset_is_shallow_crustals.mean()
     ) / dataset_is_shallow_crustals.std()
-    magnitudes = (np.array(magnitudes) - dataset_magnitudes.mean()) / dataset_magnitudes.std()
-    vs30s = (np.array(vs30s) - dataset_vs30s.mean()) / dataset_vs30s.std()
+    magnitudes_norm = (np.array(magnitudes) - dataset_magnitudes.mean()) / dataset_magnitudes.std()
+    vs30s_norm = (np.array(vs30s) - dataset_vs30s.mean()) / dataset_vs30s.std()
 
-    cond = np.stack([hypercentral_distances, is_shallow_crustals, magnitudes, vs30s], axis=1)
+    cond = np.stack(
+        [hypercentral_distances_norm, is_shallow_crustals_norm, magnitudes_norm, vs30s_norm], axis=1
+    )
 
     print("Loading model...")
 
@@ -142,10 +145,10 @@ def generate(
     print(f"Generating waveforms using {device}...")
 
     with h5py.File(config.outputdir / output, "w") as f:
-        f.create_dataset("hypocentral_distance", data=hypercentral_distances)
-        f.create_dataset("is_shallow_crustal", data=is_shallow_crustals)
-        f.create_dataset("magnitude", data=magnitudes)
-        f.create_dataset("vs30", data=vs30s)
+        f.create_dataset("hypocentral_distance", data=np.array(hypercentral_distances))
+        f.create_dataset("is_shallow_crustal", data=np.array(is_shallow_crustals))
+        f.create_dataset("magnitude", data=np.array(magnitudes))
+        f.create_dataset("vs30", data=np.array(vs30s))
 
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
 
@@ -173,7 +176,7 @@ if __name__ == "__main__":
         "--output",
         type=str,
         default="generated.h5",
-        help="output file name with generated waveforms",
+        help="Output file name with generated waveforms",
     )
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
@@ -182,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--edm_checkpoint",
         type=str,
-        default="Latent-EDM-LogSpectrogram/0_239-val_loss=1.18e+00.ckpt",
+        default="Latent-EDM-LogSpectrogram/0_299-val_loss=1.18e+00.ckpt",
         help="EDM checkpoint",
     )
     parser.add_argument(
@@ -194,6 +197,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = getattr(conf, args.config)()
+    if not "latent" in args.config.lower():
+        args.autoencoder_checkpoint = None
+        
     generate(
         args.hypocentral_distance,
         args.is_shallow_crustal,
