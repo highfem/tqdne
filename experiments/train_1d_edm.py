@@ -16,7 +16,7 @@ if __name__ == "__main__":
     name = "EDM-MovingAvg"
     config = MovingAverageEnvelopeConfig()
     max_epochs = 300
-    batch_size = 192
+    batch_size = 320
     lr = 1e-4
     ema_decay = 0.999
     resume = True
