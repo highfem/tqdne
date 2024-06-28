@@ -77,7 +77,7 @@ class AmplitudeSpectralDensity(Metric):
     Computes the Frechet Distance between the amplitude spectral densities of two signals.
     """
 
-    def __init__(self, fs, channel=0, log_eps=1e-8, isotropic=False):
+    def __init__(self, fs, channel=0, log_eps=1e-8, isotropic=True):
         super().__init__(channel)
         self.fs = fs
         self.log_eps = log_eps

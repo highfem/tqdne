@@ -173,6 +173,8 @@ class BinPlot(Plot):
         plot.set_yticks(np.arange(len(self.dist_bins)))
         plot.set_yticklabels(self.dist_bins)
         plot.invert_yaxis()
-        plot.set_xlabel("Magnitude bin $M_w$")
+        plot.set_xlabel("Magnitude bin")
         plot.set_ylabel("Distance bin [km]")
-        return plot
+        fig = plot.get_figure()
+        fig.tight_layout()
+        return fig

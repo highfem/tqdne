@@ -81,6 +81,9 @@ def generate(
         magnitudes = []
         vs30s = []
         with open(csv, "r") as f:
+            # skip header
+            f.readline()
+
             for line in f:
                 args = line.strip().split(",")
                 num_samples = int(args[4])
@@ -199,7 +202,7 @@ if __name__ == "__main__":
     config = getattr(conf, args.config)()
     if not "latent" in args.config.lower():
         args.autoencoder_checkpoint = None
-        
+
     generate(
         args.hypocentral_distance,
         args.is_shallow_crustal,
