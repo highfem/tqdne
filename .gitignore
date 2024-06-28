@@ -16,5 +16,3 @@ outputs/
 .venv
 .env
 .idea/
-
-notebooks/*ipynb
