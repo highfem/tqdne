@@ -75,8 +75,7 @@ class SamplePlot(Plot):
         ax.plot(time, pred[0], "b", label="Predicted")
         if self.plot_target:
             ax.plot(time, target[0], "orange", label="Target")
-        ax.set_title(self.name)
-        ax.set_xlabel("Time (s)")
+        ax.set_xlabel("Time [s]")
         ax.set_ylabel("Amplitude")
         ax.legend()
         fig.tight_layout()
@@ -96,8 +95,7 @@ class UpsamplingSamplePlot(Plot):
         ax.plot(time, cond_signal[0], "g", label="Input")
         ax.plot(time, target[0], "orange", label="Target")
         ax.plot(time, pred[0], "b", label="Predicted")
-        ax.set_title(self.name)
-        ax.set_xlabel("Time (s)")
+        ax.set_xlabel("Time [s]")
         ax.set_ylabel("Amplitude")
         ax.legend()
         fig.tight_layout()
@@ -134,9 +132,8 @@ class AmplitudeSpectralDensity(Plot, ABC):
         ax.fill_between(
             freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
         )
-        ax.set_title("Log-Amplitude Spectral Density")
-        ax.set_xlabel("Frequency (Hz)")
-        ax.set_ylabel("Log Fourier Amplitude Spectral Density")
+        ax.set_xlabel("Frequency [Hz]")
+        ax.set_ylabel("Log-Amplitude $[m/s^2 \ H^{-1}]$")
         ax.legend()
         fig.tight_layout()
         return fig
@@ -178,3 +175,160 @@ class BinPlot(Plot):
         fig = plot.get_figure()
         fig.tight_layout()
         return fig
+
+
+class GridPlot(Plot, ABC):
+    """Creates a grid of plots comparing the predicted and target signals.
+
+    The grid contains 2 columns (predicted and target) and one row per distance bin.
+    Each plot contains one graph per magnitude bin. The graphs depict the mean and standard deviation
+    of all signals in the bin.
+    """
+
+    def __init__(self, fs, channel, mag_bins, dist_bins):
+        super().__init__(channel)
+        self.fs = fs
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+
+    @abstractmethod
+    def transform(self, waveform):
+        pass
+
+    @property
+    @abstractmethod
+    def xlabel(self):
+        pass
+
+    @property
+    @abstractmethod
+    def ylabel(self):
+        pass
+
+    @abstractmethod
+    def xticks(self, length):
+        pass
+
+    def plot(self, pred, target, cond_signal, mag, dist):
+        # Create the grid
+        default_width, default_height = plt.rcParams["figure.figsize"]
+        width = default_width * 2
+        height = default_height * (len(self.dist_bins) - 1)
+        fig, axs = plt.subplots(len(self.dist_bins) - 1, 2, figsize=(width, height))
+        xticks = self.xticks(pred.shape[-1])
+
+        for i in range(len(self.dist_bins) - 1):
+            mask = (dist >= self.dist_bins[i]) & (dist < self.dist_bins[i + 1])
+            for j in range(len(self.mag_bins) - 1):
+                bin_mask = mask & (mag >= self.mag_bins[j]) & (mag < self.mag_bins[j + 1])
+
+                # plot mean and std of the transformed signals
+                for ax, waveform in zip(axs[i], [pred, target]):
+                    transformed = self.transform(waveform[bin_mask])
+                    mean = transformed.mean(axis=0)
+                    std = transformed.std(axis=0)
+                    ax.plot(xticks, mean, label=f"{self.mag_bins[j]}-{self.mag_bins[j + 1]}")
+                    ax.fill_between(xticks, mean - std, mean + std, alpha=0.2)
+                    ax.set_xlabel(self.xlabel)
+                    ax.set_ylabel(self.ylabel)
+                    ax.grid(True)
+
+        # unify y-axis limits
+        for ax in axs.flatten():
+            y_min = min(ax.get_ylim()[0] for ax in axs.flatten())
+            y_max = max(ax.get_ylim()[1] for ax in axs.flatten())
+            ax.set_ylim(y_min, y_max)
+            ax.margins(x=0)
+
+        # legend
+        handles, labels = axs[0, 0].get_legend_handles_labels()
+        fig.legend(
+            handles,
+            labels,
+            loc="lower center",
+            ncol=len(self.mag_bins) - 1,
+            title="Magnitude bins",
+            bbox_to_anchor=(0.5, -0.025),
+        )
+
+        # column titles
+        for ax, title in zip(axs[0], ["Predicted", "Target"]):
+            ax.annotate(
+                title,
+                xy=(0.5, 1.05),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                va="baseline",
+                fontsize=20,
+                xycoords="axes fraction",
+            )
+
+        # row titles
+        for i, ax in enumerate(axs):
+            ax[0].annotate(
+                f"{self.dist_bins[i]}-{self.dist_bins[i + 1]} km",
+                xy=(-0.3, 0.5),
+                xytext=(0, 0),
+                textcoords="offset points",
+                ha="center",
+                va="center",
+                rotation=90,
+                fontsize=20,
+                xycoords="axes fraction",
+            )
+
+        fig.tight_layout()
+        return fig
+
+
+class MovingAverageEnvelopeGrid(GridPlot):
+
+    def __init__(self, fs, channel, mag_bins, dist_bins, window_size=128, log_eps=1e-6):
+        super().__init__(fs, channel, mag_bins, dist_bins)
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+        self.window_size = window_size
+        self.log_eps = log_eps
+
+    @property
+    def xlabel(self):
+        return "Time [s]"
+
+    @property
+    def ylabel(self):
+        return "Log-Amplitude"
+
+    def xticks(self, length):
+        return np.arange(0, length) / self.fs
+
+    def transform(self, waveform):
+        env = np.apply_along_axis(
+            lambda x: np.convolve(x, np.ones(self.window_size) / self.window_size, mode="same"),
+            axis=-1,
+            arr=np.abs(waveform),
+        )
+        return np.log(env + self.log_eps)
+
+
+class AmplitudeSpectralDensityGrid(GridPlot):
+
+    def __init__(self, fs, channel, mag_bins, dist_bins, log_eps=1e-8):
+        super().__init__(fs, channel, mag_bins, dist_bins)
+        self.log_eps = log_eps
+
+    @property
+    def xlabel(self):
+        return "Frequency [Hz]"
+
+    @property
+    def ylabel(self):
+        return "Log-Amplitude $[m/s^2 \ H^{-1}]$"
+
+    def xticks(self, length):
+        return np.fft.rfftfreq(length, d=1 / self.fs)
+
+    def transform(self, waveform):
+        sd = np.abs(np.fft.rfft(waveform, axis=-1))
+        log_sd = np.log(np.clip(sd, self.log_eps, None))
+        return log_sd
