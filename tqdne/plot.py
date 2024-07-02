@@ -133,7 +133,7 @@ class AmplitudeSpectralDensity(Plot, ABC):
             freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
         )
         ax.set_xlabel("Frequency [Hz]")
-        ax.set_ylabel("Log-Amplitude $[m/s^2 \ H^{-1}]$")
+        ax.set_ylabel("Log-Amplitude $[m/s^2 \ Hz^{-1}]$")
         ax.legend()
         fig.tight_layout()
         return fig
@@ -297,7 +297,7 @@ class MovingAverageEnvelopeGrid(GridPlot):
 
     @property
     def ylabel(self):
-        return "Log-Amplitude"
+        return "Log-Amplitude [m/s^2]"
 
     def xticks(self, length):
         return np.arange(0, length) / self.fs
@@ -323,7 +323,7 @@ class AmplitudeSpectralDensityGrid(GridPlot):
 
     @property
     def ylabel(self):
-        return "Log-Amplitude $[m/s^2 \ H^{-1}]$"
+        return "Log-Amplitude $[m/s^2 \ Hz^{-1}]$"
 
     def xticks(self, length):
         return np.fft.rfftfreq(length, d=1 / self.fs)
