@@ -297,7 +297,7 @@ class MovingAverageEnvelopeGrid(GridPlot):
 
     @property
     def ylabel(self):
-        return "Log-Amplitude [m/s^2]"
+        return "Log-Amplitude $[m/s^2]$"
 
     def xticks(self, length):
         return np.arange(0, length) / self.fs
