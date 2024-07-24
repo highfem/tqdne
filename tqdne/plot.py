@@ -215,6 +215,8 @@ class GridPlot(Plot, ABC):
         width = default_width * 2
         height = default_height * (len(self.dist_bins) - 1)
         fig, axs = plt.subplots(len(self.dist_bins) - 1, 2, figsize=(width, height))
+        if len(self.dist_bins) == 2:
+            axs = axs[np.newaxis, :]
         xticks = self.xticks(pred.shape[-1])
 
         for i in range(len(self.dist_bins) - 1):
@@ -248,7 +250,7 @@ class GridPlot(Plot, ABC):
             loc="lower center",
             ncol=len(self.mag_bins) - 1,
             title="Magnitude bins",
-            bbox_to_anchor=(0.5, -0.025),
+            bbox_to_anchor=(0.5, -0.15 / (len(self.dist_bins) - 1)),
         )
 
         # column titles
@@ -265,18 +267,19 @@ class GridPlot(Plot, ABC):
             )
 
         # row titles
-        for i, ax in enumerate(axs):
-            ax[0].annotate(
-                f"{self.dist_bins[i]}-{self.dist_bins[i + 1]} km",
-                xy=(-0.3, 0.5),
-                xytext=(0, 0),
-                textcoords="offset points",
-                ha="center",
-                va="center",
-                rotation=90,
-                fontsize=20,
-                xycoords="axes fraction",
-            )
+        if len(self.dist_bins) > 2:
+            for i, ax in enumerate(axs):
+                ax[0].annotate(
+                    f"{self.dist_bins[i]}-{self.dist_bins[i + 1]} km",
+                    xy=(-0.3, 0.5),
+                    xytext=(0, 0),
+                    textcoords="offset points",
+                    ha="center",
+                    va="center",
+                    rotation=90,
+                    fontsize=20,
+                    xycoords="axes fraction",
+                )
 
         fig.tight_layout()
         return fig
