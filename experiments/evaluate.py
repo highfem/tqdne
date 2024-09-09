@@ -1,20 +1,20 @@
 """Evaluate the trained EDM model.
 
-This script generates waveforms using the same conditional features as the dataset. 
-The generated waveforms are saved along with original waveforms, conditional features, and classifier outputs in an HDF5 file. 
+This script generates waveforms using the same conditional features as the dataset.
+The generated waveforms are saved along with original waveforms, conditional features, and classifier outputs in an HDF5 file.
 The created file can be read by the corresponding notebook to compute metrics and create plots.
 """
 
 import sys
 from argparse import ArgumentParser
 
+import config as conf
 import torch
 import torch as th
 from h5py import File
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import tqdne.config as conf
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import Dataset
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
     )
     args = parser.parse_args()
-    if not "latent" in args.config.lower():
+    if "latent" not in args.config.lower():
         args.autoencoder_checkpoint = None
 
     config = getattr(conf, args.config)()

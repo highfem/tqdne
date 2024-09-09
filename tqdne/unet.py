@@ -6,7 +6,7 @@ Implementation adapted from https://github.com/openai/consistency_models.
 from abc import abstractmethod
 
 import torch as th
-import torch.nn as nn
+from torch import nn
 
 from .blocks import AttentionBlock, Downsample, GaussianFourierProjection, Upsample
 from .nn import append_dims, checkpoint, conv_nd, normalization, zero_module

@@ -22,7 +22,6 @@
 # - then open the Python file as notebook ('right-click' + 'open with'in Jupyter lab).
 
 # %%
-import torch
 
 # %%
 1 + 1

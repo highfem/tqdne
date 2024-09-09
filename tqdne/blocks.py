@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 import torch as th
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from .nn import avg_pool_nd, checkpoint, conv_nd, normalization, zero_module
 
@@ -369,7 +369,7 @@ class Decoder(nn.Module):
     flash_attention : bool, optional
         Use the flash attention implementation.
     """
-    
+
     def __init__(
         self,
         in_channels,

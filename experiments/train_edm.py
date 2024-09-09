@@ -1,10 +1,10 @@
 import logging
 
 import torch
+from config import SpectrogramConfig
 from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
-from tqdne.config import SpectrogramConfig
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 from tqdne.training import get_pl_trainer
