@@ -14,12 +14,12 @@ The generated waveforms along with the corresponding conditional features are sa
 
 import argparse
 
+import config as conf
 import h5py
 import numpy as np
 import torch as th
 from tqdm import tqdm
 
-import tqdne.config as conf
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
@@ -80,7 +80,7 @@ def generate(
         is_shallow_crustals = []
         magnitudes = []
         vs30s = []
-        with open(csv, "r") as f:
+        with open(csv) as f:
             # skip header
             f.readline()
 
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = getattr(conf, args.config)()
-    if not "latent" in args.config.lower():
+    if "latent" not in args.config.lower():
         args.autoencoder_checkpoint = None
 
     generate(

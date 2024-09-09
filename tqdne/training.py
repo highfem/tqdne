@@ -4,7 +4,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
-from tqdne.config import Config
 from tqdne.ema import EMA
 from tqdne.logging import LogCallback
 
@@ -13,13 +12,13 @@ def get_pl_trainer(
     name,
     val_loader,
     representation,
+    config,
     metrics=None,
     plots=None,
     ema_decay=0.0,
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
-    config=Config(),
     **trainer_params,
 ):
     # wandb logger

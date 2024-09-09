@@ -1,11 +1,11 @@
 import logging
 
 import torch
+from config import LatentMovingAverageEnvelopeConfig
 from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
 from tqdne.autoencoder import LithningAutoencoder
-from tqdne.config import LatentMovingAverageEnvelopeConfig
 from tqdne.dataset import Dataset
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint

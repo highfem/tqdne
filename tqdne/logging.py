@@ -3,10 +3,9 @@ import warnings
 
 import numpy as np
 import torch
+import wandb
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
-
-import wandb
 
 
 class LogCallback(Callback):

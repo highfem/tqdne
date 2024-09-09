@@ -1,6 +1,7 @@
 import logging
 
 import torch
+from config import SpectrogramClassificationConfig
 from torch.utils.data import DataLoader
 from torchmetrics.classification import (
     MulticlassAccuracy,
@@ -10,7 +11,6 @@ from torchmetrics.classification import (
 )
 
 from tqdne.classifier import LithningClassifier
-from tqdne.config import SpectrogramClassificationConfig
 from tqdne.dataset import ClassificationDataset
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint

@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
 
-from . import representation
+from tqdne import representation
 
 # path processed dataset
 PATH_ROOT = Path(__file__).parents[1]
@@ -16,13 +15,13 @@ class Config:
 
     datasetdir: Path = PATH_ROOT / Path("datasets")
     outputdir: Path = PATH_ROOT / Path("outputs")
-    original_datapath: Path = datasetdir / Path("wforms_GAN_input_v20220805.h5")
-    datapath: Path = datasetdir / Path("gm0.h5")
+    original_datapath: Path = datasetdir / Path("raw_waveforms.h5")
+    datapath: Path = datasetdir / Path("processed_waveforms.h5")
     channels: int = 3
     fs: int = 100
     t = None
 
-    features_keys: Tuple[str, ...] = (
+    features_keys: tuple[str, ...] = (
         "hypocentral_distance",
         "is_shallow_crustal",
         "magnitude",
