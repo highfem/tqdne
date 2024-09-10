@@ -6,7 +6,6 @@ import torch as th
 
 
 class EMA(pl.Callback):
-
     def __init__(self, decay: float = 0.999):
         self.decay = decay
 

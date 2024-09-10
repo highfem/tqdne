@@ -1,10 +1,9 @@
 import pytorch_lightning as pl
 import torch
-from torch.nn import functional as F
-from tqdm import tqdm
-
 from diffusers import DDPMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
+from torch.nn import functional as F
+from tqdm import tqdm
 
 
 class LightningDDMP(pl.LightningModule):

@@ -66,9 +66,7 @@ class LithningConsistencyModel(pl.LightningModule):
         input = sample if cond_sample is None else torch.cat((sample, cond_sample), dim=1)
 
         # skip coefficients
-        c_skip = self.sigma_data**2 / (
-            (sigma - self.sigma_min) ** 2 + self.sigma_data**2
-        )
+        c_skip = self.sigma_data**2 / ((sigma - self.sigma_min) ** 2 + self.sigma_data**2)
         c_skip = append_dims(c_skip, sample.dim())
         c_out = (self.sigma_data * (sigma - self.sigma_min)) / (
             self.sigma_data**2 + sigma**2
@@ -140,11 +138,9 @@ class LithningConsistencyModel(pl.LightningModule):
 
         # sample timesteps from lognormal distribution
         pdf = torch.erf(
-            (torch.log(sigmas[1:]) - self.lognormal_mean)
-            / (self.lognormal_std * np.sqrt(2))
+            (torch.log(sigmas[1:]) - self.lognormal_mean) / (self.lognormal_std * np.sqrt(2))
         ) - torch.erf(
-            (torch.log(sigmas[:-1]) - self.lognormal_mean)
-            / (self.lognormal_std * np.sqrt(2))
+            (torch.log(sigmas[:-1]) - self.lognormal_mean) / (self.lognormal_std * np.sqrt(2))
         )
         pdf = pdf / pdf.sum()
         timesteps = torch.multinomial(pdf, sample.shape[0], replacement=True)

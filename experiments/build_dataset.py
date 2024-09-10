@@ -1,8 +1,7 @@
 import numpy as np
+from config import Config
 from h5py import File
 from tqdm import tqdm
-
-from tqdne.config import Config
 
 if __name__ == "__main__":
     config = Config()

@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Type
 
 import PIL
 import pytorch_lightning as pl
@@ -34,7 +33,7 @@ class NumpyArgMixin:
         return wrapper
 
 
-def load_model(type: Type[pl.LightningModule], path: Path, **kwargs):
+def load_model(type: type[pl.LightningModule], path: Path, **kwargs):
     """Load the autoencoder model from the save directory.
 
     Parameters
