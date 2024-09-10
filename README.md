@@ -1,39 +1,37 @@
-# **T**his **Q**uake **D**oes **N**ot **E**xist
+# Denoising waveform model
 
-This project provides modules and scripts to train, generate, and evaluate deep learning models for creating synthetic seismic data.
+[![ci](https://github.com/highfem/denoising-waveform-model/actions/workflows/ci.yaml/badge.svg)](https://github.com/highfem/denoising-waveform-model/actions/workflows/ci.yaml)
+[![arXiv](https://img.shields.io/badge/arXiv-2311.00474-b31b1b.svg)](https://arxiv.org/abs/2311.00474)
 
-## Setup
+> Generative modelling of seismic waveforms
 
-Follow these steps to get started:
+## About
 
-1. **Clone the repository:**
-    ```bash
-    git clone git@github.com:highfem/tqdne.git
-    cd tqdne
-    ```
+This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](arxiv link).
+It can be used to generate seismic waveforms or for training custom models.
 
-2. **Add the seismic waveforms file:**
-    - Copy `wforms_GAN_input_v20220805.h5` to the `datasets/` folder. (This file is not included in the repository due to size constraints.)
+## Installation
 
-3. **Install dependencies:**
-    - Ensure you have conda installed. If not, install [miniforge](https://github.com/conda-forge/miniforge) (recommended) or any other conda implementation.
-    - Create the `tqne` conda environment:
-    ```bash
-    conda env create -f environment.yml
-    ```
+You can all required dependencies using conda. First download the latest release of the model from [here](ttps://github.com/highfem/denoising-waveform-model/releases)
+Then, install Python dependencies by creating a new conda environment:
 
-4. **Activate the environment:**
-    - Perform this step each time you work on the project.
-    ```bash
-    conda activate tqne
-    ```
+```bash
+conda env create -f environment.yml -p <PATH>
+```
 
-## Structure
+where <PATH> is a user defined path.
 
-The project is organized as follows:
+## Experiments
 
-- `tqne/`: Python package with modules for training, generating, and evaluating synthetic seismic data.
-- `experiments/`: Scripts for dataset building, model training, and evaluation. Refer to the README.md in this folder for details.
-- `notebooks/`: Jupyter notebooks for data exploration and visualization.
-- `datasets/`: Directory for raw and processed datasets. Place `wforms_GAN_input_v20220805.h5` here before running experiments.
-- `outputs/`: Directory for experiment outputs, including model checkpoints and generated data.
+All experimental code can be found in `experiments` (which we, e.g., used to train the generative models in [1]).
+
+## Acknowledgements
+
+Some Python code has been adopted from the following sources:
+
+- EDM: https://github.com/NVlabs/edm
+- Consistency models: https://github.com/openai/consistency_models
+
+## References
+
+[1] Bergmeister, Andreas *et al.*, [High Resolution Seismic Waveform Generation using Denoising Diffusion](arxiv link), 2024

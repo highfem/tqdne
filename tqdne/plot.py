@@ -286,7 +286,6 @@ class GridPlot(Plot, ABC):
 
 
 class MovingAverageEnvelopeGrid(GridPlot):
-
     def __init__(self, fs, channel, mag_bins, dist_bins, window_size=128, log_eps=1e-6):
         super().__init__(fs, channel, mag_bins, dist_bins)
         self.mag_bins = mag_bins
@@ -315,7 +314,6 @@ class MovingAverageEnvelopeGrid(GridPlot):
 
 
 class AmplitudeSpectralDensityGrid(GridPlot):
-
     def __init__(self, fs, channel, mag_bins, dist_bins, log_eps=1e-8):
         super().__init__(fs, channel, mag_bins, dist_bins)
         self.log_eps = log_eps

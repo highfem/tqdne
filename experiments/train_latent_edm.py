@@ -1,11 +1,11 @@
 import logging
 
 import torch
+from config import LatentSpectrogramConfig
 from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
 from tqdne.autoencoder import LithningAutoencoder
-from tqdne.config import LatentSpectrogramConfig
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 from tqdne.training import get_pl_trainer
@@ -74,7 +74,9 @@ if __name__ == "__main__":
     optimizer_params = {"learning_rate": lr, "max_steps": max_steps}
 
     logging.info("Loading autoencoder...")
-    checkpoint = config.outputdir / "Autoencoder-32x32x4-LogSpectrogram" / "0_199-val_loss=1.55e-03.ckpt"
+    checkpoint = (
+        config.outputdir / "Autoencoder-32x32x4-LogSpectrogram" / "0_199-val_loss=1.55e-03.ckpt"
+    )
     autoencoder = LithningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")

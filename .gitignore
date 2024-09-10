@@ -16,3 +16,6 @@ outputs/
 .venv
 .env
 .idea/
+
+requirements.lock
+requirements-dev.lock
