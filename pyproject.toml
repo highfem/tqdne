@@ -18,6 +18,8 @@ dependencies = [
     "h5py>=3.10.0",
     "diffusers>=0.26.3",
     "pathos>=0.3.2",
+    "librosa>=0.10.2.post1",
+    "pandas>=2.2.2",
 ]
 dynamic = ["version"]
 
