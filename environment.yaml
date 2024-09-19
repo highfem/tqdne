@@ -21,6 +21,7 @@ dependencies:
   - librosa=0.10.1
   - pathos=0.3.2
   - pandas=2.2.2
+  - obspy=1.4.1
   - pip
   - pip:
       - plotly==5.20.0
