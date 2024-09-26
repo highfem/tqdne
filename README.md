@@ -12,14 +12,15 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
-You can all required dependencies and the versions that have been used in the experiments using conda.
-First download the latest release of the model from [here](ttps://github.com/highfem/tqdne/releases). Then, install Python dependencies by creating a new conda environment:
+You can install all required dependencies and the versions that have been used in the experiments using conda.
+First download the latest release of the model from [here](https://github.com/highfem/tqdne/releases). Then, install Python dependencies by creating a new conda environment, and by then activating it:
 
 ```bash
 conda env create -f environment.yml -p <PATH>
+conda activate tqdne
 ```
 
-where <PATH> is a user defined path.
+where `<PATH>` is a user defined path.
 
 ## Experiments
 
