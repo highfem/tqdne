@@ -1,0 +1,16 @@
+# pack-refs with: peeled fully-peeled sorted 
+6aec3ad32c1a49930447845d8220050348535286 refs/heads/andrea-gm0
+6aec3ad32c1a49930447845d8220050348535286 refs/heads/andrea-gm0-public
+6aec3ad32c1a49930447845d8220050348535286 refs/heads/andrea-new
+d88a58864fdc17ba771d3714841e041f85e7748a refs/heads/main
+6aec3ad32c1a49930447845d8220050348535286 refs/remotes/origin/andrea-gm0
+5e163acbb4dd1ffe4253b5e95372cb67e247d96e refs/remotes/origin/diffusion-moreira
+fde74424dde73aafcb44d8476ef5548d08e1ceff refs/remotes/origin/log_spec
+eb866dd4e4d831076a0d678719430b0faf6f6b7b refs/remotes/origin/logspectrogram
+1909ac71f171fc465deecd94200308a70c1417a6 refs/remotes/origin/main
+e32a9abe6c432274c08c41317092d7667772b554 refs/remotes/origin/metrics
+f7e1b11a1a1b67c55dde449f3b5b3230021227e3 refs/remotes/origin/notebooks
+912ca6c60bf46a007347dff966cdc5a0de302fde refs/remotes/origin/representation
+3644caa0e0b8652eff95db4ffcf66dedbaac5177 refs/remotes/origin/signal-envelope
+d22ba019f4708acebe53eaed68f1e9415b5defcf refs/remotes/origin/test
+8d86c0ed4f4c52d0193e0d478185621ae43fed7c refs/remotes/origin/unet

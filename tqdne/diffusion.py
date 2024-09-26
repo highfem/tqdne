@@ -74,11 +74,7 @@ class LightningDiffusion(pl.LightningModule):
         else:
             cond = None
 
-        #assert torch.isfinite(input).all().item()
         out = self.net(input, t, cond=cond)
-        #assert torch.isfinite(out).all().item() 
-        #print(out.min(), out.max())
-        #print("Model outputs all 0s: ", torch.all(out == 0).item())
         return out
 
     def sample(self, shape, cond_signal=None, cond=None):

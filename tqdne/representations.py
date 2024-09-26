@@ -21,13 +21,13 @@ def to_numpy(x):
         return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
     
 @staticmethod
-def to_torch(x, device='cuda'):
+def to_torch(x, device='cuda', dtype=torch.float32):
     if isinstance(x, Sequence):
         return x.__class__(to_torch(v, device) for v in x)
     elif isinstance(x, Mapping):
         return x.__class__((k, to_torch(v, device)) for k, v in x.items())
     else:
-        return x.to(torch.device(device)) if isinstance(x, torch.Tensor) else x
+        return torch.from_numpy(x).to(torch.device(device), dtype=dtype) if isinstance(x, np.ndarray) else x.to(torch.device(device), dtype=dtype)
 
 
 class Representation(ABC):
@@ -63,11 +63,13 @@ class Representation(ABC):
         return self._plot(raw_waveform, title, inverted_waveform)
     
     @abstractmethod
-    def _plot_representation(self, channel=0):
+    def _plot_representation(self, signal=None, channel=0):
         pass
 
-    def plot_representation(self, channel=0): 
-        return self._plot_representation(channel)   
+    def plot_representation(self, downsampling_factor, channel=0): 
+        from tqdne.dataset import downsample_waveform
+        signal = downsample_waveform(self.config.example_signal, downsampling_factor)
+        return self._plot_representation(signal, channel)   
     
     @abstractmethod
     def _plot_distribution(self, pred_raw_waveforms, test_raw_waveforms):
@@ -99,27 +101,6 @@ class Representation(ABC):
 
     def get_num_channels(self, original_num_channels: int) -> int:
         return self._get_num_channels(original_num_channels)
-
-    def _get_length_divisor(self, unet_max_divisor: int) -> int:
-        return unet_max_divisor    
-
-    def get_length_divisor(self, unet_max_divisor: int) -> int:
-        return self._get_length_divisor(unet_max_divisor)    
-    
-    def _adjust_length_params(self, unet_max_divisor: int, new_signal_length: int) -> None:
-        pass
-
-    def adjust_length_params(self, unet_max_divisor: int, new_signal_length: int) -> None:
-        return self._adjust_length_params(unet_max_divisor, new_signal_length)
-
-
-    # TODO: remove this method
-    def update_stats(self, config: Config):
-        return self._update_stats(config)
-
-    @abstractmethod
-    def _update_stats(self, config: Config):
-        pass
 
 
 class Signal(Representation):
@@ -167,7 +148,7 @@ class Signal(Representation):
             return self.inv_scaling_function(representation)
         return representation
 
-    def _plot(self, raw_waveform, title, inverted_waveform=None):
+    def _plot(self, raw_waveform, title, inverted_waveform):
         fig, axs = plt.subplots(self.config.num_channels, 1, figsize=(15, 15))
         for c in range(self.config.num_channels):
             axs[c, 0].plot(raw_waveform[c, :], label=f'Channel {c}')
@@ -175,14 +156,17 @@ class Signal(Representation):
             axs[c, 0].legend()
 
         fig.suptitle(f'Cond. params: {title}')
+        plt.tight_layout()
         plt.show()    
 
-    def _plot_representation(self, channel):
-        signal = self.config.example_signal[channel, :]
-        fig = plt.figure()
+    def _plot_representation(self, signal, channel):
+        fig = plt.figure(figsize=(15, 9))
         ax = fig.add_subplot(111)
-        ax.plot(signal)
+        time_ax = np.arange(0, signal.shape[-1]) / self.config.fs
+        ax.plot(time_ax, signal[channel])
+        ax.set_xlabel('Time [s]')
         ax.set_title(f"Signal - channel {channel}")
+        plt.tight_layout()
         plt.show()
 
     def _plot_distribution(self, pred_raw_waveforms, test_raw_waveforms):
@@ -207,11 +191,7 @@ class Signal(Representation):
     def _test(self, waveforms):
         # TODO: Maybe test scaling
         pass
-
-    def _update_stats(self, config: Config):
-        pass            
-
-
+         
 
 class SignalWithEnvelope(Representation):
     def __init__(self, env_function, env_function_params, env_transform, env_transform_params, scaling, config = Config()):
@@ -221,22 +201,24 @@ class SignalWithEnvelope(Representation):
         self.trans_function, self.inv_trans_function = self._get_trans_function_by_name(env_transform)
         self.env_transform_params = env_transform_params
         self.scaling = scaling
-        # if key dataset_stats_file exist
-        if "dataset_stats_file" in self.scaling:
-            import pickle
-            with open(self.scaling["dataset_stats_file"], 'rb') as pickle_file:
-                dataset_stats_dict = pickle.load(pickle_file)
-        else:
-            dataset_stats_dict = config.signal_statistics 
 
         if self.scaling["type"] == "normalize":
             if self.scaling["scalar"]:
                 # Signal statistics for normalization
-                # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0.
-                max_env_peak_per_channel = np.array([dataset_stats_dict[ch]['max'] for ch in dataset_stats_dict.keys()])[:, np.newaxis]
-                min_env_peak_per_channel = np.array([0 for _ in max_env_peak_per_channel])[:, np.newaxis]
-                max_trans_env_peak_per_channel = self.trans_function(max_env_peak_per_channel, **env_transform_params)
-                min_trans_env_peak_per_channel = self.trans_function(min_env_peak_per_channel, **env_transform_params)
+                if "dataset_stats_file" in self.scaling:
+                    import pickle
+                    with open(self.scaling["dataset_stats_file"], 'rb') as pickle_file:
+                        envelope_stats_dict = pickle.load(pickle_file)
+                        max_trans_env_peak_per_channel = np.array([envelope_stats_dict[ch]['max'] for ch in envelope_stats_dict.keys()])[:, np.newaxis]
+                        min_trans_env_peak_per_channel = np.array([envelope_stats_dict[ch]['min'] for ch in envelope_stats_dict.keys()])[:, np.newaxis]
+                else:
+                    dataset_stats_dict = config.signal_statistics 
+                    # Assuming that maximum of the envelope coincides with the maximum of the signal and that the minimum of the envelope is 0.
+                    max_env_peak_per_channel = np.array([dataset_stats_dict[ch]['max'] for ch in dataset_stats_dict.keys()])[:, np.newaxis]
+                    min_env_peak_per_channel = np.array([0 for _ in max_env_peak_per_channel])[:, np.newaxis]
+                    max_trans_env_peak_per_channel = self.trans_function(max_env_peak_per_channel, **env_transform_params) 
+                    min_trans_env_peak_per_channel = self.trans_function(min_env_peak_per_channel, **env_transform_params)
+
                 #Normalize the transformed envelope to the range [-1, 1]
                 self.scaling_function = lambda trans_env: 2 * (trans_env - min_trans_env_peak_per_channel) / (max_trans_env_peak_per_channel - min_trans_env_peak_per_channel) - 1
                 self.inv_scaling_function = lambda norm_trans_env: (norm_trans_env + 1) * (max_trans_env_peak_per_channel - min_trans_env_peak_per_channel) / 2 + min_trans_env_peak_per_channel
@@ -244,22 +226,22 @@ class SignalWithEnvelope(Representation):
                 raise NotImplementedError("Channel-wise normalization is not implemented yet -- missing statistics")
 
         elif self.scaling["type"] == "standardize":
-            if self.scaling["scalar"]:
-                env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
-                trans_env_mean_per_channel = np.array([env_stats['mean'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
-                trans_env_std_per_channel = np.array([env_stats['std_dev'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
-                self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel) / trans_env_std_per_channel 
-                self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel + trans_env_mean_per_channel
+            raise NotImplementedError()
+            # if self.scaling["scalar"]:
+            #     env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
+            #     trans_env_mean_per_channel = np.array([env_stats['mean'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
+            #     trans_env_std_per_channel = np.array([env_stats['std_dev'] for env_stats in env_stats_per_channel]).reshape(-1, 1) # shape: (num_channels, 1)
+            #     self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel) / trans_env_std_per_channel 
+            #     self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel + trans_env_mean_per_channel
                 
-            else:
-                # Statistics of the transformed envelope (computer over a subset of the training dataset)
-                # TODO: manage. maybe remove it, as one should need to compute the statistics over the whole dataset for each envelope function and related params
-                env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
-                trans_env_mean_per_channel = np.array([env_stats['mean_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
-                trans_env_std_per_channel = np.array([env_stats['std_dev_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
-                # Standardize the transformed envelope 
-                self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel[:, : trans_env.shape[-1]]) / trans_env_std_per_channel[:, : trans_env.shape[-1]] 
-                self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel[:, : std_trans_env.shape[-1]] + trans_env_mean_per_channel[:, : std_trans_env.shape[-1]]
+            # else:
+            #     # Statistics of the transformed envelope (computer over a subset of the training dataset)
+            #     env_stats_per_channel = [dataset_stats_dict[ch] for ch in dataset_stats_dict.keys()]
+            #     trans_env_mean_per_channel = np.array([env_stats['mean_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+            #     trans_env_std_per_channel = np.array([env_stats['std_dev_signal'] for env_stats in env_stats_per_channel]) # shape: (num_channels, signal_length)
+            #     # Standardize the transformed envelope 
+            #     self.scaling_function = lambda trans_env: (trans_env - trans_env_mean_per_channel[:, : trans_env.shape[-1]]) / trans_env_std_per_channel[:, : trans_env.shape[-1]] 
+            #     self.inv_scaling_function = lambda std_trans_env: std_trans_env * trans_env_std_per_channel[:, : std_trans_env.shape[-1]] + trans_env_mean_per_channel[:, : std_trans_env.shape[-1]]
 
         elif self.scaling["type"] == "none":
             self.scaling_function = lambda x: x
@@ -392,38 +374,53 @@ class SignalWithEnvelope(Representation):
     ## --- Plotting methods --- ##
     def _plot(self, raw_waveform, title, inverted_waveform):
         n_channels = self.config.num_channels
-        inverted_waveform = self.invert_representation(raw_waveform.reshape(1,-1))[0] if inverted_waveform is None else inverted_waveform
-        fig, axs = plt.subplots(n_channels, 3, figsize=(15, 15))
-        
+        time_ax = np.arange(0, self.config.signal_length) / self.config.fs
+        fig, axs = plt.subplots(n_channels, 3, figsize=(20, 15))
         for c in range(n_channels):
-            axs[c, 0].plot(raw_waveform[c, :], label=f'Channel {c}')
-            axs[c, 1].plot(raw_waveform[n_channels+c, :], label=f'Channel {c}')
-            axs[c, 2].plot(inverted_waveform[c, :], label=f'Channel {c}')   
+            axs[c, 0].plot(time_ax, raw_waveform[c, :], label=f'Channel {c}')
+            axs[c, 1].plot(time_ax, raw_waveform[n_channels+c, :], label=f'Channel {c}')
+            axs[c, 2].plot(time_ax, inverted_waveform[c, :], label=f'Channel {c}')   
             axs[c, 0].set_title('Gen. Transformed Envelope')
             axs[c, 1].set_title('Gen. Scaled Signal')
             axs[c, 2].set_title('Gen. Inverted Signal')
+            axs[c, 2].set_ylabel('$m/s^2$')
             axs[c, 0].legend(), axs[c, 1].legend(), axs[c, 2].legend()
         
+        axs[c, 0].set_xlabel('Time [s]'), axs[c, 1].set_xlabel('Time [s]'), axs[c, 2].set_xlabel('Time [s]')
         fig.suptitle(f'Cond. params: {title}')
+    
+        plt.tight_layout()
         plt.show()    
     
-    def _plot_representation(self, channel):
-        signal = self.config.example_signal[channel, :]
+    def _plot_representation(self, signal, channel):
+
         envelope = self.env_function(signal, **self.env_function_params)
 
-        fig = plt.figure()
-        ax1 = fig.add_subplot(211)
-        ax1.plot(signal, alpha=0.6, label='signal')
-        ax1.plot(envelope, linewidth=1,  label='envelope')
-        title = f"Envelope function: {self.env_function.__name__}"
+        time_ax = np.arange(0, signal.shape[-1]) / self.config.fs
+
+        fig = plt.figure(figsize=(15, 9))
+        ax1 = fig.add_subplot(311)
+        ax1.plot(time_ax, signal[channel], alpha=0.6, label='Signal')
+        ax1.plot(time_ax, envelope[channel], linewidth=1,  label='Envelope')
+        title = f"Envelope function: {self.env_function.__name__} - {self.env_function_params}" if self.env_function_params else f"Envelope function: {self.env_function.__name__}"
         ax1.set_title(title)
+        ax1.set_xlabel('Time [s]')
         ax1.legend()
 
-        ax2 = fig.add_subplot(212)
-        sig_scaled_by_envelope = np.nan_to_num(signal/envelope, nan=0., posinf=0., neginf=0.) # since if the envelope is 0, the signal is also small. 
+        repr = self._get_representation(signal)
+        num_channels = self.config.num_channels
 
-        ax2.plot(sig_scaled_by_envelope)
-        ax2.set_title("Signal scaled by its envelope")
+        ax2 = fig.add_subplot(312)
+        sig_scaled_by_envelope = repr[num_channels:, :]
+        ax2.plot(time_ax, sig_scaled_by_envelope[channel])
+        ax2.set_title("Signal scaled by the envelope")
+        ax2.set_xlabel('Time [s]')  
+
+        ax3 = fig.add_subplot(313)
+        scaled_envelope = repr[:num_channels, :]
+        ax3.plot(time_ax, scaled_envelope[channel])
+        ax3.set_title("Transformed and scaled envelope")
+        ax3.set_xlabel("Time [s]")
         
         plt.tight_layout()
         plt.show()
@@ -459,21 +456,16 @@ class SignalWithEnvelope(Representation):
             for env_fun in self._env_functions:
                 repr_config = SignalWithEnvelope(env_fun, {}, trans_fun, {}, scaling={"type": "normalize", "scalar": True})
                 repr_config.test_inversion(waveforms)
-           
-
-    def _update_stats(self, config: Config):
-        # TODO
-        # Compute the statistics of the transformed envelope (mean, std, min, max) over a subset of the training dataset
-        # Save the statistics in a pickle file
-        pass    
+            
         
 
 class LogSpectrogram(Representation):
     def __init__(
         self,
+        output_signal_length,
         stft_channels=512,
         hop_size=None,
-        griffin_lim_iterations=256,
+        griffin_lim_iterations=128,
         clip=1e-8,
         log_max=3,
         library="librosa",
@@ -484,9 +476,10 @@ class LogSpectrogram(Representation):
         LogSpectrogram representation class.
 
         Args:
+            output_signal_length (int): Length of the output signal.
             stft_channels (int): Number of channels in the STFT.
             hop_size (int): Hop size for the STFT. If None, it is set to stft_channels // 4.
-            griffin_lim_iterations (int): Number of iterations for the Griffin-Lim algorithm.
+            griffin_lim_iterations (int): Number of iterations for the Griffin-Lim algorithm. Default is 128.
             clip (float): Clip value for the logarithm operation.
             log_max (float): Maximum value for the logarithm operation.
             library (str): Library to use for the STFT and inverse STFT operations. Options are "librosa", "tifresi", and "torch".
@@ -503,7 +496,9 @@ class LogSpectrogram(Representation):
         self.griffin_lim_iterations = griffin_lim_iterations
         self.library = library
 
-        self.internal_signal_length = None
+        self.output_signal_length = output_signal_length
+        self.internal_signal_length = output_signal_length + self.stft_channels // 2
+        self._set_stft_functions(self.internal_signal_length)
 
         self.device = device
         if library == 'librosa' and device != 'cpu': 
@@ -517,12 +512,12 @@ class LogSpectrogram(Representation):
 
         #self._set_stft_functions()
 
-    def _set_stft_functions(self, new_signal_length=None):
+    def _set_stft_functions(self, signal_length=None):
         """
         Set the STFT and inverse STFT functions based on the selected library.
 
         Args:
-            new_signal_length (int): New signal length for the inverse STFT.
+            signal_length (int): Length of the signal used for the inverse STFT.
 
         """
         if self.library == "librosa":
@@ -530,7 +525,7 @@ class LogSpectrogram(Representation):
 
             self.stft = lambda x: stft(x, n_fft=self.stft_channels, hop_length=self.hop_size)
             self.istft = lambda x: griffinlim(
-                x, hop_length=self.hop_size, n_fft=self.stft_channels, length=new_signal_length, n_iter=self.griffin_lim_iterations, random_state=0
+                x, hop_length=self.hop_size, n_fft=self.stft_channels, length=signal_length, n_iter=self.griffin_lim_iterations, random_state=0
             )
 
         elif self.library == "tifresi":
@@ -542,58 +537,29 @@ class LogSpectrogram(Representation):
             self.istft = stft_system.invert_spectrogram
 
         elif self.library == "torch":
-            window = torch.hann_window(self.stft_channels, device=torch.device(self.device))
+            #window = torch.hann_window(self.stft_channels, device=torch.device(self.device))
             #window = torch.hann_window(self.stft_channels)#.to(self.device)
+            window = torch.hann_window(self.stft_channels)
             self.stft = lambda x: torch.stft(
-                torch.tensor(x, device=torch.device(self.device)),
+                to_torch(x, device=self.device),
                 n_fft=self.stft_channels, 
                 hop_length=self.hop_size, 
-                window=window, 
+                window=to_torch(window, device=self.device), 
                 return_complex=True
                 ).numpy()
             from torchaudio.functional import griffinlim
             self.istft = lambda x: griffinlim(
-                torch.tensor(x, device=torch.device(self.device)), 
+                to_torch(x, device=self.device), 
                 n_fft=self.stft_channels, 
                 hop_length=self.hop_size, 
-                length=new_signal_length,  
-                window=window, 
+                length=signal_length,  
+                window=to_torch(window, device=self.device), 
                 win_length=self.stft_channels,
                 power=1, 
                 n_iter=self.griffin_lim_iterations,
                 momentum=.99, 
                 rand_init=False
-                ).numpy()
-
-
-    def _get_length_divisor(self, unet_max_divisor: int):
-        """
-        Get the length divisor based on the UNet maximum divisor.
-
-        Args:
-            unet_max_divisor (int): Maximum divisor of the UNet.
-
-        Returns:
-            int: Length divisor.
-
-        """
-        stft_length_divisor = self.hop_size * unet_max_divisor
-        return stft_length_divisor
-            
-
-    def _adjust_length_params(self, unet_max_divisor: int, new_signal_length: int):
-        """
-        Adjust the length parameters based on the UNet maximum divisor and new signal length.
-
-        Args:
-            unet_max_divisor (int): Maximum divisor of the UNet.
-            new_signal_length (int): New signal length.
-
-        """
-        new_stft_channels = round(self.stft_channels / unet_max_divisor) * unet_max_divisor
-        self.stft_channels = new_stft_channels
-        self._set_stft_functions(new_signal_length)
-        
+                ).numpy()        
 
     def _get_name(self, FLAGS, name=None):
         """
@@ -622,10 +588,7 @@ class LogSpectrogram(Representation):
             ndarray: Spectrogram.
 
         """
-        if self.internal_signal_length is None:
-            self.internal_signal_length = signal.shape[-1] + self.stft_channels // 2
-            self._set_stft_functions(new_signal_length=self.internal_signal_length)
-        signal_pad = fix_length(signal, size=self.internal_signal_length)
+        signal_pad = fix_length(to_numpy(signal), size=self.internal_signal_length)
         shape = signal_pad.shape
         signal_pad = signal_pad.reshape(-1, shape[-1])  # flatten trailing dimensions
         signal_pad = self.to_array_fun(signal_pad)
@@ -649,7 +612,7 @@ class LogSpectrogram(Representation):
         spec = self.to_array_fun(spec)
         signal = np.array([self.istft(x) for x in spec])
         signal = signal.reshape(shape[:-2] + signal.shape[1:])  # restore trailing dimensions
-        signal = signal[..., :self.config.signal_length]  # remove padding
+        signal = signal[..., :self.output_signal_length]  # remove padding
         return signal
 
     def _get_representation(self, signal):
@@ -703,7 +666,6 @@ class LogSpectrogram(Representation):
 
         """
         channels = [c for c in range(self.config.num_channels)] if channel is None else [channel] 
-        inverted_waveform = self.invert_representation(raw_waveform[None, ...])[0] if inverted_waveform is None else inverted_waveform
         fig, axs = plt.subplots(len(channels), 2, figsize=(15, 15))
         axs = np.atleast_2d(axs)
         time_ax = np.arange(0, self.config.signal_length) / self.config.fs
@@ -713,7 +675,8 @@ class LogSpectrogram(Representation):
             axs[c, 0].set_xlabel('Time Bins'), axs[c, 0].set_ylabel('Freq. Bins')
             axs[c, 0].set_title('Gen. Normalized Log-Spectrogram (STFT)')
             axs[c, 1].plot(time_ax, inverted_waveform[c, :self.config.signal_length], label=f'Channel {c}')   
-            axs[c, 1].set_xlabel('Time (s)')
+            axs[c, 1].set_xlabel('Time [s]')
+            axs[c, 1].set_ylabel('$[m/s^2]$')
             axs[c, 1].set_title('Gen. Inverted Signal')
             axs[c, 1].legend()
         
@@ -722,27 +685,33 @@ class LogSpectrogram(Representation):
         plt.tight_layout()
         plt.show()   
 
-    def _plot_representation(self, channel):
+    def _plot_representation(self, signal, channel):
         """
-        Plot the representation for a specific channel.
+        Plots the signal and its spectrogram representation.
 
         Args:
-            channel (int): Channel to plot.
+            signal (ndarray): The input signal.
+            channel (int): The channel number.
 
+        Returns:
+            None
         """
-        signal = self.config.example_signal[channel, :]
+
+        time_ax = np.arange(0, signal.shape[-1]) / self.config.fs
         spectrogram = self._get_representation(signal)
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(15, 9))
         ax1 = fig.add_subplot(211)
-        ax1.plot(signal)
+        ax1.plot(time_ax, signal[channel])
         ax1.set_title(f"Signal - channel {channel}")
+        ax1.set_xlabel('Time [s]')
 
-        ax2 = fig.add_subplot(212) 
-        ax2.imshow(spectrogram)
-        ax2.set_title(f"Spectrogram (STFT)- channel {channel}")
+        ax2 = fig.add_subplot(212)
+        ax2.imshow(spectrogram[channel])
+        ax2.set_title(f"Spectrogram (STFT) - channel {channel}")
         ax2.set_xlabel('Time Bins'), ax2.set_ylabel('Freq. Bins')
-        
+        ax2.set_aspect('auto')  # Set same width as ax1
+
         plt.tight_layout()
         plt.show()
 
@@ -789,15 +758,4 @@ class LogSpectrogram(Representation):
 
         """
         return LogSpectrogram()._test_inversion(waveforms)    
-        
     
-    def _update_stats(self, config: Config):
-        """
-        Update the statistics based on the configuration.
-
-        Args:
-            config (Config): Configuration object.
-
-        """
-        pass
-     

@@ -10,6 +10,17 @@ import wandb
 
 class LogCallback(Callback):
     def __init__(self, task, val_loader, metrics, plots, limit_batches=1, every=1):
+        """
+        Initializes the LogCallback.
+
+        Args:
+            task (str): The task type, e.g., "classification".
+            val_loader (DataLoader): The validation data loader.
+            metrics (list or dict): The metrics to be logged.
+            plots (list): The plots to be logged.
+            limit_batches (int): The maximum number of batches to evaluate. Default is 1.
+            every (int): The frequency of logging. Default is 1.
+        """
         super().__init__()
         self.task = task
         self.val_loader = val_loader
@@ -50,8 +61,6 @@ class LogCallback(Callback):
         else: 
             target = batch    
         
-        # TODO: cache the inverted representation to speed up the evaluation
-
         # Log metrics
         if isinstance(self.metrics, list):
             self.metrics = {(metric.name if hasattr(metric, "name") else metric.__class__.__name__): metric for metric in self.metrics}
@@ -65,7 +74,6 @@ class LogCallback(Callback):
             fig = plot(
                 preds=pred,
                 target=target,
-                cond_signal=batch["cond_signal"] if "cond_signal" in batch else None,
                 cond=batch["cond"] if "cond" in batch else None,
             )
             try:

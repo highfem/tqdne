@@ -8,7 +8,7 @@ from pathlib import Path
 from absl import flags, app
 from ml_collections import config_flags
 from tqdne.conf import Config
-from tqdne.dataset import SampleDataset
+from tqdne.dataset import ClassifierDataset
 from tqdne.training import get_pl_trainer
 from tqdne.unet import HalfUNetClassifierModel
 from torch.utils.data import DataLoader
@@ -27,6 +27,7 @@ flags.DEFINE_bool("use_last_checkpoint", False, "get the last checkpoint from th
 flags.DEFINE_string("checkpoint_file", None, "checkpoint file of the previously trained model")
 flags.DEFINE_string("train_datapath", str(general_config.datasetdir / general_config.data_train), "path to the training data")
 flags.DEFINE_string("test_datapath", str(general_config.datasetdir / general_config.data_test), "path to the test data")
+flags.DEFINE_integer("downsampling_factor", 1, "downsampling factor")
 flags.DEFINE_string("outdir", str(general_config.outputdir) , "out directory, i.e., place where results are written to")
 flags.mark_flags_as_required(["config"])
 
@@ -36,18 +37,34 @@ def main(argv):
 
     batch_size = FLAGS.config.optimizer_params.batch_size
 
+    # Update configuration parameters
+    general_config.fs = general_config.fs // FLAGS.downsampling_factor
+    general_config.signal_length = general_config.signal_length // FLAGS.downsampling_factor
+
     # Get the data representation 
-    data_representation = get_data_representation(FLAGS.config) 
+    data_representation = get_data_representation(FLAGS.config, signal_length=general_config.signal_length) 
     name = f"{FLAGS.config.name}-{FLAGS.config.model.net_params.dims}D-{FLAGS.config.model.net_params.model_channels}Chan-{FLAGS.config.model.net_params.channel_mult}Mult-{FLAGS.config.model.net_params.num_res_blocks}ResBlocks-{FLAGS.config.model.net_params.num_heads}AttHeads"
     name = data_representation.get_name(FLAGS, name)
+    data_repr_channels = data_representation.get_num_channels(general_config.num_channels)
     
-
     # Datastes
     # Bins decided based on the distribution of the data (see dataset_stats.ipynb)
-    mag_bins = [(4.5, 4.8), (4.8, 5), (5, 5.5), (5.5, 6.), (6., 6.5), (6.5, 9.1)]
-    dist_bins = [(0, 50), (50, 100), (100, 150), (150, 200)]
-    train_dataset = SampleDataset(h5_path=Path(FLAGS.train_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins, shuffle=True) 
-    test_dataset = SampleDataset(h5_path=Path(FLAGS.test_datapath), data_representation=data_representation, cut=general_config.signal_length, mag_bins=mag_bins, dist_bins=dist_bins)
+    mag_bins = FLAGS.config.bins.mag
+    dist_bins = FLAGS.config.bins.dist
+    train_dataset = ClassifierDataset(
+        h5_path=Path(FLAGS.train_datapath), 
+        downsample=FLAGS.downsampling_factor,
+        mag_bins=mag_bins,
+        dist_bins=dist_bins,    
+        data_repr=data_representation
+        ) 
+    test_dataset = ClassifierDataset(
+        h5_path=Path(FLAGS.test_datapath), 
+        downsample=FLAGS.downsampling_factor, 
+        mag_bins=mag_bins,
+        dist_bins=dist_bins,
+        data_repr=data_representation
+        )
 
     # Loss function with class weights
     class_weights = train_dataset.get_class_weights()
@@ -80,7 +97,7 @@ def main(argv):
 
 
     logging.info("Build network...")
-    net = HalfUNetClassifierModel(in_channels=general_config.num_channels, num_classes=num_classes, **FLAGS.config.model.net_params)
+    net = HalfUNetClassifierModel(in_channels=data_repr_channels, num_classes=num_classes, **FLAGS.config.model.net_params)
     logging.info(FLAGS.config.model.net_params)
 
     # Metrics
@@ -101,7 +118,14 @@ def main(argv):
 
     logging.info("Build Pytorch Lightning Trainer...")
     example_input = train_dataset[0]["repr"][None, ...]
-    model = LightningClassifier(net=net, optimizer_params=FLAGS.config.optimizer_params, loss=loss, metrics=metrics, example_input_array=example_input, ml_config=FLAGS.config)
+    model = LightningClassifier(
+        net=net, 
+        optimizer_params=FLAGS.config.optimizer_params, 
+        loss=loss, 
+        metrics=metrics, 
+        example_input_array=example_input,
+        ml_config=FLAGS.config
+    )
 
     trainer = get_pl_trainer(
         name=name,

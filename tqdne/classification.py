@@ -2,9 +2,10 @@ import ml_collections
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 
-from tqdne.representations import to_numpy
+from tqdne.representations import to_numpy, to_torch
 
 class LightningClassifier(pl.LightningModule):
     """A PyTorch Lightning module for training a classification model
@@ -80,64 +81,106 @@ class LightningClassifier(pl.LightningModule):
         )
         return optimizer
     
-    def get_embeddings(self, data, data_represenation=None):
-            """
-            Get the embeddings for the input data.
+    def get_embeddings(self, data, data_representation=None):
+        """
+        Get the embeddings for the input data.
 
-            Args:
-                data (np.ndarray or torch.utils.data.DataLoader): The input data.
-                data_represenation (Representation, optional): The data representation used by the classifier.
+        Args:
+            data (np.ndarray or torch.utils.data.DataLoader): The input data.
+            data_representation (Representation, optional): The data representation used by the classifier.
 
-            Returns:
-                torch.Tensor: The embeddings for the input data.
-            """ 
+        Returns:
+            torch.Tensor: The embeddings for the input data.
+        """ 
 
-            embeddings_list = []
-            with torch.no_grad():
-                if isinstance(data, torch.utils.data.DataLoader):
-                    for batch in tqdm(data):
-                        if data_represenation is not None:
-                            batch = data_represenation.get_representation(batch['repr'])
-                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                        embeddings = self.net.get_embeddings(batch) 
-                        embeddings_list.append(to_numpy(embeddings))
-                else:  
-                    for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
-                        if data_represenation is not None:
-                            batch = data_represenation.get_representation(batch)           
-                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                        embeddings = self.net.get_embeddings(batch) 
-                        embeddings_list.append(to_numpy(embeddings))
-                        
-            return np.concatenate(embeddings_list, axis=0)
+        embeddings_list = []
+        with torch.no_grad():
+            if isinstance(data, torch.utils.data.DataLoader):
+                for batch in tqdm(data):
+                    if data_representation is not None:
+                        batch = data_representation.get_representation(batch['waveform'])
+                    else:    
+                        batch = to_torch(batch['repr'], device=self.device)
+                    batch = to_torch(batch, device=self.device)
+                    embeddings = self.net.get_embeddings(batch) 
+                    embeddings_list.append(to_numpy(embeddings))
+            else:  
+                if self.ml_config.optimizer_params.batch_size >= data.shape[0]:
+                    if data_representation is not None:
+                        data = data_representation.get_representation(data) 
+                    embeddings = self.net.get_embeddings(to_torch(data, device=self.device))
+                    return to_numpy(embeddings)
+                for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
+                    if data_representation is not None:
+                        batch = data_representation.get_representation(batch)           
+                    batch = to_torch(batch, device=self.device)
+                    embeddings = self.net.get_embeddings(batch) 
+                    embeddings_list.append(to_numpy(embeddings))
+                    
+        return np.concatenate(embeddings_list, axis=0)
 
-    def get_probabilities(self, data, data_represenation=None):
-            """
-            Get class probabilities for the input data.
+    def get_probabilities(self, data, data_representation=None, from_embeddings=False):
+        """
+        Get class probabilities for the input data.
 
-            Args:
-                data (np.ndarray or torch.utils.data.DataLoader): The input data.
-                data_represenation (Representation, optional): The data representation object. Defaults to None.
+        Args:
+            data (np.ndarray or torch.utils.data.DataLoader): The input data (np.ndarray or torch.utils.data.DataLoader) or the embeddings (np.ndarray).
+            data_representation (Representation, optional): The data representation object. Defaults to None.
+            from_embeddings (bool, optional): Whether to get the probabilities from the embeddings. Defaults to False.
 
-            Returns:
-                numpy.ndarray: The concatenated class probabilities for the input data.
+        Returns:
+            numpy.ndarray: The concatenated class probabilities for the input data.
 
-            """
-            probabilities_list = []
-            with torch.no_grad():
-                if isinstance(data, torch.utils.data.DataLoader):
-                    for batch in tqdm(data):
-                        if data_represenation is not None:
-                            batch = data_represenation.get_representation(batch['repr'])
-                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                        probabilities = torch.nn.functional.softmax(self.net(batch), dim=1)
-                        probabilities_list.append(to_numpy(probabilities))
-                else:      
-                    for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
-                        if data_represenation is not None:
-                            batch = data_represenation.get_representation(batch)       
-                        batch = torch.tensor(batch, dtype=torch.float32).to(self.device)
-                        probabilities = torch.nn.functional.softmax(self.net(batch), dim=1)
-                        probabilities_list.append(to_numpy(probabilities))
-                                
-            return np.concatenate(probabilities_list, axis=0)
+        """
+        predictions = to_torch(self.get_predictions(data, data_representation, from_embeddings))
+        probabilities = torch.nn.functional.softmax(predictions, dim=1)                 
+        return to_numpy(probabilities)
+
+    
+    def get_predictions(self, data, data_representation=None, from_embeddings=False):
+        """
+        Get the class predictions for the input data, before the softmax.
+
+        data (np.ndarray or torch.utils.data.DataLoader): The input data (np.ndarray or torch.utils.data.DataLoader) or the embeddings (np.ndarray).
+        data_representation (Representation, optional): The data representation object. Defaults to None.
+        from_embeddings (bool, optional): Whether to get the predictions
+
+        Returns:
+            numpy.ndarray: The concatenated class predictions for the input data.
+
+        """
+        predictions_list = []
+        with torch.no_grad():
+            if isinstance(data, torch.utils.data.DataLoader):
+                for batch in tqdm(data):
+                    if data_representation is not None:
+                        batch = data_representation.get_representation(batch['waveform'])
+                    else:    
+                        batch = to_torch(batch['repr'], device=self.device)
+                    batch = to_torch(batch, device=self.device)
+                    predictions = self.net(batch)
+                    predictions_list.append(to_numpy(predictions))
+            else:      
+                if self.ml_config.optimizer_params.batch_size >= data.shape[0]:
+                    if data_representation is not None:
+                        assert not from_embeddings, "Cannot use data representation with embeddings"
+                        data = data_representation.get_representation(data) 
+                    if from_embeddings:
+                        preds = self.net.get_predictions(to_torch(data, device=self.device), from_embeddings=True)
+                    else:
+                        preds = self.net(to_torch(data, device=self.device))
+                    return to_numpy(preds)
+                for batch in tqdm(np.array_split(data, self.ml_config.optimizer_params.batch_size)):
+                    if data_representation is not None:
+                        assert not from_embeddings, "Cannot use data representation with embeddings"
+                        batch = data_representation.get_representation(batch)       
+                    if from_embeddings:
+                        preds = self.net.get_predictions(to_torch(batch, device=self.device), from_embeddings=True)
+                    else:
+                        preds = self.net(to_torch(batch, device=self.device))
+                    predictions_list.append(to_numpy(preds))
+
+        return np.concatenate(predictions_list, axis=0)
+
+
+            

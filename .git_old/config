@@ -1,0 +1,18 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[remote "origin"]
+	url = git@github.com:highfem/tqdne.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+	remote = origin
+	merge = refs/heads/main
+[branch "andrea-gm0"]
+	vscode-merge-base = main
+	remote = origin
+	merge = refs/heads/andrea-gm0
+[submodule "diffusers"]
+	active = true
+	url = https://github.com/huggingface/diffusers.git

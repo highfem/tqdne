@@ -9,7 +9,7 @@ from ml_collections import config_flags
 from diffusers import DDIMScheduler, DDPMScheduler
 from tqdne.conf import Config
 from tqdne.consistency_model import LightningConsistencyModel
-from tqdne.dataset import EnvelopeDataset
+from tqdne.dataset import RepresentationDataset
 from tqdne.diffusion import LightningDiffusion
 from tqdne.plot import get_plots_list
 from tqdne.metric import get_metrics_list
@@ -43,8 +43,13 @@ def main(argv):
     batch_size = FLAGS.config.optimizer_params.batch_size
     num_cond_features = len(general_config.features_keys)
 
+    # Update configuration parameters based on the downsampling factor
+    general_config.fs = general_config.fs // FLAGS.downsampling_factor
+    # TODO: set signal length to the closest number having small factors
+    general_config.signal_length = general_config.signal_length // FLAGS.downsampling_factor
+
     # Define the data representation
-    data_representation = get_data_representation(FLAGS.config) 
+    data_representation = get_data_representation(FLAGS.config, signal_length=general_config.signal_length) 
     name = data_representation.get_name(FLAGS)
     data_repr_channels = data_representation.get_num_channels(general_config.num_channels)
 
@@ -53,13 +58,9 @@ def main(argv):
     net = UNetModel(in_channels=data_repr_channels, out_channels=data_repr_channels, cond_features=num_cond_features, **FLAGS.config.model.net_params)
     logging.info(f"Unet Params:\n  {FLAGS.config.model.net_params}")
 
-    # Update configuration parameters
-    general_config.fs = general_config.fs // FLAGS.downsampling_factor
-    general_config.signal_length = general_config.signal_length // FLAGS.downsampling_factor
-
-    # TODO: REMOVE max_amplitude
-    train_dataset = EnvelopeDataset(h5_path=Path(FLAGS.train_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
-    test_dataset = EnvelopeDataset(h5_path=Path(FLAGS.test_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
+    # Load the dataset
+    train_dataset = RepresentationDataset(h5_path=Path(FLAGS.train_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation) 
+    test_dataset = RepresentationDataset(h5_path=Path(FLAGS.test_datapath), max_amplitude=FLAGS.max_amplitude, downsample=FLAGS.downsampling_factor, data_repr=data_representation)
     
     # DEBUG
     if FLAGS.debug:
@@ -79,7 +80,7 @@ def main(argv):
     # Get the number of available CPU cores
     num_cores = multiprocessing.cpu_count()
     # Set the number of workers based on the number of CPU cores
-    num_workers = num_cores - 1 if num_cores > 1 else 0
+    num_workers = num_cores - 1 if num_cores > 1 or FLAGS.debug else 0
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 

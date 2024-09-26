@@ -1,16 +1,36 @@
+# TODO: MERGE ALL WITH METRIC.PY
+
+
 from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
-import numpy as np
 import seaborn as sns
+import numpy as np
 
 from tqdne import utils
-from tqdne.metric import Metric
+from tqdne.metric import Metric, LogEnvelope, PowerSpectralDensity
+
+
 from tqdne.representations import to_numpy
 
-# TODO: MERGE ALL WITH METRIC.PY
-
 def get_plots_list(plots_config, metrics, general_config, data_representation=None):
+    """
+    Generate a list of plots based on the provided configuration.
+
+    Args:
+        plots_config (dict): A dictionary containing the plot configurations.
+        metrics (list): A list of metrics to be used in the plots.
+        general_config (object): An object containing general configuration settings.
+        data_representation (object, optional): An object representing the data representation. Defaults to None.
+
+    Returns:
+        list: A list of plot objects.
+
+    Raises:
+        NotImplementedError: If the 'channels-avg' metric is not implemented yet.
+        ValueError: If an unknown metric name is encountered.
+
+    """
     plots = []
     for plot, v_plot in plots_config.items():
         if plot == "bin":
@@ -21,7 +41,7 @@ def get_plots_list(plots_config, metrics, general_config, data_representation=No
                 #for i in range(0, len(metrics), general_config.num_channels):
                 #    metric_avg = np.mean(metrics[i:i+general_config.num_channels])
                 #    plots.append(BinPlot())
-                # TODO: it should be handled by BinPlot itself 
+                # TODO: it should be handled by BinPlot itself 
                 raise NotImplementedError("channels-avg not implemented yet")
         else:
             if v_plot == -1:
@@ -44,10 +64,9 @@ def get_plots_list(plots_config, metrics, general_config, data_representation=No
                     plots.append(SamplePlot(fs=general_config.fs, channel=c, data_representation=data_representation, invert_representation=False))              
             else:
                 raise ValueError(f"Unknown metric name: {plot}")
-    return plots    
+    return plots
 
 
-# TODO: maybe rename into plots.py
 class Plot(ABC):
     """Abstract plot class.
 
@@ -72,23 +91,26 @@ class Plot(ABC):
         name = f"{name} - Channel {self.channel}" if self.channel is not None else name
         return name
 
-    def __call__(self, preds, target=None, cond_signal=None, cond=None):
+    def __call__(self, preds, target=None, cond=None):
         if self.invert_representation:
             preds = self.data_representation.invert_representation(preds)
             target = to_numpy(target["waveform"]) if isinstance(target, dict) else self.data_representation.invert_representation(target)
         else:
             preds = to_numpy(preds)
-            target = to_numpy(target["repr"]) if isinstance(target, dict) else to_numpy(target)
+            try:
+                target = to_numpy(target["repr"]) if isinstance(target, dict) else to_numpy(target)
+            except:
+                target = to_numpy(target)
         cond = to_numpy(cond)
         if self.channel is not None:
             preds = preds[:, self.channel]
             target = target[:, self.channel]
-            cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
+            #cond_signal = cond_signal[:, self.channel] if cond_signal is not None else None
 
-        return self.plot(preds, target, cond_signal, cond)
+        return self.plot(preds, target, cond)
 
     @abstractmethod
-    def plot(self, preds, target=None, cond_signal=None, cond=None):
+    def plot(self, preds, target=None, cond=None):
         pass
 
 
@@ -99,15 +121,15 @@ class SamplePlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, preds, target=None, cond_signal=None, cond=None):
-        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
+    def plot(self, preds, target=None, cond=None):
+        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_str(cond[0]).items()])}" if cond is not None else self.name
         if preds[0].ndim == 1:
             fig, ax = plt.subplots(figsize=(9, 6))
             time = np.arange(0, preds.shape[-1]) / self.fs
             ax.plot(time, preds[0], label="Generated")
             assert target[0].ndim == 1, "Target must be 1D too"
             ax.plot(time, target[0], alpha=0.5, label="Target")
-            ax.set_xlabel("Time (s)")
+            ax.set_xlabel("Time [s]")
             ax.set_ylabel("Amplitude")
             ax.set_title(title)
             ax.legend()
@@ -129,53 +151,32 @@ class SamplePlot(Plot):
         return fig
 
 
-class UpsamplingSamplePlot(Plot):
-    """Plot a sample of the input, target, and reconstructed signals."""
-
-    def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
-        super().__init__(channel, data_representation)
-        self.fs = fs
-
-    def plot(self, preds, target, cond_signal, cond=None):
-        time = np.arange(0, preds.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(time, cond_signal[0], "b", label="Input")
-        ax.plot(time, target[0], label="Target")
-        ax.plot(time, preds[0], label="Reconstructed")
-        title = f"{self.name}\n{', '.join([f'{key}: {value:.1f}' for key, value in utils.get_cond_params_dict(cond[0]).items()])}" if cond is not None else self.name
-        ax.set_title(title)
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Amplitude")
-        ax.legend()
-        fig.tight_layout()
-        return fig
-
 class LogEnvelopePlot(Plot):
     def __init__(self, fs=100, channel=0, data_representation=None, invert_representation=True):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, preds, target=None, cond_signal=None, cond=None):
+    def plot(self, preds, target=None, cond=None):
 
-        preds_logenv = utils.get_log_envelope(preds)
-        target_logenv = utils.get_log_envelope(target)
+        preds_logenv = LogEnvelope.get_log_envelope(preds)
+        target_logenv = LogEnvelope.get_log_envelope(target)
 
         preds_logenv_median = np.median(preds_logenv, axis=0)
-        preds_logenv_p25 = np.percentile(preds_logenv, 25, axis=0)
-        preds_logenv_p75 = np.percentile(preds_logenv, 75, axis=0)
+        preds_logenv_p15 = np.percentile(preds_logenv, 15, axis=0)
+        preds_logenv_p85 = np.percentile(preds_logenv, 85, axis=0)
         target_logenv_median = np.median(target_logenv, axis=0)
-        target_logenv_p25 = np.percentile(target_logenv, 25, axis=0)
-        target_logenv_p75 = np.percentile(target_logenv, 75, axis=0)
+        target_logenv_p15 = np.percentile(target_logenv, 15, axis=0)
+        target_logenv_p85 = np.percentile(target_logenv, 85, axis=0)
 
         time_ax = np.arange(0, len(preds_logenv_median)) / self.fs
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.plot(time_ax, preds_logenv_median, label="Generated - median")
-        ax.fill_between(time_ax, preds_logenv_p25, preds_logenv_p75, alpha=0.2, label="Generated - IQR (25-75%)")
+        ax.fill_between(time_ax, preds_logenv_p15, preds_logenv_p85, alpha=0.2, label="Generated - IQR (15-85%)")
         ax.plot(time_ax, target_logenv_median, label="Target - median")
-        ax.fill_between(time_ax, target_logenv_p25, target_logenv_p75, alpha=0.2, label="Target - IQR (25-75%)")
+        ax.fill_between(time_ax, target_logenv_p15, target_logenv_p85, alpha=0.2, label="Target - IQR (15-85%)")
 
         ax.set_title(self.name)
-        ax.set_xlabel("Time (s)")
+        ax.set_xlabel("Time [s]")
         ax.set_ylabel("Log Envelope")
         ax.legend()
         fig.tight_layout()
@@ -187,22 +188,22 @@ class PowerSpectralDensityPlot(Plot):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def plot(self, preds, target, cond_signal=None, cond=None, eps=1e-7):
+    def plot(self, preds, target, cond=None, eps=1e-7):
         fig, ax = plt.subplots(figsize=(9, 6))
         if self.metric is not None:
             preds_mean, preds_std, target_mean, target_std = self.metric.get_preds_and_target_stats()
         else:  
             target = preds if target is None else target
-            target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
-            target_mean = np.log(target_psd + eps).mean(axis=0)
-            target_std = np.log(target_psd + eps).std(axis=0)
+            target_psd = PowerSpectralDensity.get_power_spectral_density(target, log_scale=True)
+            target_mean = target_psd.mean(axis=0)
+            target_std = target_mean.std(axis=0)
 
             freq = np.fft.rfftfreq(target.shape[-1], d=1 / self.fs)
 
             if preds is not None and target is not None:
-                preds_psd = np.abs(np.fft.rfft(preds, axis=-1)) ** 2
-                preds_mean = np.log(preds_psd + eps).mean(axis=0)
-                preds_std = np.log(preds_psd + eps).std(axis=0)
+                preds_psd = PowerSpectralDensity.get_power_spectral_density(preds, log_scale=True)
+                preds_mean = preds_psd.mean(axis=0)
+                preds_std = preds_psd.std(axis=0)
                 ax.plot(freq, preds_mean, label="Predicted")
                 ax.fill_between(freq, preds_mean - preds_std, preds_mean + preds_std, alpha=0.2)
 
@@ -210,8 +211,8 @@ class PowerSpectralDensityPlot(Plot):
         ax.plot(freq, target_mean, label="Target")
         ax.fill_between(freq, target_mean - target_std, target_mean + target_std, alpha=0.2)
         ax.set_title(self.name)
-        ax.set_xlabel("Frequency (Hz)")
-        ax.set_ylabel("Log Power")
+        ax.set_xlabel("Frequency [Hz]")
+        ax.set_ylabel("Power Spectral Density [dB]")
         ax.legend()
         fig.tight_layout()
         return fig
@@ -223,31 +224,27 @@ class BinPlot(Plot):
     def __init__(
         self,
         metric: Metric,
-        num_mag_bins=10,
-        num_dist_bins=10,
-        min_mag=4.5,
-        max_mag=9.5,
-        min_dist=0,
-        max_dist=180
+        mag_bins: list[tuple],
+        dist_bins: list[tuple],
+        fmt=".2f",
+        title=None,
     ):
         super().__init__(data_representation=None, invert_representation=False)
         self.metric = metric
-        self.num_mag_bins = num_mag_bins
-        self.num_dist_bins = num_dist_bins
-        self.min_mag = min_mag
-        self.max_mag = max_mag
-        self.min_dist = min_dist
-        self.max_dist = max_dist
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+        self.fmt = fmt
+        self.title = title
 
     @property
     def name(self):
+        if self.title:
+            return self.title
         return f"Bin {self.metric.name}"
 
-    def plot(self, preds, target, cond_signal, cond):
-        # create the bins
-        mag_bins = np.linspace(self.min_mag, self.max_mag, self.num_mag_bins + 1)
-        dist_bins = np.linspace(self.min_dist, self.max_dist, self.num_dist_bins + 1)
-        results = np.zeros((self.num_dist_bins, self.num_mag_bins))
+    def plot(self, preds, target, cond=None):
+
+        results = np.zeros((len(self.dist_bins), len(self.mag_bins)))
 
         def _fill_bins(preds_wf, preds_cond, target_wf, target_cond):
             preds_mag = preds_cond[:, 2]
@@ -255,13 +252,13 @@ class BinPlot(Plot):
             target_mag = target_cond[:, 2]
             target_dist = target_cond[:, 0]
 
-            for i in range(self.num_mag_bins):
-                for j in range(self.num_dist_bins):
-                    preds_mask = (preds_mag >= mag_bins[i]) & (preds_mag < mag_bins[i + 1])
-                    preds_mask &= (preds_dist >= dist_bins[j]) & (preds_dist < dist_bins[j + 1])
-                    target_mask = (target_mag >= mag_bins[i]) & (target_mag < mag_bins[i + 1])
-                    target_mask &= (target_dist >= dist_bins[j]) & (target_dist < dist_bins[j + 1])
-                    results[j, i] = self.metric(preds_wf[preds_mask], target_wf[target_mask]) if preds_mask.any() else np.nan
+            for i in range(len(self.mag_bins)):
+                for j in range(len(self.dist_bins)):
+                    preds_mask = (preds_mag >= self.mag_bins[i][0]) & (preds_mag < self.mag_bins[i][1])
+                    preds_mask &= (preds_dist >= self.dist_bins[j][0]) & (preds_dist < self.dist_bins[j][1])
+                    target_mask = (target_mag >= self.mag_bins[i][0]) & (target_mag < self.mag_bins[i][1])
+                    target_mask &= (target_dist >= self.dist_bins[j][0]) & (target_dist < self.dist_bins[j][1])
+                    results[j, i] = self.metric(preds_wf[preds_mask], target_wf[target_mask]) if preds_mask.sum() > 1 else np.nan
 
         if isinstance(preds, dict) and isinstance(target, dict):
             preds_wf = preds["waveforms"]
@@ -273,23 +270,18 @@ class BinPlot(Plot):
             assert cond is not None, "Conditioning inputs must be provided if preds and target are numpy arrays"
             _fill_bins(preds, cond, target, cond) 
         else:
-            raise ValueError("Invalid input format")     
+            raise ValueError(f"Invalid input format: preds and target must be both dictionaries or both numpy arrays, got {type(preds)} for preds and {type(target)} for target.")   
 
         # Plotting the heatmap using seaborn
-        mag_bins_center = (mag_bins[1:] + mag_bins[:-1]) / 2
-        dist_bins_center = (dist_bins[1:] + dist_bins[:-1]) / 2
-        fig, ax = plt.subplots(figsize=(8, 8))
-        sns.heatmap(
-            results,
-            annot=True,
-            fmt=".1f",
-            cmap="viridis",
-            xticklabels=[f"{mag:.1f}" for mag in mag_bins_center],
-            yticklabels=[f"{dist:.0f}" for dist in dist_bins_center],
-        )
-
-        ax.set_xlabel("Magnitude Bin")
-        ax.set_ylabel("Distance Bin (in km)")
-        ax.set_title(self.name)
+        plot = sns.heatmap(results, annot=True, fmt=self.fmt, cmap="viridis")
+        plot.set_xticks(np.arange(len(self.mag_bins) + 1))
+        plot.set_xticklabels([m[0] for m in self.mag_bins] + [self.mag_bins[-1][1]])
+        plot.set_yticks(np.arange(len(self.dist_bins) + 1))
+        plot.set_yticklabels([d[0] for d in self.dist_bins] + [self.dist_bins[-1][1]])
+        plot.invert_yaxis()
+        plot.set_xlabel("Magnitude bin")
+        plot.set_ylabel("Distance bin [km]")
+        plot.set_title(self.name)
+        fig = plot.get_figure()
         fig.tight_layout()
         return fig

@@ -11,6 +11,14 @@ from typing import Type
 
 from tqdne.conf import Config
 
+@staticmethod
+def downsample_waveform(waveform, downsample_factor): 
+    original_signal_length = waveform.shape[-1]
+    waveform_ds = scipy.signal.decimate(waveform, downsample_factor, axis=-1, zero_phase=False) 
+    if waveform_ds.shape[-1] > original_signal_length // downsample_factor:
+            waveform_ds = waveform_ds[..., :-1]
+    return waveform_ds
+
 def compute_mean_std(array):
     """Compute mean and std of an array.
 
@@ -31,13 +39,16 @@ def compute_mean_std(array):
     return np.mean(array), np.std(array)
 
 
-def compute_mean_std_features(datapath, features_keys):
+def compute_mean_std_features(datapath, features_keys, indices=None):
     """Compute mean and std of features in a dataset."""
     with h5py.File(datapath, "r") as f:
         stds = []
         means = []
         for key in features_keys:
-            mean, std = compute_mean_std(f[key][0])
+            if indices is not None:
+                mean, std = compute_mean_std(f[key][0, indices])
+            else:    
+                mean, std = compute_mean_std(f[key][0])
             means.append(mean)
             stds.append(std)
 
@@ -60,47 +71,42 @@ def extract_sample_from_h5file(f, idx, config=Config()):
     return waveform, np.array(features)
 
 
-def build_dataset(config=Config()):
+def build_dataset(config=Config(), batch_size=1000):
     """Build the dataset."""
 
     # extract the config information
-    #output_path = config.datasetdir
-    output_path = Path("/store/sdsc/sd28/data/GM0-dataset-split/")
-    datapath = Path("/store/sdsc/sd28/wforms_GAN_input_v20220805.h5")
+    output_path = config.datasetdir
+    datapath = config.datapath
     features_keys = config.features_keys
 
-    # Create the filter
-    #sos = signal.butter(**config.params_filter, fs=config.fs, output="sos")
-
     with h5py.File(datapath, "r") as f:
-        time = f["time_vector"][:]
+        # remove samples with vs30 <= 0
+        mask = f["vs30"][0, :] > 0
+        indices = np.arange(len(mask))[mask]
+
+        time = f["time_vector"]
         t = len(time)
         nf = len(features_keys)
-        n = f["waveforms"].shape[2]
-        n_train = 1024 * (128 + 64) # TO ASK: why these numbers?
+        n = len(indices)
+        n_train = round(n * config.train_ratio)
         # reset the random state
         np.random.seed(42)
-        permutation = np.random.permutation(n)
-        train_indices = permutation[:n_train]
-        test_indices = permutation[n_train:]
-        means, stds = compute_mean_std_features(datapath, features_keys)
+        np.random.shuffle(indices)
+        train_indices = np.sort(indices[:n_train])
+        test_indices = np.sort(indices[n_train:])
 
         def create_dataset(name, indices):
             processed_path = output_path / Path(name)
+            processed_path.parent.mkdir(parents=True, exist_ok=True)  # Create parent directory if it doesn't exist
             with h5py.File(processed_path, "w") as fout:
-                fout.create_dataset("time", data=time)
-                fout.create_dataset("feature_means", data=means)
-                fout.create_dataset("feature_stds", data=stds)
-                waveforms = fout.create_dataset("waveform", (len(indices), 3, t))
-                #filtered = fout.create_dataset("filtered", (len(indices), 3, t))
-                featuress = fout.create_dataset("features", (len(indices), nf))
-                for i, idx in tqdm.tqdm(enumerate(indices), total=len(indices)):
-                    waveform, features = extract_sample_from_h5file(f, idx)
-                    #filtered[i] = np.array(
-                    #    [signal.sosfilt(sos, channel) for channel in waveform]
-                    #)
-                    waveforms[i] = waveform
-                    featuress[i] = features
+                fout.create_dataset("waveforms", (len(indices), config.num_channels, t))
+                fout.create_dataset("features", (len(indices), nf))
+                for i in tqdm.tqdm(range(0, len(indices), batch_size)):
+                    batch_waveforms = f["waveforms"][:, :, indices[i : i + batch_size]].transpose(2, 0, 1)
+                    batch_waveforms = np.nan_to_num(batch_waveforms)
+                    fout["waveforms"][i : i + batch_size] = batch_waveforms
+                    batch_features = np.array([f[key][0, indices[i : i + batch_size]] for key in features_keys]).T
+                    fout["features"][i : i + batch_size] = batch_features
 
         create_dataset(config.data_train, train_indices) 
         create_dataset(config.data_test, test_indices) 
@@ -160,151 +166,8 @@ class LowFreqDataset(torch.utils.data.Dataset):
             "cond": torch.tensor(cond, dtype=torch.float32),
         }
     
-
-class UpsamplingDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, cut=None, cond=False, config=Config()):
-        super().__init__()
-        self.h5_path = h5_path
-        self.cut = cut
-        self.cond = cond
-        self.sigma_in = config.sigma_in
-
-        self.file = h5py.File(h5_path, "r")
-        self.waveform = self.file["waveform"]
-        self.filtered = self.file["filtered"]
-        if cond:
-            self.features = self.file["features"][:]
-            self.features_means = self.file["feature_means"][:]
-            self.features_stds = self.file["feature_stds"][:]
-
-    def __del__(self):
-        if not self.in_memory:
-            self.file.close()
-
-    def __len__(self):
-        return len(self.waveform)
-
-    def __getitem__(self, index):
-        waveform = self.waveform[index]
-        filtered = self.filtered[index]
-
-        # normalize
-        scale = np.abs(filtered).max()
-        waveform = waveform / scale / 5
-        filtered = filtered / scale * 2
-
-        # add noise to filtered
-        filtered += np.random.randn(*filtered.shape) * self.sigma_in
-
-        # features
-        features = self.features[index]
-        # features = (features - self.features_means) / self.features_stds
-
-        if self.cut:
-            signal = waveform[:, : self.cut]
-            cond_signal = filtered[:, : self.cut]
-        else:
-            signal = waveform
-            cond_signal = filtered
-
-        return {
-            "signal": torch.tensor(signal, dtype=torch.float32),
-            "cond_signal": torch.tensor(cond_signal, dtype=torch.float32),
-            "cond": torch.tensor(features, dtype=torch.float32),
-        }
     
-# TODO: class not needed, can be merged with EnvelopeDataset in RepresentationDataset   
-class SampleDataset(torch.utils.data.Dataset):
-    def __init__(self, h5_path, data_representation, cut=None, mag_bins=None, dist_bins=None, config=Config()):
-        super().__init__()
-        self.h5_path = h5_path
-        self.file = h5py.File(h5_path, "r", locking=False)
-        self.features = self.file["features"][:]
-        self.waveforms = self.file["waveform"]  
-        self.cut = cut
-
-        # Remove the third feature (log10snr)
-        self.features = self.features[:, [0, 1, 3, 4]] 
-
-        self.n = len(self.features)
-        assert self.n == len(self.waveforms)
-
-        self.data_representation = data_representation
-
-        self.bin_mapping = None
-        if (mag_bins and dist_bins):
-            self.mag_bins = mag_bins
-            self.dist_bins = dist_bins
-            self.bin_mapping = {f"{i}_{j}": idx for idx, (i, j) in enumerate(np.ndindex((len(dist_bins), len(mag_bins))))}
-    
-    def __del__(self):
-        pass
-        #if not self.in_memory:
-        #    self.file.close()
-
-    def __len__(self):
-        return self.n
-
-    def __getitem__(self, index):
-        """
-        Get an item from the dataset at the specified index.
-
-        Args:
-            index (int): The index of the item to retrieve.
-
-        Returns:
-            dict: A dictionary containing the waveform, features, and optionally the class label.
-        """
-
-        signal = self.waveforms[index]
-        features = self.features[index]
-        
-        if self.cut:
-            signal = signal[:, : self.cut]
-
-        repr = self.data_representation.get_representation(signal)    
-        
-        if self.bin_mapping is None:
-            return {
-                "repr": torch.tensor(repr, dtype=torch.float32),
-                "cond": torch.tensor(features, dtype=torch.float32),
-            }
-
-        return {
-            "repr": torch.tensor(repr, dtype=torch.float32),
-            "cond": torch.tensor(features, dtype=torch.float32),
-            "classes": torch.tensor(self._get_class_label(features), dtype=torch.long)
-        }
-    
-    def _get_class_label(self, features):
-        mag, dist = features[2], features[0]
-        for i, dist_bin in enumerate(self.dist_bins):
-            for j, mag_bin in enumerate(self.mag_bins):
-                if dist >= dist_bin[0] and dist < dist_bin[1] and mag >= mag_bin[0] and mag < mag_bin[1]:
-                    return self.bin_mapping[f"{i}_{j}"]
-    
-    def get_num_classes(self):
-        """
-        Get the number of classes in the dataset.
-
-        Returns:
-            int: The number of classes.
-        """
-        return len(self.bin_mapping) if self.bin_mapping else 0
-    
-    def get_class_weights(self):
-        """
-        Calculate the class weights based on the frequency of each class label in the dataset.
-
-        Returns:
-            torch.Tensor: The class weights.
-        """
-        class_counts = torch.bincount(torch.tensor([self._get_class_label(features) for features in self.features]))
-        class_weights = 1. / class_counts.float()
-        return class_weights / class_weights.sum()
-
-
-class EnvelopeDataset(torch.utils.data.Dataset):
+class RepresentationDataset(torch.utils.data.Dataset):
     def __init__(self, h5_path, data_repr, max_amplitude=None, pad=None, downsample=1):
         super().__init__()
         self.h5_path = h5_path
@@ -312,13 +175,20 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         self.file = h5py.File(h5_path, "r", locking=False)
         self.features = self.file["features"][:]
-        self.waveforms = self.file["waveform"]
-        #self.time = self.file["time"][:]
-        self.features_means = self.file["feature_means"][:] #  Not really needed. Scaling is meaningless since embedding are sin/cos so periodic
-        self.features_stds = self.file["feature_stds"][:] 
+        try:
+            self.waveforms = self.file["waveforms"]
+        except KeyError:
+            self.waveforms = self.file["waveform"] 
+        
+        try:
+            self.features_means = self.file["feature_means"][:]
+            self.features_stds = self.file["feature_stds"][:] 
+        except KeyError:
+            pass
         
         # Remove the third feature (log10snr)
-        self.features = self.features[:, [0, 1, 3, 4]] 
+        if self.features.shape[1] == 5:
+            self.features = self.features[:, [0, 1, 3, 4]] 
 
         # Remove samples with VS30 <= 0
         idxs = self.features[:, 3] > 0
@@ -350,22 +220,17 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         signal = self.waveforms[index]
         features = self.features[index]
-        
-        # cannot be scaled because BinMetric uses non-scaled features
-        # features = (features - self.features_means) / (self.features_stds + 1e-6) 
+
 
         if self.pad:
-            if self.pad < signal.shape[-1]:
+            if self.pad <= signal.shape[-1]:
                 signal = signal[:, : self.pad]
             else:
                 # Pad at the end with the last value
                 signal = np.concatenate([signal, signal[:, -1, np.newaxis] * np.ones((signal.shape[0], self.pad - signal.shape[-1]))], axis=-1)                
 
         if self.downsample > 1:
-            original_signal_length = signal.shape[-1]
-            signal = scipy.signal.decimate(signal, self.downsample, axis=1, zero_phase=False) 
-            if signal.shape[-1] > original_signal_length // self.downsample:
-                signal = signal[:, :-1]
+            signal = downsample_waveform(signal, self.downsample)
 
         repr = self.representation.get_representation(signal)    
 
@@ -395,7 +260,7 @@ class EnvelopeDataset(torch.utils.data.Dataset):
 
         return self[idxs]        
     
-    def get_data_by_bins(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
+    def get_data_by_bin(self, magnitude_bin: tuple, distance_bin: tuple, is_shallow_crustal: bool = None):
         bins_idxs = (self.features[:, 0] >= distance_bin[0]) & (self.features[:, 0] < distance_bin[1]) & (self.features[:, 2] >= magnitude_bin[0]) & (self.features[:, 2] < magnitude_bin[1])
         if is_shallow_crustal is not None:
             bins_idxs = bins_idxs & (self.features[:, 1] == is_shallow_crustal)
@@ -403,3 +268,89 @@ class EnvelopeDataset(torch.utils.data.Dataset):
             return self[bins_idxs]
         raise ValueError("No data in the given bins")
         
+
+class ClassifierDataset(RepresentationDataset):
+    def __init__(self, h5_path, data_repr, mag_bins, dist_bins, max_amplitude=None, pad=None, downsample=1):
+        """
+        Initialize the ClassifierDataset.
+
+        Args:
+            h5_path (str): The path to the HDF5 file.
+            data_repr (str): The representation of the data.
+            mag_bins (list): The magnitude bins.
+            dist_bins (list): The distance bins.
+            max_amplitude (float, optional): The maximum amplitude. Defaults to None.
+            pad (int, optional): The padding size. Defaults to None.
+            downsample (int, optional): The downsampling factor. Defaults to 1.
+        """
+        super().__init__(h5_path, data_repr, max_amplitude, pad, downsample)
+        self.mag_bins = mag_bins
+        self.dist_bins = dist_bins
+        self.bin_mapping = {f"{i}_{j}": idx for idx, (i, j) in enumerate(np.ndindex((len(dist_bins), len(mag_bins))))}
+        
+    def __del__(self):
+        pass
+        #if not self.in_memory:
+        #    self.file.close()
+
+    def __len__(self):
+        """
+        Get the length of the dataset.
+
+        Returns:
+            int: The length of the dataset.
+        """
+        return self.n
+
+    def __getitem__(self, index):
+        """
+        Get an item from the dataset.
+
+        Args:
+            index (int): The index of the item.
+
+        Returns:
+            dict: The item from the dataset. In addition to the waveform and representation, the item also contains the class label.
+        """
+        item = super().__getitem__(index)
+        item.update({
+            "classes": torch.tensor(self._get_class_label(self.features[index]), dtype=torch.long)
+        })
+
+        return item
+    
+    def _get_class_label(self, features):
+        """
+        Get the class label for a given set of features.
+
+        Args:
+            features (list): The features.
+
+        Returns:
+            int: The class label.
+        """
+        mag, dist = features[2], features[0]
+        for i, dist_bin in enumerate(self.dist_bins):
+            for j, mag_bin in enumerate(self.mag_bins):
+                if dist >= dist_bin[0] and dist < dist_bin[1] and mag >= mag_bin[0] and mag < mag_bin[1]:
+                    return self.bin_mapping[f"{i}_{j}"]
+    
+    def get_num_classes(self):
+        """
+        Get the number of classes in the dataset.
+
+        Returns:
+            int: The number of classes.
+        """
+        return len(self.bin_mapping) if self.bin_mapping else 0
+    
+    def get_class_weights(self):
+        """
+        Calculate the class weights based on the frequency of each class label in the dataset.
+
+        Returns:
+            torch.Tensor: The class weights.
+        """
+        class_counts = torch.bincount(torch.tensor([self._get_class_label(features) for features in self.features]))
+        class_weights = 1. / class_counts.float()
+        return class_weights / class_weights.sum()

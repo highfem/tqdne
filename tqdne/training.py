@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, ModelSummary, EarlyStopping
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, ModelSummary
 from pytorch_lightning.loggers import WandbLogger
 
 from tqdne.conf import Config
@@ -10,12 +10,9 @@ from tqdne.logging import LogCallback
 
 def get_pl_trainer(
     name,
-    task,
     val_loader,
     metrics,
     plots,
-    flags,
-    early_stopping_patience=-1,
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
@@ -25,7 +22,6 @@ def get_pl_trainer(
     # wandb logger
     if log_to_wandb:
         wandb_logger = WandbLogger(project=config.project_name, name=name)
-        wandb_logger.experiment.config.update(flags)
     else:
         wandb_logger = None
 
@@ -34,13 +30,11 @@ def get_pl_trainer(
 
     # log callback
     callbacks.append(
-        LogCallback(task, val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
+        LogCallback(val_loader, metrics, plots, limit_batches=limit_eval_batches, every=eval_every)
     )
 
     # set early stopping
-    if early_stopping_patience > 0:
-        early_stopping = EarlyStopping('val_loss', mode='min', patience=early_stopping_patience)
-        callbacks.append(early_stopping)
+    # early_stopping = EarlyStopping('val_loss', mode='min', patience=5)
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
     if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:

@@ -13,7 +13,6 @@ class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
 
-
 def conv_nd(dims, *args, **kwargs):
     """
     Create a 1D, 2D, or 3D convolution module.
@@ -162,6 +161,20 @@ def checkpoint(func, inputs, params, flag):
 
 
 class CheckpointFunction(th.autograd.Function):
+    """
+    A custom autograd function that enables checkpointing during the forward and backward passes.
+    Checkpointing reduces memory consumption by recomputing intermediate results during the backward pass.
+
+    Args:
+        run_function (callable): The function to be executed during the forward and backward passes.
+        length (int): The number of input tensors.
+        *args: Input tensors and parameters.
+
+    Returns:
+        output_tensors: The output tensors computed by the run_function.
+
+    """
+
     @staticmethod
     def forward(ctx, run_function, length, *args):
         ctx.run_function = run_function

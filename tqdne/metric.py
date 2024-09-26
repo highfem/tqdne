@@ -8,9 +8,22 @@ from scipy.linalg import sqrtm
 from tqdne.representations import to_numpy
 
 
-
 @staticmethod
 def get_metrics_list(metrics_config, general_config, data_representation=None):
+    """
+    Get a list of metric objects based on the given metrics configuration.
+
+    Args:
+        metrics_config (dict): A dictionary containing the metrics configuration.
+        general_config (object): An object containing general configuration settings.
+        data_representation (object, optional): An object representing the data representation. Defaults to None.
+
+    Returns:
+        list: A list of metric objects.
+
+    Raises:
+        ValueError: If an unknown metric name is encountered in the metrics configuration.
+    """
     metrics = []
     for metric, v in metrics_config.items():
         if v == -1:
@@ -31,22 +44,8 @@ def get_metrics_list(metrics_config, general_config, data_representation=None):
                 metrics.append(SignalMeanMSE(channel=c, data_representation=data_representation))        
         else:
             raise ValueError(f"Unknown metric name: {metric}")
-    return metrics    
+    return metrics
 
-
-@staticmethod
-def compute_fid(preds, target):
-    """
-    Compute the Fréchet Inception Distance (FID) between two sets of embeddings.
-
-    Parameters:
-    preds (ndarray or tuple): The predicted embeddings. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
-    target (ndarray or tuple): The target embeddings. If a tuple, the first element should be the mean and the second element should be the covariance matrix.
-
-    Returns:
-    float: The computed Fréchet Inception Distance.
-    """
-    return frechet_distance(preds, target)
 
 # TODO: remove
 @staticmethod
@@ -122,11 +121,22 @@ def frechet_distance(x, y, eps=1e-6, torch_fun=True):
     # TODO: remove or rearrange (it works in the sense it doesn't raise an error. Still have to test whether it works as expected.)
     if torch_fun:
         import torch
-        assert isinstance(x, tuple) and isinstance(y, tuple), "x and y must be tuples"
-        mu1 = torch.tensor(x[0])
-        sigma1 = torch.tensor(x[1])
-        mu2 = torch.tensor(y[0])
-        sigma2 = torch.tensor(y[1])
+        if isinstance(x, tuple):
+            mu1 = torch.tensor(x[0]) 
+            sigma1 = torch.tensor(x[1])
+        else:
+            mu1 = torch.tensor(x.mean(axis=0))
+            sigma1 = torch.tensor(np.cov(x, rowvar=False))
+        if isinstance(y, tuple):
+            mu2 = torch.tensor(y[0])
+            sigma2 = torch.tensor(y[1])    
+        else:
+            mu2 = torch.tensor(y.mean(axis=0))
+            sigma2 = torch.tensor(np.cov(y, rowvar=False))
+
+        if sigma1.dim() < 2 or sigma2.dim() < 2:
+            raise ValueError("Covariance matrices must have at least two dimensions")
+
         return _calculate_frechet_distance(mu1, sigma1, mu2, sigma2)
 
     if isinstance(x, tuple):
@@ -174,6 +184,7 @@ def compute_inception_score(preds, preds_2=None):
     Returns:
         float: The computed Inception Score.
     """
+    print(preds.shape)
     if preds_2 is None:
         preds_1 = preds[: preds.shape[0] // 2]
         preds_2 = preds[preds.shape[0] // 2:]
@@ -258,16 +269,29 @@ class PowerSpectralDensity(Metric):
         super().__init__(channel, data_representation, invert_representation)
         self.fs = fs
 
-    def compute(self, preds, target):
-        preds_psd = np.abs(np.fft.rfft(preds, axis=-1)) ** 2
-        target_psd = np.abs(np.fft.rfft(target, axis=-1)) ** 2
+    @staticmethod
+    def get_power_spectral_density(data: np.ndarray, log_scale=False, eps=1e-7):
+        """
+        Get the power spectral density of the given data.
 
-        # Compute mean and std of PSD in log scale
-        eps = 1e-7
-        self.preds_mean = np.log(preds_psd + eps).mean(axis=0)
-        self.target_mean = np.log(target_psd + eps).mean(axis=0)
-        self.preds_cov = np.cov(np.log(preds_psd + eps), rowvar=False)
-        self.target_cov = np.cov(np.log(target_psd + eps), rowvar=False)
+        Args:
+            data (np.ndarray): The input data.
+            log_scale (bool, optional): Whether to return the PSD in log scale. Defaults to False.
+            eps (float, optional): A small value to add to the PSD before taking the logarithm. Defaults to 1e-7.
+
+        Returns:
+            np.ndarray: The power spectral density of the input data.
+        """
+        psd = np.abs(np.fft.rfft(data, axis=-1)) ** 2
+        return np.log(psd + eps) if log_scale else psd  
+
+    def compute(self, preds, target):
+        log_preds_psd = self.get_power_spectral_density(preds, log_scale=True)
+        log_target_psd = self.get_power_spectral_density(target, log_scale=True)
+        self.preds_mean = log_preds_psd.mean(axis=0)
+        self.target_mean = log_target_psd.mean(axis=0)
+        self.preds_cov = np.cov(log_preds_psd, rowvar=False)
+        self.target_cov = np.cov(log_target_psd, rowvar=False)
 
         return frechet_distance((self.preds_mean, self.preds_cov), (self.target_mean, self.target_cov))
     
@@ -282,20 +306,9 @@ class LogEnvelope(Metric):
         return signal.convolve(np.abs(x), np.ones((x.shape[0], window_len)), mode='same') / window_len    
     
     @staticmethod
-    def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, env_function_params={}, eps=1e-7):
-        """
-        Get the log envelope of the given data.
-
-        Args:
-            data (np.ndarray): The input data.
-            env_function (str): The envelope function to use.
-            env_function_params (dict, optional): The parameters for the envelope function. Defaults to None.
-            eps (float, optional): A small value to add to the envelope before taking the logarithm. Defaults to 1e-7.
-
-        Returns:
-            np.ndarray: The log envelope of the input data.
-        """
-        return np.log(env_function(data, **env_function_params) + eps)        
+    def get_log_envelope(data: np.ndarray, env_function=_get_moving_avg_envelope, env_function_params={}, log_scale=True, eps=1e-7):
+        env = env_function(data, **env_function_params)
+        return np.log10(env + eps) if log_scale else env   
 
     def compute(self, preds, target):
         preds_logenv = self.get_log_envelope(preds)

@@ -1,5 +1,0 @@
-#######
-Metrics
-#######
-
-.. automodule:: tqdne.metric

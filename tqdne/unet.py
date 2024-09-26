@@ -79,19 +79,6 @@ class Upsample(nn.Module):
             )
         # Contains the output size of the upsampling operation, upddated at each downsampling level    
         self.output_size_list = output_size_list    
-
-    # TODO REMOVE
-    # def forward(self, x):
-    #     assert x.shape[1] == self.channels
-    #     if self.dims == 3:
-    #         x = F.interpolate(
-    #             x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
-    #         )
-    #     else:
-    #         x = F.interpolate(x, scale_factor=2, mode="nearest")
-    #     if self.use_conv:
-    #         x = self.conv(x)
-    #     return x
     
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -251,6 +238,13 @@ class ResBlock(TimestepBlock):
 class AttentionBlock(nn.Module):
     """
     An attention block that allows spatial positions to attend to each other.
+
+    Args:
+        channels (int): Number of input channels.
+        num_heads (int, optional): Number of attention heads. Defaults to 1.
+        use_checkpoint (bool, optional): Whether to use checkpointing for memory optimization. Defaults to False.
+        flash_attention (bool, optional): Whether to use QKVFlashAttention. Defaults to True.
+        dims (int, optional): Number of dimensions for the input. Defaults to 2.
     """
 
     def __init__(
@@ -334,7 +328,7 @@ class QKVFlashAttention(nn.Module):
 
 class QKVAttention(nn.Module):
     """
-    A module which performs QKV attention. Fallback from Blocksparse if use_fp16=False
+    A module which performs QKV attention. Fallback from Blocksparse if use_fp16=False.
     """
 
     def __init__(self, n_heads):
@@ -689,17 +683,14 @@ class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
                 ds *= 2
                 self._feature_size += ch
 
-        self.mlp = nn.ModuleList(
-            [
-                nn.Sequential(
+        self.mlp = nn.Sequential(
                     normalization(ch),
                     nn.SiLU(),
                     global_avg_pool_nd(dims),
                     nn.Flatten(1),
                     linear(ch, num_classes)
                 )
-            ]
-        )
+
 
     def forward(self, x):
         """
@@ -728,4 +719,15 @@ class HalfUNetClassifierModel(ModelMixin, ConfigMixin):
                 h = block(h)
             return h
 
-                
+    def get_predictions(self, x, from_embeddings):
+        """
+        Get the predictions from the model.
+
+        :param x: an [N x C x ...] Tensor of inputs.
+        :param from_embeddings: a bool determining if the predictions should be
+            made from the embeddings.
+        :return: an [N x C x ...] Tensor of predictions.
+        """
+        if from_embeddings:
+            return self.mlp[-1](x)
+        return self(x)      
