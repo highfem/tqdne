@@ -1,13 +1,13 @@
 # This quake does not exist
 
 [![ci](https://github.com/highfem/tqdne/actions/workflows/ci.yaml/badge.svg)](https://github.com/highfem/tqdne/actions/workflows/ci.yaml)
-[![arXiv](https://img.shields.io/badge/arXiv-2311.00474-b31b1b.svg)]()
+[![arXiv](https://img.shields.io/badge/arXiv-2410.19343-b31b1b.svg)](https://arxiv.org/abs/2410.19343)
 
 > Generative modelling of seismic waveforms using denoising diffusion
 
 ## About
 
-This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](arxiv link).
+This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
 It can be used to generate seismic waveforms, replicate the results from the manuscript, or for training custom models from scratch.
 
 ## Installation
@@ -20,6 +20,10 @@ conda env create -f environment.yml -p <PATH>
 ```
 
 where <PATH> is a user defined path.
+
+## Weight files
+
+You can find the weight files for the neural networks on [Zenodo](https://zenodo.org/records/13952381).
 
 ## Experiments
 
@@ -35,7 +39,3 @@ Some Python code has been adopted from the following sources:
 
 - EDM: https://github.com/NVlabs/edm
 - Consistency models: https://github.com/openai/consistency_models
-
-## References
-
-[1] Bergmeister, Andreas *et al.*, [High Resolution Seismic Waveform Generation using Denoising Diffusion](arxiv link), 2024
