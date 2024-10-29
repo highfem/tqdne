@@ -1,6 +1,6 @@
 # Generate seismic waveforms
 
-In order to generate synthetic seismic waveforms, call this following on the command line and follow the instructions:
+In order to generate synthetic seismic waveforms, call the following on the command line and follow the instructions:
 
 ```shell
 python generate_waveforms.py
@@ -30,19 +30,20 @@ python generate_waveforms.py \
   --autoencoder_checkpoint ../weights/autoencoder.ckpt
 ```
 
-## Convert `waveforms.h5` to seisbench framework:
+## Convert to SeisBench framework:
 
-To convert hdf5 file to seisbench framework, first prepare the station metadata consists of list of columns similar to the figure below in `.csv` format:
-![Example waveform Plot](https://github.com/highfem/tqdne/tree/main/scripts/station_metadata.png)
+To convert the generated `waveforms.h5` file into SeisBench format, first prepare the station metadata consisting of a list of columns in `.csv` format, similar to the following figure:
 
-YouRun the `write_to_seisbench.py` with the following commands.
+![Example waveform Plot](station_metadata.png)
 
-Inspecting the command:
+Then, run the `write_to_seisbench.py` script by:
+
+1. Inspecting the command:
 ```shell
 python write_to_seisbench.py -h
 
 ```
-Running the command:
+2. Running the command:
 ```shell
 python write_to_seisbench.py \
   <path_to_station_metadata>/station_metadata.csv \
