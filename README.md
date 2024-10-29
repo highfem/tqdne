@@ -18,7 +18,7 @@ You can install all required dependencies and the versions that have been used i
 First download the latest release of the model from [here](https://github.com/highfem/tqdne/releases). Then, install Python dependencies by creating a new `conda` environment, and by then activating it:
 
 ```bash
-conda env create -f environment.yml -p <PATH>
+conda env create -f environment.yaml -p <PATH>
 conda activate tqdne
 ```
 
