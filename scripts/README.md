@@ -54,4 +54,3 @@ python write_to_seisbench.py \
   --trace_sampling_rate 100 \
   <path_to_seisbench>/events
 ```
-
