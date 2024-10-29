@@ -19,10 +19,14 @@ First download the latest release of the model from [here](https://github.com/hi
 
 ```bash
 conda env create -f environment.yaml -p <PATH>
-conda activate tqdne
+conda activate <PATH>
 ```
 
-where `<PATH>` is a user defined path.
+where `<PATH>` is a user-defined path for installing the environment. Alternatively, you can simply install it in the default path (using the name "tqdne") with:
+```bash
+conda env create -f environment.yaml 
+conda activate tqdne
+```
 
 ## Weight files
 
