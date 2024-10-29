@@ -1,6 +1,6 @@
 # This quake does not exist
 
-[![ci](https://github.com/highfem/tqdne/actions/workflows/ci.yaml/badge.svg)](https://github.com/highfem/tqdne/actions/workflows/ci.yaml)
+[![ci](https://github.com/highfem/tqdne/actions/workflows/ci.yml/badge.svg)](https://github.com/highfem/tqdne/actions/workflows/ci.yml)
 [![arXiv](https://img.shields.io/badge/arXiv-2410.19343-b31b1b.svg)](https://arxiv.org/abs/2410.19343)
 
 > Generative modelling of seismic waveforms using denoising diffusion
