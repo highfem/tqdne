@@ -30,7 +30,7 @@ python generate_waveforms.py \
   --autoencoder_checkpoint ../weights/autoencoder.ckpt
 ```
 
-## Convert to SeisBench framework:
+## Convert to SeisBench framework
 
 To convert the generated `waveforms.h5` file into SeisBench format, first prepare the station metadata consisting of a list of columns in `.csv` format, similar to the following figure:
 
