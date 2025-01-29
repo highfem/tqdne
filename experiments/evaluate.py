@@ -19,6 +19,7 @@ from tqdne.autoencoder import LithningAutoencoder
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
+from tqdne.utils import get_device
 
 
 @torch.no_grad()
@@ -61,7 +62,7 @@ def predict(
 
     print("Loading model...")
 
-    device = "cuda" if th.cuda.is_available() else "cpu"
+    device = get_device()
     autoencoder = (
         LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
         if autoencoder_checkpoint is not None
@@ -139,7 +140,7 @@ def predict(
             target_signal[start:end] = batch["signal"].numpy()
 
             # pred
-            batch = {k: v.to("cuda") for k, v in batch.items()}
+            batch = {k: v.to(device) for k, v in batch.items()}
             pred_signal = edm.evaluate(batch)
             predicted_signal[start:end] = pred_signal.cpu().numpy()
             pred_waveform = config.representation.invert_representation(pred_signal)

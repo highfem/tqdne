@@ -38,7 +38,7 @@ class EDM:
 
     def sampling_sigmas(self, num_steps, device=None):
         rho_inv = 1 / self.rho
-        step_idxs = th.arange(num_steps, dtype=th.float64, device=device)
+        step_idxs = th.arange(num_steps, dtype=dtype, device=device)
         sigmas = (
             self.sigma_max**rho_inv
             + step_idxs / (num_steps - 1) * (self.sigma_min**rho_inv - self.sigma_max**rho_inv)
@@ -145,6 +145,7 @@ class LightningEDM(pl.LightningModule):
     @th.no_grad()
     def sample(self, shape, cond_sample=None, cond=None):
         """Sample using Heun's second order method."""
+        dtype = th.float32 if self.device.type == "mps" else th.float64
         if self.autoencoder:
             if cond_sample is not None:
                 cond_sample = self.autoencoder.encode(cond_sample)
@@ -155,7 +156,7 @@ class LightningEDM(pl.LightningModule):
             shape = latent.shape
 
         sigmas = self.edm.sampling_sigmas(self.num_sampling_steps, device=self.device)
-        eps = th.randn(shape, device=self.device, dtype=th.float64) * sigmas[0]
+        eps = th.randn(shape, device=self.device, dtype=dtype) * sigmas[0]
         if self.deterministic_sampling:
             sample = self.sample_deterministically(eps, sigmas, cond_sample, cond)
         else:
@@ -167,6 +168,7 @@ class LightningEDM(pl.LightningModule):
         return sample
 
     def sample_deterministically(self, eps, sigmas, cond_sample=None, cond=None):
+        dtype = th.float32 if self.device.type == "mps" else th.float64
         sample_next = eps
         for i, (sigma, sigma_next) in enumerate(zip(sigmas[:-1], sigmas[1:])):
             sample_curr = sample_next
@@ -175,7 +177,7 @@ class LightningEDM(pl.LightningModule):
                 sigma.to(self.dtype).repeat(len(sample_curr)),
                 cond_sample,
                 cond,
-            ).to(th.float64)
+            ).to(dtype)
             d_cur = (sample_curr - pred_curr) / sigma
             sample_next = sample_curr + d_cur * (sigma_next - sigma)
 
@@ -186,13 +188,14 @@ class LightningEDM(pl.LightningModule):
                     sigma_next.to(self.dtype).repeat(len(sample_curr)),
                     cond_sample,
                     cond,
-                ).to(th.float64)
+                ).to(dtype)
                 d_prime = (sample_next - pred_next) / sigma_next
                 sample_next = sample_curr + (sigma_next - sigma) * (0.5 * d_cur + 0.5 * d_prime)
 
         return sample_next
 
     def sample_stochastically(self, eps, sigmas, cond_sample=None, cond=None):
+        dtype = th.float32 if self.device.type == "mps" else th.float64
         sample_next = eps
         for i, (sigma, sigma_next) in enumerate(zip(sigmas[:-1], sigmas[1:])):
             sample_curr = sample_next
@@ -208,7 +211,7 @@ class LightningEDM(pl.LightningModule):
                 sigma_hat.to(self.dtype).repeat(len(sample_hat)),
                 cond_sample,
                 cond,
-            ).to(th.float64)
+            ).to(dtype)
             d_cur = (sample_hat - pred_hat) / sigma_hat
             sample_next = sample_hat + d_cur * (sigma_next - sigma_hat)
 
@@ -219,7 +222,7 @@ class LightningEDM(pl.LightningModule):
                     sigma_next.to(self.dtype).repeat(len(sample_hat)),
                     cond_sample,
                     cond,
-                ).to(th.float64)
+                ).to(dtype)
                 d_prime = (sample_next - pred_next) / sigma_next
                 sample_next = sample_hat + (sigma_next - sigma_hat) * (0.5 * d_cur + 0.5 * d_prime)
 

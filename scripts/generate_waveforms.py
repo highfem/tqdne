@@ -13,6 +13,7 @@ from tqdm import tqdm
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.edm import LightningEDM
 from tqdne.representation import LogSpectrogram
+from tqdne.utils import get_device
 
 
 @dataclass
@@ -72,7 +73,7 @@ def generate(
 
     print("Loading model...")
     config = LatentSpectrogramConfig()
-    device = "cuda" if th.cuda.is_available() else "cpu"
+    device = get_device()
     autoencoder = None
     if autoencoder_checkpoint is not None:
         autoencoder = (
