@@ -7,6 +7,15 @@ import pytorch_lightning as pl
 import torch
 
 
+def get_device():
+    """Get the available accelerator device."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def to_numpy(x):
     if isinstance(x, Sequence):
         return x.__class__(to_numpy(v) for v in x)
