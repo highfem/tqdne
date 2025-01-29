@@ -23,6 +23,7 @@ from tqdm import tqdm
 from tqdne.autoencoder import LithningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
+from tqdne.utils import get_device
 
 
 @th.no_grad()
@@ -125,7 +126,7 @@ def generate(
 
     print("Loading model...")
 
-    device = "cuda" if th.cuda.is_available() else "cpu"
+    device = get_device()
     if autoencoder_checkpoint is not None:
         autoencoder = (
             LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
