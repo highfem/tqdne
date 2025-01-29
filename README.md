@@ -14,19 +14,27 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
-You can install all required dependencies and the versions that have been used in the experiments using `conda`.
-First download the latest release of the model from [here](https://github.com/highfem/tqdne/releases). Then, install Python dependencies by creating a new `conda` environment, and by then activating it:
+To set up the environment and install dependencies, use `conda` as follows:
 
-```bash
-conda env create -f environment.yaml -p <PATH>
-conda activate <PATH>
-```
+1. **Download the latest model release** from [here](https://github.com/highfem/tqdne/releases).
 
-where `<PATH>` is a user-defined path for installing the environment. Alternatively, you can simply install it in the default path (using the name "tqdne") with:
-```bash
-conda env create -f environment.yaml 
-conda activate tqdne
-```
+2. **Create and activate the Conda environment:**
+
+   ```bash
+   conda env create -f environment.yaml
+   conda activate tqdne
+   ```
+
+   Replace `<PATH>` with your desired installation path.
+
+3. (Optional) If you prefer to install the environment in a custom path, run:
+
+   ```bash
+   conda env create -f environment.yaml -p <PATH>
+   conda activate <PATH>
+   ```
+
+   Replace `<PATH>` with your desired installation directory.
 
 ## Weight files
 
@@ -34,15 +42,15 @@ You can find the weight files for the neural networks on [Zenodo](https://zenodo
 
 ## Experiments
 
-All experimental code can be found in `experiments` (which we, e.g., used to train the proposed generative models).
+To reproduce the experiments from the manuscript, including data preprocessing, training, and evaluation, navigate to the [experiments](./experiments) folder. Refer to the corresponding README files for step-by-step guidance.
 
 ## Sampling waveforms
 
-You can generate your own waveforms using the scripts in `scripts`.
+You can generate your own waveforms using the scripts in [scripts](./scripts). See the corresponding README files for more information.
 
 ## Acknowledgements
 
-Some Python code has been adopted from the following sources:
+Some Python code has been adapted from the following repositories:
 
-- EDM: https://github.com/NVlabs/edm
-- Consistency models: https://github.com/openai/consistency_models
+- [EDM](https://github.com/NVlabs/edm)
+- [Consistency Models](https://github.com/openai/consistency_models)
