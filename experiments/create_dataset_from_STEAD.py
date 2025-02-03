@@ -10,8 +10,6 @@ import pandas as pd
 import h5py
 import obspy
 import numpy as np
-import matplotlib.pyplot as plt
-
 from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
 
@@ -60,71 +58,41 @@ def make_stream(dataset):
 
     return stream
 
-
 def create_h5_file(file_path, df, dtfl):
     """
-    Creates an HDF5 file in a STEAD-like structure and populates it with seismic metadata
-    and waveforms. It processes each selected event by removing the instrument response,
-    trimming the waveforms, and storing them in the new HDF5 file.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the output HDF5 file that will be created (e.g., 'stead_example.h5').
-    df : pandas.DataFrame
-        A filtered DataFrame containing event and station metadata.
-    dtfl : h5py.File
-        An open HDF5 file object containing the raw seismic data.
-
-    Returns
-    -------
-    None
+    Creates an HDF5 file in a tqdne structure
     """
-    num_samples = len(df)
 
-    # Extract metadata into numpy arrays
-    event_ID = df.source_id.values
-    hypocentral_distance = df.source_distance_km.values
-    hypocentre_depth = df.source_depth_km.values
-    hypocentre_latitude = df.source_latitude.values
-    hypocentre_longitude = df.source_longitude.values
-    is_shallow_crustal = (df['source_depth_km'] <= 25).astype(int)
-    magnitude = df.source_magnitude.values
-    station_altitude = df.receiver_elevation_m.values
-    station_latitude = df.receiver_latitude.values
-    station_longitude = df.receiver_longitude.values
-    station_name = df.receiver_code.values
-    station_network = df.network_code.values
-    time_sample = df.p_arrival_sample.values
-    time_arrival = df.p_travel_sec.values
-    trace_start_time = df.trace_start_time.values
-
-    # Randomly assigned vs30 values for demonstration, no vs30 value in STEAD dataset; adjust as necessary
-    vs30 = np.random.randint(400, 1501, num_samples)
-
-    # Prepare a list of dataset paths within the HDF5
-    ev_list = df['trace_name'].to_list()
-
-    # Preallocate the waveform array: (channels, samples, number_of_events)
-    # Adjust sizes to match your data (here assumed 3 channels x 6000 samples x events)
-    waveforms = np.zeros((3, 6000, num_samples), dtype=np.float32)
+    event_ID_list = []
+    hypocentral_distance_list = []
+    hypocentre_depth_list = []
+    hypocentre_latitude_list = []
+    hypocentre_longitude_list = []
+    is_shallow_crustal_list = []
+    magnitude_list = []
+    station_altitude_list = []
+    station_latitude_list = []
+    station_longitude_list = []
+    station_name_list = []
+    station_network_list = []
+    time_sample_list = []
+    time_arrival_list = []
+    trace_start_time_list = []
+    vs30_list = []
+    waveform_list = []  # will hold arrays of shape (3, n_samples) for each event
 
     # ObsPy FDSN client for removing response
     client = Client("IRIS")
-
-    for i, trace_name in enumerate(ev_list):
-        print(f"Processing {i + 1}/{len(ev_list)}: data/{trace_name}")
-
-        # Retrieve the HDF5 dataset
+    iter = 0
+    for i, row in df.iterrows():
+        iter += 1
+        trace_name = row['trace_name']
         dataset = dtfl.get(f"data/{trace_name}")
+
         if dataset is None:
-            print(f"Warning: Dataset {trace_name} not found in the HDF5 file.")
+            print(f"Warning: Dataset {trace_name} not found in the HDF5 file. Skipping...")
             continue
 
-        # Convert the dataset to an ObsPy Stream
-        st = make_stream(dataset)
-
-        # Get station response metadata
         try:
             inventory = client.get_stations(
                 network=dataset.attrs['network_code'],
@@ -135,50 +103,103 @@ def create_h5_file(file_path, df, dtfl):
                 channel="*",
                 level="response"
             )
-
-            # Remove instrument response to get acceleration (ACC)
-            st.remove_response(inventory=inventory, output="ACC", plot=False)
         except Exception as e:
-            print(f"Error retrieving or removing response: {e}")
+            print(f"Error retrieving station metadata for {trace_name}: {e}")
+            # Skip this event if station metadata is not available
             continue
 
-        # Define trimming window: 5 seconds before P arrival to 60 seconds afterward
-        starttime = (UTCDateTime(dataset.attrs['trace_start_time']) +
-                     dataset.attrs['p_arrival_sample'] * 0.01 - 5)
+        st = make_stream(dataset)
+        try:
+            st.remove_response(inventory=inventory, output="ACC", plot=False)
+        except Exception as e:
+            print(f"Error removing instrument response for {trace_name}: {e}")
+            continue
+
+        # Trim around the P arrival (5 seconds before, up to 60 seconds total)
+        starttime = UTCDateTime(dataset.attrs['trace_start_time']) + dataset.attrs['p_arrival_sample'] * 0.01 - 5
         endtime = starttime + 60
         st.trim(starttime, endtime, pad=True, fill_value=0)
 
-        # Combine the three channels into one NumPy array
-        # st[0], st[1], st[2] correspond to N, E, Z in this example
-        st_data = np.vstack([tr.data for tr in st])
+        try:
+            st_data = np.vstack([tr.data for tr in st])
+        except Exception as e:
+            print(f"Error stacking channels for {trace_name}: {e}")
+            continue
 
-        # Store the waveform data in the allocated array
-        # Ensure st_data does not exceed your preallocated shape
-        n_samples = min(st_data.shape[1], waveforms.shape[1])
-        waveforms[:, :n_samples, i] = st_data[:, :n_samples]
+        # For demonstration, we assume 6000 samples max
+        max_samples = 6000
+        # slice if st_data is longer than 6000
+        st_data_clipped = st_data[:, :max_samples]
 
-    # Write all metadata and waveform data to the new HDF5 file
+        # store waveforms
+        waveform_list.append(st_data_clipped)
+
+        # store metadata
+        event_ID_list.append(row['source_id'])
+        hypocentral_distance_list.append(row['source_distance_km'])
+        hypocentre_depth_list.append(row['source_depth_km'])
+        hypocentre_latitude_list.append(row['source_latitude'])
+        hypocentre_longitude_list.append(row['source_longitude'])
+        is_shallow_crustal_list.append(1 if row['source_depth_km'] <= 25 else 0)
+        magnitude_list.append(row['source_magnitude'])
+        station_altitude_list.append(row['receiver_elevation_m'])
+        station_latitude_list.append(row['receiver_latitude'])
+        station_longitude_list.append(row['receiver_longitude'])
+        station_name_list.append(row['receiver_code'])
+        station_network_list.append(row['network_code'])
+        time_sample_list.append(row['p_arrival_sample'])
+        time_arrival_list.append(row['p_travel_sec'])
+        trace_start_time_list.append(row['trace_start_time'])
+        # vs30 could be real data or random for demonstration
+        vs30_list.append(np.random.randint(400, 1501))
+
+        print(f"Processed {iter}/{len(df)}: {trace_name} successfully.")
+
+    event_ID_arr = np.array(event_ID_list)
+    hypocentral_distance_arr = np.array(hypocentral_distance_list)
+    hypocentre_depth_arr = np.array(hypocentre_depth_list)
+    hypocentre_latitude_arr = np.array(hypocentre_latitude_list)
+    hypocentre_longitude_arr = np.array(hypocentre_longitude_list)
+    is_shallow_crustal_arr = np.array(is_shallow_crustal_list)
+    magnitude_arr = np.array(magnitude_list)
+    station_altitude_arr = np.array(station_altitude_list)
+    station_latitude_arr = np.array(station_latitude_list)
+    station_longitude_arr = np.array(station_longitude_list)
+    station_name_arr = np.array(station_name_list).astype('S')
+    station_network_arr = np.array(station_network_list).astype('S')
+    time_sample_arr = np.array(time_sample_list)
+    time_arrival_arr = np.array(time_arrival_list)
+    trace_start_time_arr = np.array(trace_start_time_list).astype('S')
+    vs30_arr = np.array(vs30_list)
+
+    # Waveforms: we need shape (3, 6000, n_events)
+    # waveform_list is a list of (3, <=6000) arrays
+    n_events = len(waveform_list)
+    waveforms_arr = np.zeros((3, max_samples, n_events), dtype=np.float32)
+    for i in range(n_events):
+        n_samps = waveform_list[i].shape[1]
+        waveforms_arr[:, :n_samps, i] = waveform_list[i]
+
     with h5py.File(file_path, "w") as h5f:
-        h5f.create_dataset("event_ID", data=event_ID)
-        h5f.create_dataset("hypocentral_distance", data=hypocentral_distance)
-        h5f.create_dataset("hypocentre_depth", data=hypocentre_depth)
-        h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude)
-        h5f.create_dataset("hypocentre_longitude", data=hypocentre_longitude)
-        h5f.create_dataset("is_shallow_crustal", data=is_shallow_crustal)
-        h5f.create_dataset("magnitude", data=magnitude)
-        h5f.create_dataset("station_altitude", data=station_altitude)
-        h5f.create_dataset("station_latitude", data=station_latitude)
-        h5f.create_dataset("station_longitude", data=station_longitude)
-        h5f.create_dataset("station_name", data=station_name.astype('S'))  # store as string
-        h5f.create_dataset("station_network", data=station_network.astype('S'))  # store as string
-        h5f.create_dataset("time_sample", data=time_sample)
-        h5f.create_dataset("time_arrival", data=time_arrival)
-        h5f.create_dataset("trace_start_time", data=trace_start_time.astype('S'))  # store as string
-        h5f.create_dataset("vs30", data=vs30)
-        h5f.create_dataset("waveforms", data=waveforms)
+        h5f.create_dataset("event_ID", data=event_ID_arr)
+        h5f.create_dataset("hypocentral_distance", data=hypocentral_distance_arr)
+        h5f.create_dataset("hypocentre_depth", data=hypocentre_depth_arr)
+        h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude_arr)
+        h5f.create_dataset("hypocentre_longitude", data=hypocentre_longitude_arr)
+        h5f.create_dataset("is_shallow_crustal", data=is_shallow_crustal_arr)
+        h5f.create_dataset("magnitude", data=magnitude_arr)
+        h5f.create_dataset("station_altitude", data=station_altitude_arr)
+        h5f.create_dataset("station_latitude", data=station_latitude_arr)
+        h5f.create_dataset("station_longitude", data=station_longitude_arr)
+        h5f.create_dataset("station_name", data=station_name_arr)
+        h5f.create_dataset("station_network", data=station_network_arr)
+        h5f.create_dataset("time_sample", data=time_sample_arr)
+        h5f.create_dataset("time_arrival", data=time_arrival_arr)
+        h5f.create_dataset("trace_start_time", data=trace_start_time_arr)
+        h5f.create_dataset("vs30", data=vs30_arr)
+        h5f.create_dataset("waveforms", data=waveforms_arr)
 
-    print(f"HDF5 file '{file_path}' created successfully.")
-
+    print(f"\nHDF5 file '{file_path}' created successfully with {n_events} valid events.")
 
 def main():
     """
@@ -216,4 +237,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
