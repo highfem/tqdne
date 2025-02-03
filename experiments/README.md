@@ -2,6 +2,14 @@
 
 This directory contains scripts for dataset building, model training, and evaluation. To reproduce the experiments in the paper, follow these steps:
 
+### NOTE:
+
+The user is reccommended to download the dataset and preprocessed the data by following the data section in our [manuscript](https://arxiv.org/abs/2410.19343). However, to ease the trial, we provide script to generate the `raw_waveforms.h5` using STEAD dataset [link](https://github.com/smousavi05/STEAD) in `create_dataset_from_STEAD.py`.
+
+### Build the Raw Dataset
+
+Download the STEAD Dataset, extract the `*.zip` file in this directory, and then simply run `create_dataset_from_STEAD.py`. It will generate `raw_waveforms.h5` file. Note that, some of the parameters (e.g., the length of the waveforms, data sampling rate, vs30 values, and starting time of the waveforms) are hardcoded, therefore, please adjust accordingly. 
+
 ### Build the Dataset
 
 Run `build_dataset.py` to create the cleaned `preprocessed_waveforms.h5` dataset from the raw `raw_waveforms.h5` file.
