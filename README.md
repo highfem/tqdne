@@ -14,18 +14,25 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
-To set up the environment and install dependencies, use `conda` as follows:
+To set up the environment and install dependencies:
 
-1. **Download the latest model release** from [here](https://github.com/highfem/tqdne/releases).
+1. **Clone the repository:**
 
-2. **Create and activate the Conda environment:**
+   ```bash
+   git clone --depth 1 https://github.com/highfem/tqdne.git
+   cd tqdne
+   ```
+
+   Ommit `--depth 1` if you want to access the full commit history.
+
+2. **Create and activate a conda environment:**
 
    ```bash
    conda env create -f environment.yaml
    conda activate tqdne
    ```
 
-   Replace `<PATH>` with your desired installation path.
+   If conda is not installed, download it from [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
 3. (Optional) If you prefer to install the environment in a custom path, run:
 
