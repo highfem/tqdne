@@ -181,7 +181,6 @@ def create_h5_file(file_path, df, dtfl):
         waveforms_arr[:, :n_samps, i] = waveform_list[i]
 
     with h5py.File(file_path, "w") as h5f:
-        h5f.create_dataset("event_ID", data=event_ID_arr)
         h5f.create_dataset("hypocentral_distance", data=hypocentral_distance_arr)
         h5f.create_dataset("hypocentre_depth", data=hypocentre_depth_arr)
         h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude_arr)
