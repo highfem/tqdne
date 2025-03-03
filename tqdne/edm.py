@@ -38,7 +38,7 @@ class EDM:
 
     def sampling_sigmas(self, num_steps, device=None):
         rho_inv = 1 / self.rho
-        step_idxs = th.arange(num_steps, dtype=dtype, device=device)
+        step_idxs = th.arange(num_steps, dtype=th.float32, device=device)
         sigmas = (
             self.sigma_max**rho_inv
             + step_idxs / (num_steps - 1) * (self.sigma_min**rho_inv - self.sigma_max**rho_inv)

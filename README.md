@@ -4,13 +4,13 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2410.19343-b31b1b.svg)](https://arxiv.org/abs/2410.19343)
 
 > Generative modelling of seismic waveforms using denoising diffusion.
-> 
-> ![Generative pipeline](pipeline.jpg)
+>
+> ![Generative pipeline](figures/pipeline.jpg)
 
 ## About
 
 This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
-It can be used to generate seismic waveforms, replicate the results from the manuscript, or for training custom models from scratch.
+It can be used to generate seismic waveforms, replicate the results from the manuscript, and for training custom models from scratch.
 
 ## Installation
 
@@ -23,7 +23,7 @@ To set up the environment and install dependencies:
    cd tqdne
    ```
 
-   Ommit `--depth 1` if you want to access the full commit history.
+   Omit `--depth 1` if you want to access the full commit history. Alternatively, download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commmit history.
 
 2. **Create and activate a conda environment:**
 
@@ -45,7 +45,7 @@ To set up the environment and install dependencies:
 
 ## Weight files
 
-You can find the weight files for the neural networks on [Zenodo](https://zenodo.org/records/13952381), under the `weights` folder.
+You can find the weight files for the neural networks on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
 
 ## Experiments
 

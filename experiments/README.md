@@ -8,7 +8,7 @@ The user is reccommended to download the dataset and preprocessed the data by fo
 
 ### Build the Raw Dataset
 
-Download the STEAD Dataset, extract the `*.zip` file in this directory, and then simply run `create_dataset_from_STEAD.py`. It will generate `raw_waveforms.h5` file. Note that, some of the parameters (e.g., the length of the waveforms, data sampling rate, vs30 values, and starting time of the waveforms) are hardcoded, therefore, please adjust accordingly. 
+Download the STEAD Dataset, extract the `*.zip` file in this directory, and then simply run `create_dataset_from_STEAD.py`. It will generate `raw_waveforms.h5` file. Note that, some of the parameters (e.g., the length of the waveforms, data sampling rate, vs30 values, and starting time of the waveforms) are hardcoded, therefore, please adjust accordingly.
 
 ### Build the Dataset
 

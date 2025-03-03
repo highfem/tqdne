@@ -6,17 +6,17 @@ Description:
 
 """
 
-import pandas as pd
 import h5py
-import obspy
 import numpy as np
+import obspy
+import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
 
 
 def make_stream(dataset):
     """
-    Convert an HDF5 dataset of shape (samples, 3) into an ObsPy Stream object. 
+    Convert an HDF5 dataset of shape (samples, 3) into an ObsPy Stream object.
     Inspired by https://github.com/smousavi05/STEAD
 
     Parameters
@@ -33,30 +33,31 @@ def make_stream(dataset):
     data = np.array(dataset)
 
     tr_E = obspy.Trace(data=data[:, 0])
-    tr_E.stats.starttime = UTCDateTime(dataset.attrs['trace_start_time'])
+    tr_E.stats.starttime = UTCDateTime(dataset.attrs["trace_start_time"])
     tr_E.stats.delta = 0.01  # Sample rate interval
-    tr_E.stats.channel = dataset.attrs['receiver_type'] + 'E'
-    tr_E.stats.station = dataset.attrs['receiver_code']
-    tr_E.stats.network = dataset.attrs['network_code']
+    tr_E.stats.channel = dataset.attrs["receiver_type"] + "E"
+    tr_E.stats.station = dataset.attrs["receiver_code"]
+    tr_E.stats.network = dataset.attrs["network_code"]
 
     tr_N = obspy.Trace(data=data[:, 1])
-    tr_N.stats.starttime = UTCDateTime(dataset.attrs['trace_start_time'])
+    tr_N.stats.starttime = UTCDateTime(dataset.attrs["trace_start_time"])
     tr_N.stats.delta = 0.01
-    tr_N.stats.channel = dataset.attrs['receiver_type'] + 'N'
-    tr_N.stats.station = dataset.attrs['receiver_code']
-    tr_N.stats.network = dataset.attrs['network_code']
+    tr_N.stats.channel = dataset.attrs["receiver_type"] + "N"
+    tr_N.stats.station = dataset.attrs["receiver_code"]
+    tr_N.stats.network = dataset.attrs["network_code"]
 
     tr_Z = obspy.Trace(data=data[:, 2])
-    tr_Z.stats.starttime = UTCDateTime(dataset.attrs['trace_start_time'])
+    tr_Z.stats.starttime = UTCDateTime(dataset.attrs["trace_start_time"])
     tr_Z.stats.delta = 0.01
-    tr_Z.stats.channel = dataset.attrs['receiver_type'] + 'Z'
-    tr_Z.stats.station = dataset.attrs['receiver_code']
-    tr_Z.stats.network = dataset.attrs['network_code']
+    tr_Z.stats.channel = dataset.attrs["receiver_type"] + "Z"
+    tr_Z.stats.station = dataset.attrs["receiver_code"]
+    tr_Z.stats.network = dataset.attrs["network_code"]
 
     # Create a Stream containing the three traces (N, E, Z)
     stream = obspy.Stream([tr_N, tr_E, tr_Z])
 
     return stream
+
 
 def create_h5_file(file_path, df, dtfl):
     """
@@ -86,7 +87,7 @@ def create_h5_file(file_path, df, dtfl):
     iter = 0
     for i, row in df.iterrows():
         iter += 1
-        trace_name = row['trace_name']
+        trace_name = row["trace_name"]
         dataset = dtfl.get(f"data/{trace_name}")
 
         if dataset is None:
@@ -95,13 +96,13 @@ def create_h5_file(file_path, df, dtfl):
 
         try:
             inventory = client.get_stations(
-                network=dataset.attrs['network_code'],
-                station=dataset.attrs['receiver_code'],
-                starttime=UTCDateTime(dataset.attrs['trace_start_time']),
-                endtime=UTCDateTime(dataset.attrs['trace_start_time']) + 60,
+                network=dataset.attrs["network_code"],
+                station=dataset.attrs["receiver_code"],
+                starttime=UTCDateTime(dataset.attrs["trace_start_time"]),
+                endtime=UTCDateTime(dataset.attrs["trace_start_time"]) + 60,
                 loc="*",
                 channel="*",
-                level="response"
+                level="response",
             )
         except Exception as e:
             print(f"Error retrieving station metadata for {trace_name}: {e}")
@@ -116,7 +117,11 @@ def create_h5_file(file_path, df, dtfl):
             continue
 
         # Trim around the P arrival (5 seconds before, up to 60 seconds total)
-        starttime = UTCDateTime(dataset.attrs['trace_start_time']) + dataset.attrs['p_arrival_sample'] * 0.01 - 5
+        starttime = (
+            UTCDateTime(dataset.attrs["trace_start_time"])
+            + dataset.attrs["p_arrival_sample"] * 0.01
+            - 5
+        )
         endtime = starttime + 60
         st.trim(starttime, endtime, pad=True, fill_value=0)
 
@@ -135,21 +140,21 @@ def create_h5_file(file_path, df, dtfl):
         waveform_list.append(st_data_clipped)
 
         # store metadata
-        event_ID_list.append(row['source_id'])
-        hypocentral_distance_list.append(row['source_distance_km'])
-        hypocentre_depth_list.append(row['source_depth_km'])
-        hypocentre_latitude_list.append(row['source_latitude'])
-        hypocentre_longitude_list.append(row['source_longitude'])
-        is_shallow_crustal_list.append(1 if row['source_depth_km'] <= 25 else 0)
-        magnitude_list.append(row['source_magnitude'])
-        station_altitude_list.append(row['receiver_elevation_m'])
-        station_latitude_list.append(row['receiver_latitude'])
-        station_longitude_list.append(row['receiver_longitude'])
-        station_name_list.append(row['receiver_code'])
-        station_network_list.append(row['network_code'])
-        time_sample_list.append(row['p_arrival_sample'])
-        time_arrival_list.append(row['p_travel_sec'])
-        trace_start_time_list.append(row['trace_start_time'])
+        event_ID_list.append(row["source_id"])
+        hypocentral_distance_list.append(row["source_distance_km"])
+        hypocentre_depth_list.append(row["source_depth_km"])
+        hypocentre_latitude_list.append(row["source_latitude"])
+        hypocentre_longitude_list.append(row["source_longitude"])
+        is_shallow_crustal_list.append(1 if row["source_depth_km"] <= 25 else 0)
+        magnitude_list.append(row["source_magnitude"])
+        station_altitude_list.append(row["receiver_elevation_m"])
+        station_latitude_list.append(row["receiver_latitude"])
+        station_longitude_list.append(row["receiver_longitude"])
+        station_name_list.append(row["receiver_code"])
+        station_network_list.append(row["network_code"])
+        time_sample_list.append(row["p_arrival_sample"])
+        time_arrival_list.append(row["p_travel_sec"])
+        trace_start_time_list.append(row["trace_start_time"])
         # vs30 could be real data or random for demonstration
         vs30_list.append(np.random.randint(400, 1501))
 
@@ -165,11 +170,11 @@ def create_h5_file(file_path, df, dtfl):
     station_altitude_arr = np.array(station_altitude_list)
     station_latitude_arr = np.array(station_latitude_list)
     station_longitude_arr = np.array(station_longitude_list)
-    station_name_arr = np.array(station_name_list).astype('S')
-    station_network_arr = np.array(station_network_list).astype('S')
+    station_name_arr = np.array(station_name_list).astype("S")
+    station_network_arr = np.array(station_network_list).astype("S")
     time_sample_arr = np.array(time_sample_list)
     time_arrival_arr = np.array(time_arrival_list)
-    trace_start_time_arr = np.array(trace_start_time_list).astype('S')
+    trace_start_time_arr = np.array(trace_start_time_list).astype("S")
     vs30_arr = np.array(vs30_list)
 
     # Waveforms: we need shape (3, 6000, n_events)
@@ -201,6 +206,7 @@ def create_h5_file(file_path, df, dtfl):
 
     print(f"\nHDF5 file '{file_path}' created successfully with {n_events} valid events.")
 
+
 def main():
     """
     Main function to demonstrate reading a CSV, filtering a DataFrame,
@@ -214,16 +220,16 @@ def main():
     print(f"Total events in CSV file: {len(df)}")
 
     # Open the HDF5 file containing the raw seismic data
-    dtfl = h5py.File(file_name, 'r')
+    dtfl = h5py.File(file_name, "r")
 
     # Filter the DataFrame for local earthquakes:
     # (1) category: 'earthquake_local'
     # (2) distance <= 200 km
     # (3) magnitude > 4
     df = df[
-        (df.trace_category == 'earthquake_local') &
-        (df.source_distance_km <= 200) &
-        (df.source_magnitude > 4)
+        (df.trace_category == "earthquake_local")
+        & (df.source_distance_km <= 200)
+        & (df.source_magnitude > 4)
     ]
     print(f"Total events selected: {len(df)}")
 
