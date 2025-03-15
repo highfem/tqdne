@@ -1,24 +1,28 @@
 import logging
+import os
+import sys
 
 import torch
 from config import LatentSpectrogramConfig
 from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 
-if __name__ == "__main__":
+
+def run(args):
     logging.info("Set parameters...")
     name = "Autoencoder-32x32x4-LogSpectrogram"
-    config = LatentSpectrogramConfig()
+    config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     batch_size = 64
     lr = 1e-4
     max_epochs = 200
     resume = True
+
 
     train_dataset = Dataset(
         config.datapath, config.representation, cut=config.t, cond=False, split="train"
@@ -27,9 +31,9 @@ if __name__ == "__main__":
         config.datapath, config.representation, cut=config.t, cond=False, split="test"
     )
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, num_workers=4, shuffle=True, drop_last=True
+        train_dataset, batch_size=batch_size, num_workers=os.cpu_count(), shuffle=True, drop_last=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=os.cpu_count())
 
     # metrics
     metrics = [
@@ -65,14 +69,15 @@ if __name__ == "__main__":
     trainer_params = {
         "precision": 32,
         "accelerator": "auto",
-        "devices": "1",
+        "devices": 1,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
+        "max_steps": max_steps,
         "max_steps": max_steps,
     }
 
     logging.info("Build lightning module...")
-    autoencoder = LithningAutoencoder(
+    autoencoder = LightningAutoencoder(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
         optimizer_params=optimizer_params,
@@ -81,14 +86,14 @@ if __name__ == "__main__":
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
-        name,
-        test_loader,
-        config.representation,
+        name=name,
+        val_loader=test_loader,
+        config=config,
         metrics=metrics,
         plots=plots,
         eval_every=5,
         limit_eval_batches=10,
-        log_to_wandb=True,
+        log_to_wandb=False,
         **trainer_params,
     )
 
@@ -103,3 +108,16 @@ if __name__ == "__main__":
     )
 
     logging.info("Done!")
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser("Train a variational autoencoder")
+    parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
+    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/datasets/preprocessed_waveforms.h5`")
+    args = parser.parse_args()
+    if args.workdir is None:
+        parser.print_help()
+        sys.exit(0)
+    run(args)
+

@@ -11,7 +11,6 @@ from tqdne.logging import LogCallback
 def get_pl_trainer(
     name,
     val_loader,
-    representation,
     config,
     metrics=None,
     plots=None,
@@ -37,7 +36,7 @@ def get_pl_trainer(
         callbacks.append(
             LogCallback(
                 val_loader,
-                representation,
+                config.representation,
                 metrics,
                 plots,
                 limit_batches=limit_eval_batches,

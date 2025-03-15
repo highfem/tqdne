@@ -4,7 +4,7 @@ import torch as th
 from .blocks import Decoder, Encoder
 
 
-class LithningAutoencoder(pl.LightningModule):
+class LightningAutoencoder(pl.LightningModule):
     """A PyTorch Lightning module for training an autoencoder.
 
     Parameters

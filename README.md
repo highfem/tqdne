@@ -14,6 +14,35 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
+If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md).
+Otherwise, you can install `tqdne` like this:
+
+1. 
+   a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
+   
+   b) Alternatively, clone the repository using:
+      
+      ```bash
+      git clone (--depth 1) https://github.com/highfem/tqdne.git       
+      ```
+
+2. 
+   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will us the versions of all dependencies
+   that we are using for development, or you install using the `pip` installer which will install the latest versions of all dependencies. 
+
+   a) **Recommended**: Install all dependencies and the package with [`uv`](https://github.com/astral-sh/uv), via 
+
+      ```bash
+      uv sync
+      ```
+
+   b) Install using the `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
+
+      ```bash
+      pip install -e .
+      ```
+
+
 To set up the environment and install dependencies:
 
 1. **Clone the repository:**
@@ -23,7 +52,8 @@ To set up the environment and install dependencies:
    cd tqdne
    ```
 
-   Omit `--depth 1` if you want to access the full commit history. Alternatively, download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commmit history.
+   Omit `--depth 1` if you want to access the full commit history. 
+   Alternatively, download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history.
 
 2. **Create and activate a conda environment:**
 
