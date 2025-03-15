@@ -65,7 +65,7 @@ class LogCallback(Callback):
         # Log metrics
         for metric in self.metrics:
             result = metric(pred=pred, target=batch["waveform"])
-            pl_module.log(metric.name, result)
+            pl_module.log(metric.name, result, sync_dist=True)
 
         # Log plots
         for plot in self.plots:

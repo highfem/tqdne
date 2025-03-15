@@ -16,10 +16,11 @@ class Config:
     fs: int = 100
     t = None
     features_keys: tuple[str, ...] = (
-        "hypocentral_distance",
-        "is_shallow_crustal",
+        "hypocentral_distance",        
         "magnitude",
         "vs30",
+        "hypocentre_depth",
+        "azimuthal_gap"
     )
     representation = representation.Identity()
 
@@ -28,10 +29,10 @@ class Config:
         path = self.workdir if isinstance(self.workdir, Path) else Path(self.workdir)
         if self.infile is not None:
             self.infile =  self.infile if isinstance(self.infile, Path) else Path(self.infile)
-        self.datasetdir: Path = path / Path("datasets")
+        self.datasetdir: Path = path / Path("data")
         self.outputdir: Path = path / Path("outputs")
         self.original_datapath: Path = self.datasetdir / Path("raw_waveforms.h5")
-        self.datapath: Path = self.infile or self.datasetdir / Path("processed_waveforms.h5")
+        self.datapath: Path = self.infile or self.datasetdir / Path("preprocessed_waveforms.h5")
 
 
 @dataclass

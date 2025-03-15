@@ -62,9 +62,9 @@ class LightningAutoencoder(pl.LightningModule):
         recon_loss = th.mean((x - x_recon) ** 2)
         kl_div = self.kl_divergence(mean, log_std).mean()
         loss = recon_loss + self.kl_weight * kl_div
-        self.log(f"{stage}/reconstruction_loss", recon_loss.item())
-        self.log(f"{stage}/kl_divergence", kl_div.item())
-        self.log(f"{stage}/loss", loss.item())
+        self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
+        self.log(f"{stage}/kl_divergence", kl_div.item(), sync_dist=True)
+        self.log(f"{stage}/loss", loss.item(), sync_dist=True)
 
         if "cond_signal" not in batch:
             return loss

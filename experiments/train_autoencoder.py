@@ -18,7 +18,7 @@ def run(args):
     name = "Autoencoder-32x32x4-LogSpectrogram"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    batch_size = 64
+    batch_size = 64 * 4
     lr = 1e-4
     max_epochs = 200
     resume = True
@@ -31,9 +31,22 @@ def run(args):
         config.datapath, config.representation, cut=config.t, cond=False, split="test"
     )
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, num_workers=os.cpu_count(), shuffle=True, drop_last=True
+        train_dataset, 
+        batch_size=batch_size, 
+        num_workers=32, 
+        shuffle=True,
+        drop_last=True,
+        prefetch_factor=2,
+        persistent_workers=True,        
     )
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=os.cpu_count())
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=batch_size, 
+        num_workers=32,
+        drop_last=True,
+        prefetch_factor=2,
+        persistent_workers=True,
+    )
 
     # metrics
     metrics = [
@@ -68,12 +81,11 @@ def run(args):
 
     trainer_params = {
         "precision": 32,
-        "accelerator": "auto",
-        "devices": 1,
+        "accelerator": "gpu",
+        "devices": 4,        
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": max_steps,
-        "max_steps": max_steps,
+        "max_steps": max_steps,        
     }
 
     logging.info("Build lightning module...")
@@ -93,7 +105,7 @@ def run(args):
         plots=plots,
         eval_every=5,
         limit_eval_batches=10,
-        log_to_wandb=False,
+        log_to_wandb=True,
         **trainer_params,
     )
 
@@ -114,7 +126,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Train a variational autoencoder")
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
-    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/datasets/preprocessed_waveforms.h5`")
+    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()
