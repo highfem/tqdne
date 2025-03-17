@@ -27,8 +27,8 @@ def run(args):
     train_dataset = Dataset(
         config.datapath, config.representation, cut=config.t, cond=False, split="train"
     )
-    test_dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, cond=False, split="test"
+    val_dataset = Dataset(
+        config.datapath, config.representation, cut=config.t, cond=False, split="validation"
     )
     train_loader = DataLoader(
         train_dataset, 
@@ -39,8 +39,8 @@ def run(args):
         prefetch_factor=2,
         persistent_workers=True,        
     )
-    test_loader = DataLoader(
-        test_dataset, 
+    val_loader = DataLoader(
+        val_dataset, 
         batch_size=batch_size, 
         num_workers=32,
         drop_last=True,
@@ -99,7 +99,7 @@ def run(args):
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
         name=name,
-        val_loader=test_loader,
+        val_loader=val_loader,
         config=config,
         metrics=metrics,
         plots=plots,

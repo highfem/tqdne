@@ -36,12 +36,15 @@ class Dataset(th.utils.data.Dataset):
         rng = np.random.default_rng(seed=42)
         shuffled_indices = rng.permutation(indices)
         num_train_samples = int(len(indices) * 0.9)
+        num_val_samples = int(len(indices) * 0.95)
         if split == "full":
             self.indices = indices
         elif split == "train":
             self.indices = shuffled_indices[:num_train_samples]
+        elif split == "validation":
+            self.indices = shuffled_indices[num_train_samples:num_val_samples]
         elif split == "test":
-            self.indices = shuffled_indices[num_train_samples:]
+            self.indices = shuffled_indices[num_val_samples:]
         else:
             raise ValueError(f"Unknown split {split}")
 
