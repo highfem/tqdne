@@ -37,11 +37,12 @@ class Config:
 class SpectrogramConfig(Config):
     """Configuration class for the spectrogram representation."""
 
-    # representation size: 128 x 128
+    # representation size: 128 x 384
     stft_channels: int = 256
     hop_size: int = 32
     representation = representation.LogSpectrogram(stft_channels=stft_channels, hop_size=hop_size)
-    t: int = 4096 - hop_size  # subtract hop_size to make sure spectrogram has even number of frames
+     # we need to increase this from earlier version, since now data is bigger
+    t: int = 12256
 
 
 @dataclass
@@ -66,7 +67,7 @@ class MovingAverageEnvelopeConfig(Config):
 
     channels: int = 6  # 3 signal + 3 envelope
     representation = representation.MovingAverageEnvelope()
-    t: int = 4096 - 32  # for compatibility with the spectrogram representation
+    t: int = 12256  # for compatibility with the spectrogram representation
 
 
 @dataclass
