@@ -15,7 +15,7 @@ from h5py import File
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
@@ -41,7 +41,7 @@ def predict(
         Dataset split (`train`, `test`, or `full`).
     outputdir : str
         Output directory for the evaluation results.
-    config : str
+    config : Config
         One of the configuration classes in `tqdne.config`.
     classifier_config : str
         One of the configuration classes in `tqdne.config`.
@@ -64,7 +64,7 @@ def predict(
 
     device = get_device()
     autoencoder = (
-        LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
+        LightningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
         if autoencoder_checkpoint is not None
         else None
     )

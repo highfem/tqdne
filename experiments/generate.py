@@ -20,7 +20,7 @@ import numpy as np
 import torch as th
 from tqdm import tqdm
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 from tqdne.utils import get_device
@@ -82,9 +82,7 @@ def generate(
         magnitudes = []
         vs30s = []
         with open(csv) as f:
-            # skip header
-            f.readline()
-
+            f.readline()  # skip header
             for line in f:
                 args = line.strip().split(",")
                 num_samples = int(args[4])
@@ -129,7 +127,7 @@ def generate(
     device = get_device()
     if autoencoder_checkpoint is not None:
         autoencoder = (
-            LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
+            LightningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
             .to(device)
             .eval()
         )

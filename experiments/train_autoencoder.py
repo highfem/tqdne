@@ -1,94 +1,42 @@
-import logging
-import os
 import sys
 
 import torch
-from config import LatentSpectrogramConfig
-from torch.utils.data import DataLoader
+from absl import logging
 
+from config import LatentSpectrogramConfig
 from tqdne import metric, plot
+from tqdne.architectures import get_2d_autoencoder_configs
 from tqdne.autoencoder import LightningAutoencoder
-from tqdne.dataset import Dataset
+from tqdne.dataloader import get_train_and_val_loader
 from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint
+from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    logging.info("Set parameters...")
     name = "Autoencoder-32x32x4-LogSpectrogram"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    batch_size = 64 * 4
-    lr = 1e-4
-    max_epochs = 200
-    resume = True
 
-
-    train_dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, cond=False, split="train"
-    )
-    val_dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, cond=False, split="validation"
-    )
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
-        num_workers=32, 
-        shuffle=True,
-        drop_last=True,
-        prefetch_factor=2,
-        persistent_workers=True,        
-    )
-    val_loader = DataLoader(
-        val_dataset, 
-        batch_size=batch_size, 
-        num_workers=32,
-        drop_last=True,
-        prefetch_factor=2,
-        persistent_workers=True,
-    )
-
-    # metrics
+    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ] + [metric.MeanSquaredError(channel=c) for c in range(3)]
-
-    # plots
     plots = [plot.SamplePlot(plot_target=True, fs=config.fs, channel=c) for c in range(3)] + [
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    # Parameters
-    base_config = {
-        "model_channels": 64,
-        "channel_mult": (1, 2, 4),
-        "attention_resolutions": (),
-        "num_res_blocks": 2,
-        "dims": 2,
-        "conv_kernel_size": 3,
-        "dropout": 0.1,
-    }
-    encoder_config = base_config | {
-        "in_channels": config.channels,
-        "out_channels": config.latent_channels * 2,
-    }
-    decoder_config = base_config | {
-        "in_channels": config.latent_channels,
-        "out_channels": config.channels,
-    }
-    max_steps = max_epochs * len(train_loader)
-    optimizer_params = {"learning_rate": lr, "max_steps": max_steps}
-
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader)}
     trainer_params = {
         "precision": 32,
-        "accelerator": "gpu",
-        "devices": 4,        
+        "accelerator": get_device(),
+        "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": max_steps,        
+        "max_steps": optimizer_params["max_steps"],
     }
 
     logging.info("Build lightning module...")
+    encoder_config, decoder_config = get_2d_autoencoder_configs(config)
     autoencoder = LightningAutoencoder(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
@@ -111,25 +59,28 @@ def run(args):
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    checkpoint = get_last_checkpoint(trainer.default_root_dir) if resume else None
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)
     trainer.fit(
         autoencoder,
         train_dataloaders=train_loader,
         val_dataloaders=val_loader,
         ckpt_path=checkpoint,
     )
-
     logging.info("Done!")
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser("Train a variational autoencoder")
+    parser = argparse.ArgumentParser(
+        "Train a 2D variational autoencoder"
+    )
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
     parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
+    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
+    parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
+    parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()
         sys.exit(0)
     run(args)
-

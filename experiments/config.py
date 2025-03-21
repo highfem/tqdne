@@ -4,7 +4,6 @@ from pathlib import Path
 from tqdne import representation
 
 
-
 @dataclass
 class Config:
     """Configuration class for the project."""
@@ -23,7 +22,6 @@ class Config:
         "azimuthal_gap"
     )
     representation = representation.Identity()
-
 
     def __post_init__(self):
         path = self.workdir if isinstance(self.workdir, Path) else Path(self.workdir)

@@ -25,5 +25,5 @@ dependencies:
   - pip:
       - einops==0.8.1
       - plotly==5.20.0
-      - seisbench==0.8.0      
+      - seisbench==0.8.0
       - -e .

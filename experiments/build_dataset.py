@@ -40,6 +40,7 @@ def run(args):
                 waveforms = np.nan_to_num(waveforms)
                 f_new["waveforms"][i : i + batch_size] = waveforms
 
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Train a variational autoencoder")    

@@ -403,6 +403,15 @@ wheels = [
 ]
 
 [[package]]
+name = "einops"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/81/df4fbe24dff8ba3934af99044188e20a98ed441ad17a274539b74e82e126/einops-0.8.1.tar.gz", hash = "sha256:de5d960a7a761225532e0f1959e5315ebeafc0cd43394732f103ca44b9837e84", size = 54805 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl", hash = "sha256:919387eb55330f5757c6bea9165c5ff5cfe63a642682ea788a6d472576d81737", size = 64359 },
+]
+
+[[package]]
 name = "filelock"
 version = "3.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2260,6 +2269,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "diffusers" },
+    { name = "einops" },
     { name = "h5py" },
     { name = "librosa" },
     { name = "pandas" },
@@ -2282,6 +2292,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "diffusers", specifier = ">=0.26.3" },
+    { name = "einops", specifier = ">=0.8.1" },
     { name = "h5py", specifier = ">=3.10.0" },
     { name = "librosa", specifier = ">=0.10.2.post1" },
     { name = "pandas", specifier = ">=2.2.2" },
