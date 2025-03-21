@@ -115,7 +115,7 @@ def run(args):
     trainer.fit(
         autoencoder,
         train_dataloaders=train_loader,
-        val_dataloaders=test_loader,
+        val_dataloaders=val_loader,
         ckpt_path=checkpoint,
     )
 

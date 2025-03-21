@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 import torch as th
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.nn import append_dims
 from tqdne.unet import UNetModel
 
@@ -68,7 +68,7 @@ class LightningEDM(pl.LightningModule):
         Stochastic sampling can be more accurate but usually requires more (e.g. 256) steps.
     edm : EDM, optional
         The EDM model parameters.
-    autoencoder : None or LithningAutoencoder, optional
+    autoencoder : None or LightningAutoencoder, optional
         If provided, the autoencoder used to obtain the latent representations.
         The diffusion model will then generate these latent representations instead of the original signal [2].
 
@@ -85,7 +85,7 @@ class LightningEDM(pl.LightningModule):
         num_sampling_steps: int = 25,
         deterministic_sampling: bool = True,
         edm: EDM = EDM(),
-        autoencoder: None | LithningAutoencoder = None,
+        autoencoder: None | LightningAutoencoder = None,
     ):
         super().__init__()
 
