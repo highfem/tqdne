@@ -13,7 +13,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    name = "Autoencoder-32x96x4-LogSpectrogram-3"
+    name = "Autoencoder-32x96x4-LogSpectrogram"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
@@ -25,7 +25,7 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 150  * len(train_loader), "eta_min": 0.000001}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200  * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
