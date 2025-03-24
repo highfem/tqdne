@@ -1,7 +1,7 @@
 import sys
 
 import torch
-from absl import logging
+import logging
 
 from config import LatentSpectrogramConfig
 from tqdne import metric, plot
@@ -13,7 +13,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    name = "Autoencoder-32x32x4-LogSpectrogram"
+    name = "Autoencoder-32x96x4-LogSpectrogram-3"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
@@ -25,14 +25,14 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 150  * len(train_loader), "eta_min": 0.000001}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": optimizer_params["max_steps"],
+        "max_steps": 200 * len(train_loader),
     }
 
     logging.info("Build lightning module...")
@@ -59,7 +59,7 @@ def run(args):
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    checkpoint = get_last_checkpoint(trainer.default_root_dir)
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)    
     trainer.fit(
         autoencoder,
         train_dataloaders=train_loader,
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
     parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
-    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
+    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=128)
     parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
     parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
     args = parser.parse_args()
