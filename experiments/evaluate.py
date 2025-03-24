@@ -196,19 +196,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--edm_checkpoint",
         type=str,
-        default="Latent-EDM-LogSpectrogram/0_299-val_loss=1.18e+00.ckpt",
+        default="Latent-EDM-LogSpectrogram/best.ckpt",
         help="EDM checkpoint",
     )
     parser.add_argument(
         "--classifier_checkpoint",
         type=str,
-        default="Classifier-LogSpectrogram/0_21-val_loss=1.09e+00.ckpt",
+        default="Classifier-LogSpectrogram/best.ckpt",
         help="Classifier checkpoint",
     )
     parser.add_argument(
         "--autoencoder_checkpoint",
         type=str,
-        default="Autoencoder-32x32x4-LogSpectrogram/0_199-val_loss=1.55e-03.ckpt",
+        default="Autoencoder-32x96x4-LogSpectrogram/best.ckpt",
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
     )
     args = parser.parse_args()

@@ -10,7 +10,7 @@ import pandas as pd
 import torch as th
 from tqdm import tqdm
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.edm import LightningEDM
 from tqdne.representation import LogSpectrogram
 from tqdne.utils import get_device

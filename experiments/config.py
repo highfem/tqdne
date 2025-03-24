@@ -26,7 +26,7 @@ class Config:
     def __post_init__(self):
         path = self.workdir if isinstance(self.workdir, Path) else Path(self.workdir)
         if self.infile is not None:
-            self.infile =  self.infile if isinstance(self.infile, Path) else Path(self.infile)
+            self.infile = self.infile if isinstance(self.infile, Path) else Path(self.infile)
         self.datasetdir: Path = path / Path("data")
         self.outputdir: Path = path / Path("outputs")
         self.original_datapath: Path = self.datasetdir / Path("raw_waveforms.h5")
