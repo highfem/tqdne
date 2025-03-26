@@ -13,16 +13,12 @@ from torchmetrics.classification import (
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import ClassificationDataset
 from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint
+from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
     name = "Classifier-LogSpectrogram"
     config = SpectrogramClassificationConfig(args.workdir, args.infile)
-    max_epochs = 100
-    batch_size = 128
-    lr = 1e-4
-    resume = True
 
     train_dataset = ClassificationDataset(
         config.datapath,
@@ -33,18 +29,26 @@ def run(args):
         split="train",
     )
 
-    test_dataset = ClassificationDataset(
+    val_dataset = ClassificationDataset(
         config.datapath,
         config.representation,
         mag_bins=config.mag_bins,
         dist_bins=config.dist_bins,
         cut=config.t,
-        split="test",
+        split="validation",
     )
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, num_workers=5, shuffle=True, drop_last=True
+        train_dataset, batch_size=args.batchsize, num_workers=args.num_workers, shuffle=True, drop_last=True,
+        prefetch_factor=2,
+        persistent_workers=True,
     )
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=5)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batchsize, num_workers=args.num_workers,
+        prefetch_factor=2,
+        drop_last=True,
+        persistent_workers=True,
+    )
 
     # loss and metrics
     class_weights = train_dataset.get_class_weights()
@@ -55,8 +59,6 @@ def run(args):
         MulticlassPrecision(len(class_weights)),
         MulticlassF1Score(len(class_weights)),
     ]
-
-    logging.info("Set parameters...")
 
     # Parameters
     encoder_config = {
@@ -73,30 +75,29 @@ def run(args):
         "flash_attention": False,
     }
 
-    max_steps = max_epochs * len(train_loader)
+    optimizer_params = {"learning_rate": 0.001, "max_steps": 100 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
-        "accelerator": "auto",
-        "devices": "1",
+        "accelerator": get_device(),
+        "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": max_steps,
+        "max_steps": optimizer_params["max_steps"],
     }
 
     logging.info("Build lightning module...")
-    output_layer = torch.nn.Linear(128, len(class_weights))
     classifier = LithningClassifier(
         encoder_config=encoder_config,
         num_classes=len(class_weights),
         loss=loss,
         metrics=metrics,
-        optimizer_params={"learning_rate": lr, "max_steps": max_steps},
+        optimizer_params=optimizer_params,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
         name,
-        test_loader,
+        val_loader,
         config.representation,
         metrics=[],
         plots=[],
@@ -108,15 +109,30 @@ def run(args):
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    if resume:
-        checkpoint = get_last_checkpoint(trainer.default_root_dir)
-    else:
-        checkpoint = None
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)
     trainer.fit(
         classifier,
         train_dataloaders=train_loader,
-        val_dataloaders=test_loader,
+        val_dataloaders=val_loader,
         ckpt_path=checkpoint,
     )
 
     logging.info("Done!")
+
+
+if __name__ == "__main__":
+    import sys
+    import argparse
+    parser = argparse.ArgumentParser(
+        "Train a classifier"
+    )
+    parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
+    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
+    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=128)
+    parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
+    parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
+    args = parser.parse_args()
+    if args.workdir is None:
+        parser.print_help()
+        sys.exit(0)
+    run(args)
