@@ -15,11 +15,10 @@ from tqdne.dataset import ClassificationDataset
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint
 
-if __name__ == "__main__":
-    logging.info("Set parameters...")
 
+def run(args):
     name = "Classifier-LogSpectrogram"
-    config = SpectrogramClassificationConfig()
+    config = SpectrogramClassificationConfig(args.workdir, args.infile)
     max_epochs = 100
     batch_size = 128
     lr = 1e-4

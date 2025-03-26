@@ -9,5 +9,5 @@
 
 conda activate /capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/workdir/envs/tqdne-dev
 
-srun torchrun --nproc_per_node=4 train_latent_edm.py \
+srun torchrun --nproc_per_node=4 train_classifier.py \
     --workdir=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir

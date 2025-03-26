@@ -18,7 +18,7 @@ def run(args):
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
-    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
+    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ]
@@ -26,7 +26,7 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
@@ -34,11 +34,11 @@ def run(args):
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
         "check_val_every_n_epoch": 5,
-        "max_steps": optimizer_params["max_steps"],
+        "max_steps": 200 * len(train_loader),
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = (config.outputdir / "Autoencoder-32x32x4-LogSpectrogram" / "best.ckpt")
+    checkpoint = (config.outputdir / "Autoencoder-32x96x4-LogSpectrogram-5" / "last.ckpt")
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
@@ -53,7 +53,7 @@ def run(args):
         plots=plots,
         ema_decay=0.999,
         eval_every=20,
-        limit_eval_batches=1,
+        limit_eval_batches=5,
         log_to_wandb=True,
         **trainer_params,
     )

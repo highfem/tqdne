@@ -13,7 +13,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    name = "Autoencoder-32x96x4-LogSpectrogram"
+    name = "Autoencoder-32x96x4-LogSpectrogram-5"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
