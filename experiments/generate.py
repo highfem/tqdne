@@ -14,6 +14,8 @@ The generated waveforms along with the corresponding conditional features are sa
 
 import argparse
 
+import pandas as pd
+
 import config as conf
 import h5py
 import numpy as np
@@ -29,9 +31,10 @@ from tqdne.utils import get_device
 @th.no_grad()
 def generate(
     hypocentral_distance,
-    is_shallow_crustal,
     magnitude,
     vs30,
+    hypocentre_depth,
+    azimuthal_gap,
     num_samples,
     csv,
     output,
@@ -46,12 +49,14 @@ def generate(
     ----------
     hypocentral_distance : float
         Hypocentral distance.
-    is_shallow_crustal : int
-        Shallow crustal flag (0 or 1).
     magnitude : float
         Earthquake magnitude.
     vs30 : float
         Vs30 value.
+    hypocentre_depth : float
+        hypocentre_depth
+    azimuthal_gap : float
+        azimuthal_gap
     num_samples : int
         Number of samples to generate for the given parameters.
     csv : str
@@ -69,72 +74,73 @@ def generate(
     """
 
     print("Prepare conditional features...")
-
     with h5py.File(config.datapath, "r") as f:
         dataset_hypocentral_distances = f["hypocentral_distance"][:]
-        dataset_is_shallow_crustals = f["is_shallow_crustal"][:]
         dataset_magnitudes = f["magnitude"][:]
         dataset_vs30s = f["vs30"][:]
+        dataset_hypocentre_depths = f["hypocentre_depth"][:]
+        dataset_azimuthal_gap = f["azimuthal_gap"][:]
 
     if csv:
-        hypercentral_distances = []
-        is_shallow_crustals = []
-        magnitudes = []
-        vs30s = []
-        with open(csv) as f:
-            f.readline()  # skip header
-            for line in f:
-                args = line.strip().split(",")
-                num_samples = int(args[4])
-                hypercentral_distances += [float(args[0])] * num_samples
-                is_shallow_crustals += [float(bool(args[1]))] * num_samples
-                magnitudes += [float(args[2])] * num_samples
-                vs30s += [float(args[3])] * num_samples
+        df = pd.read_csv(csv)
+        df = df.loc[df.index.repeat(df.num_samples)]
+        hypocentral_distances = df.hypocentral_distance.to_list()
+        magnitudes = df.magnitude.to_list()
+        vs30s = df.vs30.to_list()
+        hypocentre_depths = df.hyhypocentre_depth.to_list()
+        azimuthal_gaps = df.azimuthal_gap.to_list()
 
-    elif (
-        hypocentral_distance is not None
-        and is_shallow_crustal is not None
-        and magnitude is not None
-        and vs30 is not None
-        and num_samples is not None
-    ):
-        hypercentral_distances = [hypocentral_distance] * num_samples
-        is_shallow_crustals = [is_shallow_crustal] * num_samples
+    elif np.all([
+        c is not None
+        for c in [hypocentral_distance, magnitude, vs30, hypocentre_depth, magnitude, num_samples]
+    ]):
+        hypocentral_distances = [hypocentral_distance] * num_samples
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
+        hypocentre_depths = [hypocentre_depth] * num_samples
+        azimuthal_gaps = [azimuthal_gap] * num_samples
+
     else:
-        hypercentral_distances = dataset_hypocentral_distances
-        is_shallow_crustals = dataset_is_shallow_crustals
+        hypocentral_distances = dataset_hypocentral_distances
         magnitudes = dataset_magnitudes
         vs30s = dataset_vs30s
+        hypocentre_depths = dataset_hypocentre_depths
+        azimuthal_gaps = dataset_azimuthal_gap
 
     # normalize features
-    hypercentral_distances_norm = (
-        np.array(hypercentral_distances) - dataset_hypocentral_distances.mean()
+    hypocentral_distances_norm = (
+        np.array(hypocentral_distances) - dataset_hypocentral_distances.mean()
     ) / dataset_hypocentral_distances.std()
-    is_shallow_crustals_norm = (
-        np.array(is_shallow_crustals) - dataset_is_shallow_crustals.mean()
-    ) / dataset_is_shallow_crustals.std()
     magnitudes_norm = (np.array(magnitudes) - dataset_magnitudes.mean()) / dataset_magnitudes.std()
     vs30s_norm = (np.array(vs30s) - dataset_vs30s.mean()) / dataset_vs30s.std()
+    hypocentre_depths_norm = (
+        np.array(hypocentre_depths) - dataset_hypocentre_depths.mean()
+    ) / dataset_hypocentre_depths.std()
+    azimuthal_gaps_norm = (
+        np.array(azimuthal_gaps) - dataset_azimuthal_gap.mean()
+    ) / dataset_azimuthal_gap.std()
 
-    cond = np.stack(
-        [hypercentral_distances_norm, is_shallow_crustals_norm, magnitudes_norm, vs30s_norm], axis=1
+    cond = np.stack([
+        hypocentral_distances_norm,
+        magnitudes_norm,
+        vs30s_norm,
+        hypocentre_depths_norm,
+        azimuthal_gaps_norm
+        ], axis=1
     )
 
     print("Loading model...")
 
     device = get_device()
+    autoencoder = None
     if autoencoder_checkpoint is not None:
         autoencoder = (
-            LightningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
+            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint)
             .to(device)
             .eval()
         )
     edm = (
-        LightningEDM.load_from_checkpoint(
-            config.outputdir / edm_checkpoint, autoencoder=autoencoder
-        )
+        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
         .to(device)
         .eval()
     )
@@ -145,12 +151,11 @@ def generate(
     signal_shape = dataset[0]["signal"].shape
 
     print(f"Generating waveforms using {device}...")
-
     with h5py.File(config.outputdir / output, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypercentral_distances))
-        f.create_dataset("is_shallow_crustal", data=np.array(is_shallow_crustals))
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
-        f.create_dataset("vs30", data=np.array(vs30s))
+        f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
+        f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
 
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
 
@@ -169,33 +174,36 @@ def generate(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate waveforms")
     parser.add_argument("--hypocentral_distance", type=float, default=None)
-    parser.add_argument("--is_shallow_crustal", type=int, default=None)
     parser.add_argument("--magnitude", type=float, default=None)
     parser.add_argument("--vs30", type=float, default=None)
+    parser.add_argument("--hypocentre_depth", type=float, default=None)
+    parser.add_argument("--azimuthal_gap", type=float, default=None)
     parser.add_argument("--num_samples", type=int, default=None)
     parser.add_argument("--csv", type=str, default=None, help="csv file with args")
     parser.add_argument(
-        "--output",
-        type=str,
-        default="generated.h5",
-        help="Output file name with generated waveforms",
+        "--workdir", type=str, help="the working directory in which checkpoints and all outputs are saved to (same as used during training)"
     )
-    parser.add_argument(
-        "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
-    )
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument(
         "--edm_checkpoint",
         type=str,
-        default="Latent-EDM-LogSpectrogram/0_299-val_loss=1.18e+00.ckpt",
+        required=True,
         help="EDM checkpoint",
     )
     parser.add_argument(
         "--autoencoder_checkpoint",
         type=str,
-        default="Autoencoder-32x32x4-LogSpectrogram/0_199-val_loss=1.55e-03.ckpt",
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
     )
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        default=None,
+        help="Output file name with generated waveforms; if not given writes to workdir/outputs/generated.h5",
+    )
+    parser.add_argument(
+        "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
+    )
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     args = parser.parse_args()
 
     config = getattr(conf, args.config)()
@@ -204,9 +212,10 @@ if __name__ == "__main__":
 
     generate(
         args.hypocentral_distance,
-        args.is_shallow_crustal,
         args.magnitude,
         args.vs30,
+        args.hypocentre_depth,
+        args.azimuthal_gap,
         args.num_samples,
         args.csv,
         args.output,
