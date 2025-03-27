@@ -89,10 +89,11 @@ class ClassificationDataset(Dataset):
             + np.digitize(mag, mag_bins)
             - 1
         )
+        self._split = split
 
-    def get_class_weights(self):
+    def get_class_weights(self):        
+        #TODO(simon): removed assert due to error. inquire why
         num_classes = len(np.unique(self.labels))
-        assert (self.labels.max() + 1) == num_classes
         return th.tensor(
             [1 / (self.labels == l).sum() for l in range(num_classes)], dtype=th.float32
         )

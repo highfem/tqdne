@@ -14,7 +14,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    name = "Latent-EDM-LogSpectrogram"
+    name = "Latent-EDM-LogSpectrogram-2"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
@@ -32,8 +32,7 @@ def run(args):
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": 200 * len(train_loader),
     }
 
@@ -53,7 +52,7 @@ def run(args):
         plots=plots,
         ema_decay=0.999,
         eval_every=20,
-        limit_eval_batches=5,
+        limit_eval_batches=2,
         log_to_wandb=True,
         **trainer_params,
     )

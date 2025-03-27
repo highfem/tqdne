@@ -57,7 +57,7 @@ class LatentSpectrogramConfig(SpectrogramConfig):
 class SpectrogramClassificationConfig(SpectrogramConfig):
     """Configuration class for the spectrogram representation."""
 
-    mag_bins = [4.5, 4.75, 5, 5.25, 6, 9.1]
+    mag_bins = [4, 4.75, 5, 5.25, 6, 9.1]
     dist_bins = [0, 75, 100, 125, 150, 200]
 
 

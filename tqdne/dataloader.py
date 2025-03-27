@@ -21,7 +21,7 @@ def get_train_and_val_loader(config, num_workers, batchsize, cond=False):
     )
     val_loader = DataLoader(
         val_dataset,
-        drop_last=True,
+        drop_last=False,
         prefetch_factor=2,
         persistent_workers=True,
         num_workers=num_workers,
