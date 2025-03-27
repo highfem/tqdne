@@ -72,12 +72,13 @@ class LithningClassifier(pl.LightningModule):
         loss = self.loss(y_hat, y)
         self.log("validation/loss", loss.item(), sync_dist=True)
         self.metrics(y_hat, y)
-        self.log_dict(self.metrics, on_step=False, on_epoch=True, sync_dist=True)
+        self.log_dict(self.metrics, sync_dist=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
         lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.optimizer_params["max_steps"]
+            optimizer, T_max=self.optimizer_params["max_steps"], eta_min=self.optimizer_params["eta_min"]
         )
 
         return {
