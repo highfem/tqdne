@@ -13,7 +13,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "Autoencoder-1024x16-MovingAvg"
-    config = LatentMovingAverageEnvelopeConfig(args.workdir, args.infile)
+    config = LatentMovingAverageEnvelopeConfig(args.workdir, args.infile)    
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
     metrics = [
@@ -23,7 +23,7 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),

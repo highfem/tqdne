@@ -51,7 +51,7 @@ def run(args):
         metrics=metrics,
         plots=plots,
         ema_decay=0.999,
-        eval_every=20,
+        eval_every=10,
         limit_eval_batches=2,
         log_to_wandb=True,
         **trainer_params,
