@@ -14,7 +14,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 
 def run(args):
-    name = "Latent-EDM-LogSpectrogram-2"
+    name = "Latent-EDM-LogSpectrogram"
     config = LatentSpectrogramConfig(args.workdir, args.infile)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
@@ -37,11 +37,11 @@ def run(args):
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = (config.outputdir / "Autoencoder-32x96x4-LogSpectrogram-5" / "last.ckpt")
+    checkpoint = (config.outputdir / "Autoencoder-32x96x4-LogSpectrogram" / "best.ckpt")
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
-    model = LightningEDM(get_2d_unet_config(config), optimizer_params, autoencoder=autoencoder)
+    model = LightningEDM(get_2d_unet_config(config, config.latent_channels, config.latent_channels), optimizer_params, autoencoder=autoencoder)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(

@@ -1,16 +1,4 @@
-"""Generate waveforms using the trained EDM model.
-
-By default, the script generates a waveform for every sample in the `gm0.h5` dataset using the corresponding conditional features.
-
-Alternatively, a number of waveforms can be generated for a given hypocentral distance, shallow crustal flag, magnitude, and vs30 values provided as arguments. The same can be done for a set of parameters given in a CSV file, where each line should have the following format:
-```
-hypocentral_distance, is_shallow_crustal, magnitude, vs30, num_samples
-```
-where `num_samples` is the number of samples to generate for the given parameters,
-`is_shallow_crustal` is a boolean flag (0 or 1), and the rest are floating-point values.
-
-The generated waveforms along with the corresponding conditional features are saved in an HDF5 file with the given name in the outputs directory.
-"""
+"""Generate waveforms using the trained EDM model."""
 
 import argparse
 
@@ -37,49 +25,22 @@ def generate(
     azimuthal_gap,
     num_samples,
     csv,
-    output,
+    outfile,
     config,
     batch_size,
     edm_checkpoint,
     autoencoder_checkpoint,
 ):
-    """Generate waveforms using the trained EDM model.
-
-    Parameters
-    ----------
-    hypocentral_distance : float
-        Hypocentral distance.
-    magnitude : float
-        Earthquake magnitude.
-    vs30 : float
-        Vs30 value.
-    hypocentre_depth : float
-        hypocentre_depth
-    azimuthal_gap : float
-        azimuthal_gap
-    num_samples : int
-        Number of samples to generate for the given parameters.
-    csv : str
-        CSV file with parameters.
-    output : str
-        Output file name with generated waveforms.
-    config : str
-        One of the configuration classes in `tqdne.config`.
-    batch_size : int
-        Batch size used for the generation.
-    edm_checkpoint : str
-        Saved EDM model checkpoint. Relative to the output directory.
-    autoencoder_checkpoint : str
-        Optional autoencoder model checkpoint. Needed for the Latent-EDM model. Relative to the output directory.
-    """
-
     print("Prepare conditional features...")
-    with h5py.File(config.datapath, "r") as f:
-        dataset_hypocentral_distances = f["hypocentral_distance"][:]
-        dataset_magnitudes = f["magnitude"][:]
-        dataset_vs30s = f["vs30"][:]
-        dataset_hypocentre_depths = f["hypocentre_depth"][:]
-        dataset_azimuthal_gap = f["azimuthal_gap"][:]
+    dataset = Dataset(
+        config.datapath, config.representation, cut=config.t, split="test"
+    )    
+    signal_shape = dataset[0]["signal"].shape
+    dataset_hypocentral_distances = dataset.file["hypocentral_distance"][:][dataset.sorted_indices()]
+    dataset_magnitudes = dataset.file["magnitude"][:][dataset.sorted_indices()]
+    dataset_vs30s = dataset.file["vs30"][:][dataset.sorted_indices()]
+    dataset_hypocentre_depths = dataset.file["hypocentre_depth"][:][dataset.sorted_indices()]
+    dataset_azimuthal_gap = dataset.file["azimuthal_gap"][:][dataset.sorted_indices()]
 
     if csv:
         df = pd.read_csv(csv)
@@ -89,7 +50,6 @@ def generate(
         vs30s = df.vs30.to_list()
         hypocentre_depths = df.hyhypocentre_depth.to_list()
         azimuthal_gaps = df.azimuthal_gap.to_list()
-
     elif np.all([
         c is not None
         for c in [hypocentral_distance, magnitude, vs30, hypocentre_depth, magnitude, num_samples]
@@ -99,7 +59,6 @@ def generate(
         vs30s = [vs30] * num_samples
         hypocentre_depths = [hypocentre_depth] * num_samples
         azimuthal_gaps = [azimuthal_gap] * num_samples
-
     else:
         hypocentral_distances = dataset_hypocentral_distances
         magnitudes = dataset_magnitudes
@@ -109,16 +68,11 @@ def generate(
 
     # normalize features
     hypocentral_distances_norm = (
-        np.array(hypocentral_distances) - dataset_hypocentral_distances.mean()
-    ) / dataset_hypocentral_distances.std()
-    magnitudes_norm = (np.array(magnitudes) - dataset_magnitudes.mean()) / dataset_magnitudes.std()
-    vs30s_norm = (np.array(vs30s) - dataset_vs30s.mean()) / dataset_vs30s.std()
-    hypocentre_depths_norm = (
-        np.array(hypocentre_depths) - dataset_hypocentre_depths.mean()
-    ) / dataset_hypocentre_depths.std()
-    azimuthal_gaps_norm = (
-        np.array(azimuthal_gaps) - dataset_azimuthal_gap.mean()
-    ) / dataset_azimuthal_gap.std()
+        np.array(hypocentral_distances) - dataset.file["hypocentral_distance"][:].mean()) /  dataset.file["hypocentral_distance"][:].std()
+    magnitudes_norm = (np.array(magnitudes) -  dataset.file["magnitude"][:].mean()) /  dataset.file["magnitude"][:].std()
+    vs30s_norm = (np.array(vs30s) -  dataset.file["vs30"][:].mean()) /  dataset.file["vs30"][:].std()
+    hypocentre_depths_norm = (np.array(hypocentre_depths) -  dataset.file["hypocentre_depth"][:].mean()) /  dataset.file["hypocentre_depth"][:].std()
+    azimuthal_gaps_norm = (np.array(azimuthal_gaps) -  dataset.file["azimuthal_gap"][:].mean()) /  dataset.file["azimuthal_gap"][:].std()
 
     cond = np.stack([
         hypocentral_distances_norm,
@@ -145,13 +99,8 @@ def generate(
         .eval()
     )
 
-    print("Load Dataset to infer output shape...")
-
-    dataset = Dataset(config.datapath, config.representation, cut=config.t)
-    signal_shape = dataset[0]["signal"].shape
-
     print(f"Generating waveforms using {device}...")
-    with h5py.File(config.outputdir / output, "w") as f:
+    with h5py.File(outfile, "w") as f:
         f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
@@ -172,7 +121,23 @@ def generate(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate waveforms")
+    desc = """Generate waveforms using the trained EDM model.
+
+By default, the script generates a waveform for every sample in the test set of
+`preprocessed_waveforms.h5` dataset using the corresponding conditional features.
+Alternatively, a number of waveforms can be generated for a given set of conditioning
+variables values provided as arguments. The same can be done for a set of parameters 
+given in a CSV file, where each line should have the following format:
+```
+hypocentral_distance,magnitude,vs30,hypocentre_depth,azimuthal_gap,num_samples
+```
+where `num_samples` is the number of samples to generate for the given parameters.
+The generated waveforms along with the corresponding conditional features 
+are saved in an HDF5 file with the given name in the outputs directory.
+"""
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument("--hypocentral_distance", type=float, default=None)
     parser.add_argument("--magnitude", type=float, default=None)
     parser.add_argument("--vs30", type=float, default=None)
@@ -184,6 +149,12 @@ if __name__ == "__main__":
         "--workdir", type=str, help="the working directory in which checkpoints and all outputs are saved to (same as used during training)"
     )
     parser.add_argument(
+        "--outfile",
+        type=str,
+        required=True,
+        help="Output file name with generated waveforms",
+    )
+    parser.add_argument(
         "--edm_checkpoint",
         type=str,
         required=True,
@@ -193,22 +164,20 @@ if __name__ == "__main__":
         "--autoencoder_checkpoint",
         type=str,
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
-    )
-    parser.add_argument(
-        "--outfile",
-        type=str,
-        default=None,
-        help="Output file name with generated waveforms; if not given writes to workdir/outputs/generated.h5",
-    )
+    )    
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     args = parser.parse_args()
 
-    config = getattr(conf, args.config)()
+    config = getattr(conf, args.config)(args.workdir)
     if "latent" not in args.config.lower():
         args.autoencoder_checkpoint = None
+    try:
+        config.representation.disable_multiprocessing()
+    except:
+        pass
 
     generate(
         args.hypocentral_distance,
@@ -218,7 +187,7 @@ if __name__ == "__main__":
         args.azimuthal_gap,
         args.num_samples,
         args.csv,
-        args.output,
+        args.outfile,
         config,
         args.batch_size,
         args.edm_checkpoint,

@@ -19,10 +19,10 @@ def get_1d_autoencoder_configs(config):
     return encoder_config, decoder_config
 
 
-def get_1d_unet_config(config):
+def get_1d_unet_config(config, in_channels, out_channels):
     unet_config = {
-        "in_channels": config.channels,
-        "out_channels": config.channels,
+        "in_channels": in_channels,
+        "out_channels": out_channels,
         "cond_features": len(config.features_keys),
         "dims": 1,
         "conv_kernel_size": 5,
@@ -58,10 +58,10 @@ def get_2d_autoencoder_configs(config):
     return encoder_config, decoder_config
 
 
-def get_2d_unet_config(config):
+def get_2d_unet_config(config, in_channels, out_channels):
     unet_config = {
-        "in_channels": config.latent_channels,
-        "out_channels": config.latent_channels,
+        "in_channels": in_channels,
+        "out_channels": out_channels,
         "cond_features": len(config.features_keys),
         "dims": 2,
         "conv_kernel_size": 3,

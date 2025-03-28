@@ -56,6 +56,7 @@ class LightningAutoencoder(pl.LightningModule):
         return 0.5 * th.sum(mean**2 + th.exp(log_var) - log_var - 1, dim=1)
 
     def step(self, batch, stage="training"):
+        print(batch["signal"].shape)
         x = batch["signal"]
         latent, mean, log_std = self._encode(x)
         x_recon = self.decode(latent)

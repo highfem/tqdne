@@ -48,6 +48,9 @@ class Dataset(th.utils.data.Dataset):
         else:
             raise ValueError(f"Unknown split {split}")
 
+    def sorted_indices(self):
+        return np.sort(self.indices)
+
     def get_feature(self, key):
         return self.file[key][:][self.indices]
 
