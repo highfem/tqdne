@@ -3,13 +3,14 @@
 import argparse
 
 import pandas as pd
-
 import config as conf
 import h5py
 import numpy as np
 import torch as th
+from pathlib import Path
 from tqdm import tqdm
 
+import tqdne
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
@@ -43,6 +44,7 @@ def generate(
     dataset_azimuthal_gap = dataset.file["azimuthal_gap"][:][dataset.sorted_indices()]
 
     if csv:
+        print("using csv data")
         df = pd.read_csv(csv)
         df = df.loc[df.index.repeat(df.num_samples)]
         hypocentral_distances = df.hypocentral_distance.to_list()
@@ -54,12 +56,14 @@ def generate(
         c is not None
         for c in [hypocentral_distance, magnitude, vs30, hypocentre_depth, magnitude, num_samples]
     ]):
+        print("using command line input data")
         hypocentral_distances = [hypocentral_distance] * num_samples
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
         hypocentre_depths = [hypocentre_depth] * num_samples
         azimuthal_gaps = [azimuthal_gap] * num_samples
     else:
+        print("using test data")
         hypocentral_distances = dataset_hypocentral_distances
         magnitudes = dataset_magnitudes
         vs30s = dataset_vs30s
@@ -83,16 +87,19 @@ def generate(
         ], axis=1
     )
 
-    print("Loading model...")
-
+    print("Loading models...")
     device = get_device()
-    autoencoder = None
+    autoencoder = None  
     if autoencoder_checkpoint is not None:
+        autoencoder_checkpoint = Path(autoencoder_checkpoint)
         autoencoder = (
             LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint)
             .to(device)
             .eval()
-        )
+        )    
+    
+    th.serialization.add_safe_globals([tqdne.edm.EDM])
+    edm_checkpoint = Path(edm_checkpoint)
     edm = (
         LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
         .to(device)
@@ -103,6 +110,7 @@ def generate(
     with h5py.File(outfile, "w") as f:
         f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
+        f.create_dataset("vs30s", data=np.array(vs30s))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
         f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
 

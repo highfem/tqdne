@@ -2,7 +2,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --time=00:29:59
-#SBATCH --partition=debug
+#SBATCH --partition=normal
 #SBATCH --account=sd28
 #SBATCH --output=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/slurm/%j.out
 #SBATCH --error=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/slurm/%j.out
