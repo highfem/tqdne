@@ -25,14 +25,13 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader), "eta_min": 0.0}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": optimizer_params["max_steps"],
     }
 

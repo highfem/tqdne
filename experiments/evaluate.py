@@ -1,6 +1,5 @@
 import sys
 import re
-from argparse import ArgumentParser
 
 import config as conf
 import torch
@@ -66,8 +65,9 @@ def predict(
     classifier_embedding_shape = classifier_embedding.shape[1:]
     classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
     
-    outfile = re.match(re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1))
-    outfile = Path(workdir, "evaluation", outfile + f"-split_{split}")
+    outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)    
+    Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
+    outfile = Path(workdir, "evaluation", outfile + f"-split_{split}.h5")
     with File(outfile , "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
@@ -103,7 +103,7 @@ def predict(
 
         print(f"Generating waveforms using {device}...")
         for i, batch in enumerate(tqdm(loader, file=sys.stdout)):
-            start = i * batch_size
+            start = i * batchsize
             end = start + len(batch["signal"])
 
             # target
@@ -140,7 +140,7 @@ def predict(
             predicted_classifier_embedding[start:end] = pred_embedding.cpu().numpy()
             predicted_classifier_pred[start:end] = (
                 classifier.output_layer(pred_embedding).cpu().numpy()
-            )
+            )            
 
     print("Done!")
 
@@ -153,6 +153,8 @@ The generated waveforms are saved along with original waveforms, conditional fea
 and classifier outputs in an HDF5 file. The created file can be read by the corresponding 
 notebook to compute metrics and create plots.
 """
+    import argparse
+    from argparse import ArgumentParser
     parser = ArgumentParser(
         description=desc, formatter_class=argparse.RawTextHelpFormatter
     )

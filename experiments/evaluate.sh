@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 #SBATCH --nodes=1
-#SBATCH --time=00:29:59
+#SBATCH --time=05:59:59
 #SBATCH --partition=normal
 #SBATCH --account=sd28
 #SBATCH --output=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/slurm/%j.out
@@ -9,8 +9,8 @@
 
 conda activate /capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/workdir/envs/tqdne-dev
 
-srun torchrun --nproc_per_node=4 evaluate.py \
+srun torchrun --nproc_per_node=1 evaluate.py \
     --workdir=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir \
-    --outfile=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/generated.h5 \
     --edm_checkpoint=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/outputs/Latent-EDM-LogSpectrogram/best.ckpt \
-    --autoencoder_checkpoint=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/outputs/Autoencoder-32x96x4-LogSpectrogram/best.ckpt
+    --autoencoder_checkpoint=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/outputs/Autoencoder-32x96x4-LogSpectrogram/best.ckpt \
+    --classifier_checkpoint=/capstor/scratch/cscs/sdirmeie/PROJECTS/highfem/src/tqdne/experiments/workdir/outputs/Classifier-LogSpectrogram/best.ckpt \

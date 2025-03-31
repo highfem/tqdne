@@ -19,7 +19,7 @@ def run(args):
     name = "Latent-EDM-MovingAvg"
     config = LatentMovingAverageEnvelopeConfig(args.workdir, args.infile)
 
-    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
+    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ]
@@ -27,14 +27,13 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": optimizer_params["max_steps"],
     }
 
@@ -44,7 +43,7 @@ def run(args):
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
-    model = LightningEDM(get_1d_unet_config(config), optimizer_params, autoencoder=autoencoder)
+    model = LightningEDM(get_1d_unet_config(config, config.latent_channels, config.latent_channels), optimizer_params, autoencoder=autoencoder)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
@@ -62,7 +61,7 @@ def run(args):
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    checkpoint = get_last_checkpoint(trainer.default_root_dir) if resume else None
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)
     trainer.fit(
         model,
         train_dataloaders=train_loader,
