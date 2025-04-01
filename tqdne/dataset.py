@@ -43,6 +43,8 @@ class Dataset(th.utils.data.Dataset):
             self.indices = shuffled_indices[:num_train_samples]
         elif split == "validation":
             self.indices = shuffled_indices[num_train_samples:num_val_samples]
+        elif split == "train_validation":
+            self.indices = shuffled_indices[:num_val_samples]        
         elif split == "test":
             self.indices = shuffled_indices[num_val_samples:]
         else:
