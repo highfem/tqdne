@@ -15,7 +15,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "Latent-EDM-LogSpectrogram"
-    config = LatentSpectrogramConfig(args.workdir, args.infile)
+    config = LatentSpectrogramConfig(args.workdir, None)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
@@ -77,7 +77,6 @@ if __name__ == "__main__":
         "Train a 2D latent diffusion model"
     )
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
-    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
     parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
     parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
     parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)

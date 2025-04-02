@@ -7,12 +7,12 @@ from tqdm import tqdm
 
 
 def run(args):    
-    config = Config(args.infile)
-    with File(args.infile, "r") as f:
+    config = Config(args.workdir)
+    with File(args.original_datapath, "r") as f:
         # remove samples with vs30 <= 0        
         mask = f["vs30"][:] > 0        
         indices = np.arange(len(mask))[mask]
-        with File(args.outfile, "w") as f_new:
+        with File(config.datapath, "w") as f_new:
             features = []            
             for key in config.features_keys:         
                 print(key, "", f[key].shape)       
@@ -40,8 +40,7 @@ def run(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Create a data set for training autoencoder and LDM models")
-    parser.add_argument("--infile", type=str, default=None, help="Raw waveforms file, e.g., `raw_waveforms.h5`")
-    parser.add_argument("--outfile", type=str, default=None, help="Result filename from calling this script,  e.g., `preprocessed_waveforms.h5`")
+    parser.add_argument("--workdir", type=str, help="the working directory containing `data/raw_waveforms.h5`")
     args = parser.parse_args()
     if args.infile is None or args.outfile is None:
         parser.print_help()

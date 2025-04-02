@@ -9,7 +9,6 @@ class Config:
     """Configuration class for the project."""
 
     workdir: str | Path
-    infile: str | Path | None = None
     project_name: str = "tqdne"
     channels: int = 3
     fs: int = 100
@@ -25,12 +24,10 @@ class Config:
 
     def __post_init__(self):
         path = self.workdir if isinstance(self.workdir, Path) else Path(self.workdir)
-        if self.infile is not None:
-            self.infile = self.infile if isinstance(self.infile, Path) else Path(self.infile)
         self.datasetdir: Path = path / Path("data")
         self.outputdir: Path = path / Path("outputs")
         self.original_datapath: Path = self.datasetdir / Path("raw_waveforms.h5")
-        self.datapath: Path = self.infile or self.datasetdir / Path("preprocessed_waveforms.h5")
+        self.datapath: Path = self.datasetdir / Path("preprocessed_waveforms.h5")
 
 
 @dataclass
