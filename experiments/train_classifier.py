@@ -13,7 +13,7 @@ from torchmetrics.classification import (
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import ClassificationDataset
 from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint, get_device
+from tqdne.utils import get_device, get_last_checkpoint
 
 
 def run(args):
@@ -39,13 +39,18 @@ def run(args):
         split="validation",
     )
     train_loader = DataLoader(
-        train_dataset, batch_size=args.batchsize, num_workers=args.num_workers, shuffle=True, drop_last=True,
+        train_dataset,
+        batch_size=args.batchsize,
+        num_workers=args.num_workers,
+        shuffle=True,
+        drop_last=True,
         prefetch_factor=2,
         persistent_workers=True,
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=args.batchsize, num_workers=args.num_workers,
+        batch_size=args.batchsize,
+        num_workers=args.num_workers,
         prefetch_factor=2,
         drop_last=False,
         persistent_workers=True,
@@ -76,7 +81,11 @@ def run(args):
         "flash_attention": False,
     }
 
-    optimizer_params = {"learning_rate": 0.001, "max_steps": 100 * len(train_loader), "eta_min": 0.0}
+    optimizer_params = {
+        "learning_rate": 0.001,
+        "max_steps": 100 * len(train_loader),
+        "eta_min": 0.0,
+    }
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
@@ -122,15 +131,24 @@ def run(args):
 
 
 if __name__ == "__main__":
-    import sys
     import argparse
-    parser = argparse.ArgumentParser(
-        "Train a classifier"
+    import sys
+
+    parser = argparse.ArgumentParser("Train a classifier")
+    parser.add_argument(
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all output are saved to",
     )
-    parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
-    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=128)
-    parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
-    parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
+    parser.add_argument(
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=128
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32
+    )
+    parser.add_argument(
+        "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()

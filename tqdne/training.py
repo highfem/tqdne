@@ -23,7 +23,7 @@ def get_pl_trainer(
     # wandb logger
     if log_to_wandb:
         wandb_logger = WandbLogger(
-            project=config.project_name, 
+            project=config.project_name,
             name=name,
             resume="allow",
         )

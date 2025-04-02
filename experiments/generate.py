@@ -1,13 +1,13 @@
 """Generate waveforms using the trained EDM model."""
 
 import argparse
+from pathlib import Path
 
-import pandas as pd
 import config as conf
 import h5py
 import numpy as np
+import pandas as pd
 import torch as th
-from pathlib import Path
 from tqdm import tqdm
 
 import tqdne
@@ -33,11 +33,11 @@ def generate(
     autoencoder_checkpoint,
 ):
     print("Prepare conditional features...")
-    dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, split="test"
-    )    
+    dataset = Dataset(config.datapath, config.representation, cut=config.t, split="test")
     signal_shape = dataset[0]["signal"].shape
-    dataset_hypocentral_distances = dataset.file["hypocentral_distance"][:][dataset.sorted_indices()]
+    dataset_hypocentral_distances = dataset.file["hypocentral_distance"][:][
+        dataset.sorted_indices()
+    ]
     dataset_magnitudes = dataset.file["magnitude"][:][dataset.sorted_indices()]
     dataset_vs30s = dataset.file["vs30"][:][dataset.sorted_indices()]
     dataset_hypocentre_depths = dataset.file["hypocentre_depth"][:][dataset.sorted_indices()]
@@ -52,10 +52,19 @@ def generate(
         vs30s = df.vs30.to_list()
         hypocentre_depths = df.hyhypocentre_depth.to_list()
         azimuthal_gaps = df.azimuthal_gap.to_list()
-    elif np.all([
-        c is not None
-        for c in [hypocentral_distance, magnitude, vs30, hypocentre_depth, magnitude, num_samples]
-    ]):
+    elif np.all(
+        [
+            c is not None
+            for c in [
+                hypocentral_distance,
+                magnitude,
+                vs30,
+                hypocentre_depth,
+                magnitude,
+                num_samples,
+            ]
+        ]
+    ):
         print("using command line input data")
         hypocentral_distances = [hypocentral_distance] * num_samples
         magnitudes = [magnitude] * num_samples
@@ -72,38 +81,43 @@ def generate(
 
     # normalize features
     hypocentral_distances_norm = (
-        np.array(hypocentral_distances) - dataset.file["hypocentral_distance"][:].mean()) /  dataset.file["hypocentral_distance"][:].std()
-    magnitudes_norm = (np.array(magnitudes) -  dataset.file["magnitude"][:].mean()) /  dataset.file["magnitude"][:].std()
-    vs30s_norm = (np.array(vs30s) -  dataset.file["vs30"][:].mean()) /  dataset.file["vs30"][:].std()
-    hypocentre_depths_norm = (np.array(hypocentre_depths) -  dataset.file["hypocentre_depth"][:].mean()) /  dataset.file["hypocentre_depth"][:].std()
-    azimuthal_gaps_norm = (np.array(azimuthal_gaps) -  dataset.file["azimuthal_gap"][:].mean()) /  dataset.file["azimuthal_gap"][:].std()
+        np.array(hypocentral_distances) - dataset.file["hypocentral_distance"][:].mean()
+    ) / dataset.file["hypocentral_distance"][:].std()
+    magnitudes_norm = (np.array(magnitudes) - dataset.file["magnitude"][:].mean()) / dataset.file[
+        "magnitude"
+    ][:].std()
+    vs30s_norm = (np.array(vs30s) - dataset.file["vs30"][:].mean()) / dataset.file["vs30"][:].std()
+    hypocentre_depths_norm = (
+        np.array(hypocentre_depths) - dataset.file["hypocentre_depth"][:].mean()
+    ) / dataset.file["hypocentre_depth"][:].std()
+    azimuthal_gaps_norm = (
+        np.array(azimuthal_gaps) - dataset.file["azimuthal_gap"][:].mean()
+    ) / dataset.file["azimuthal_gap"][:].std()
 
-    cond = np.stack([
-        hypocentral_distances_norm,
-        magnitudes_norm,
-        vs30s_norm,
-        hypocentre_depths_norm,
-        azimuthal_gaps_norm
-        ], axis=1
+    cond = np.stack(
+        [
+            hypocentral_distances_norm,
+            magnitudes_norm,
+            vs30s_norm,
+            hypocentre_depths_norm,
+            azimuthal_gaps_norm,
+        ],
+        axis=1,
     )
 
     print("Loading models...")
     device = get_device()
-    autoencoder = None  
+    autoencoder = None
     if autoencoder_checkpoint is not None:
         autoencoder_checkpoint = Path(autoencoder_checkpoint)
         autoencoder = (
-            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint)
-            .to(device)
-            .eval()
-        )    
-    
+            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
+        )
+
     th.serialization.add_safe_globals([tqdne.edm.EDM])
     edm_checkpoint = Path(edm_checkpoint)
     edm = (
-        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
-        .to(device)
-        .eval()
+        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
     )
 
     print(f"Generating waveforms using {device}...")
@@ -123,7 +137,7 @@ def generate(
                 sample = edm.sample(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
-            waveforms[i : i + batch_size] = config.representation.invert_representation(sample)            
+            waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
 
     print("Done!")
 
@@ -134,13 +148,13 @@ if __name__ == "__main__":
 By default, the script generates a waveform for every sample in the test set of
 `preprocessed_waveforms.h5` dataset using the corresponding conditional features.
 Alternatively, a number of waveforms can be generated for a given set of conditioning
-variables values provided as arguments. The same can be done for a set of parameters 
+variables values provided as arguments. The same can be done for a set of parameters
 given in a CSV file, where each line should have the following format:
 ```
 hypocentral_distance,magnitude,vs30,hypocentre_depth,azimuthal_gap,num_samples
 ```
 where `num_samples` is the number of samples to generate for the given parameters.
-The generated waveforms along with the corresponding conditional features 
+The generated waveforms along with the corresponding conditional features
 are saved in an HDF5 file with the given name in the outputs directory.
 """
     parser = argparse.ArgumentParser(
@@ -154,7 +168,9 @@ are saved in an HDF5 file with the given name in the outputs directory.
     parser.add_argument("--num_samples", type=int, default=None)
     parser.add_argument("--csv", type=str, default=None, help="csv file with args")
     parser.add_argument(
-        "--workdir", type=str, help="the working directory in which checkpoints and all outputs are saved to (same as used during training)"
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all outputs are saved to (same as used during training)",
     )
     parser.add_argument(
         "--outfile",
@@ -172,7 +188,7 @@ are saved in an HDF5 file with the given name in the outputs directory.
         "--autoencoder_checkpoint",
         type=str,
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
-    )    
+    )
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
     )

@@ -1,14 +1,14 @@
 import logging
 
 import torch
-
 from config import LatentMovingAverageEnvelopeConfig
+
 from tqdne import metric, plot
 from tqdne.architectures import get_1d_autoencoder_configs
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataloader import get_train_and_val_loader
 from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint, get_device
+from tqdne.utils import get_device, get_last_checkpoint
 
 
 def run(args):
@@ -23,7 +23,11 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader), "eta_min": 0.0}
+    optimizer_params = {
+        "learning_rate": 0.0001,
+        "max_steps": 200 * len(train_loader),
+        "eta_min": 0.0,
+    }
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
@@ -71,13 +75,22 @@ def run(args):
 if __name__ == "__main__":
     import argparse
     import sys
-    parser = argparse.ArgumentParser(
-        "Train a 1D variational autoencoder"
+
+    parser = argparse.ArgumentParser("Train a 1D variational autoencoder")
+    parser.add_argument(
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all output are saved to",
     )
-    parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
-    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
-    parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
-    parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
+    parser.add_argument(
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32
+    )
+    parser.add_argument(
+        "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()

@@ -44,7 +44,7 @@ class Dataset(th.utils.data.Dataset):
         elif split == "validation":
             self.indices = shuffled_indices[num_train_samples:num_val_samples]
         elif split == "train_validation":
-            self.indices = shuffled_indices[:num_val_samples]        
+            self.indices = shuffled_indices[:num_val_samples]
         elif split == "test":
             self.indices = shuffled_indices[num_val_samples:]
         else:
@@ -93,12 +93,12 @@ class ClassificationDataset(Dataset):
             (np.digitize(dist, dist_bins) - 1) * (len(mag_bins) - 1)
             + np.digitize(mag, mag_bins)
             - 1
-        )        
+        )
         self._split = split
-        self._num_classes = (len(mag_bins) - 1) * (len(dist_bins) - 1)        
+        self._num_classes = (len(mag_bins) - 1) * (len(dist_bins) - 1)
 
     def get_class_weights(self):
-        assert self._num_classes == len(np.unique(self.labels))        
+        assert self._num_classes == len(np.unique(self.labels))
         return th.tensor(
             [1 / (self.labels == l).sum() for l in range(self._num_classes)], dtype=th.float32
         )

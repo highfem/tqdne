@@ -31,12 +31,6 @@ packages = ["tqdne"]
 [tool.setuptools.dynamic]
 version = {attr = "tqdne.__init__.__version__"}
 
-[tool.uv]
-dev-dependencies = [
-    "pip>=24.2",
-    "pre-commit>=3.8.0",
-]
-
 [tool.bandit]
 skips = ["B101"]
 
@@ -48,4 +42,10 @@ select = ["E4", "E7", "E9", "F"]
 extend-select = [
   "UP", "I", "PL", "S"
 ]
-ignore = ["S301", "PLR0913", "S101", "PLR2004", "S603", "S607", "PLW2901", "E721", "S307", "PLR0915", "E741"]
+ignore = ["S301", "PLR0913", "S101", "PLR2004", "S603", "S607", "PLW2901", "E721", "S307", "PLR0915", "E741", "S110", "E722"]
+
+[tool.uv]
+dev-dependencies = [
+    "pre-commit>=3.8.0",
+    "ruff",
+]

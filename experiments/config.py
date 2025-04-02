@@ -14,11 +14,11 @@ class Config:
     fs: int = 100
     t = None
     features_keys: tuple[str, ...] = (
-        "hypocentral_distance",        
+        "hypocentral_distance",
         "magnitude",
         "vs30",
         "hypocentre_depth",
-        "azimuthal_gap"
+        "azimuthal_gap",
     )
     representation = representation.Identity()
 
@@ -38,7 +38,7 @@ class SpectrogramConfig(Config):
     stft_channels: int = 256
     hop_size: int = 32
     representation = representation.LogSpectrogram(stft_channels=stft_channels, hop_size=hop_size)
-     # we need to increase this from earlier version, since now data is bigger
+    # we need to increase this from earlier version, since now data is bigger
     t: int = 12256
 
 

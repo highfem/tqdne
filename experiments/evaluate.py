@@ -1,11 +1,11 @@
-import sys
 import re
+import sys
+from pathlib import Path
 
 import config as conf
 import torch
 import torch as th
 from h5py import File
-from pathlib import Path
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -24,7 +24,7 @@ def predict(
     num_workers,
     batchsize,
     config,
-    classifier_config,    
+    classifier_config,
     edm_checkpoint,
     classifier_checkpoint,
     autoencoder_checkpoint,
@@ -34,23 +34,19 @@ def predict(
     loader = DataLoader(dataset, batch_size=batchsize, num_workers=num_workers)
 
     print("Loading models...")
-    device = get_device()    
+    device = get_device()
     autoencoder = (
         LightningAutoencoder.load_from_checkpoint(Path(autoencoder_checkpoint))
         if autoencoder_checkpoint is not None
         else None
-    )    
+    )
     edm = (
-        LightningEDM.load_from_checkpoint(
-            Path(edm_checkpoint), autoencoder=autoencoder
-        )
+        LightningEDM.load_from_checkpoint(Path(edm_checkpoint), autoencoder=autoencoder)
         .to(device)
         .eval()
-    )    
+    )
     classifier = (
-        LithningClassifier.load_from_checkpoint(Path(classifier_checkpoint))
-        .to(device)
-        .eval()
+        LithningClassifier.load_from_checkpoint(Path(classifier_checkpoint)).to(device).eval()
     )
 
     # generate a single batch to get the output size
@@ -64,11 +60,11 @@ def predict(
     )
     classifier_embedding_shape = classifier_embedding.shape[1:]
     classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
-    
-    outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)    
+
+    outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)
     Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
     outfile = Path(workdir, "evaluation", outfile + f"-split_{split}.h5")
-    with File(outfile , "w") as f:
+    with File(outfile, "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
 
@@ -140,7 +136,7 @@ def predict(
             predicted_classifier_embedding[start:end] = pred_embedding.cpu().numpy()
             predicted_classifier_pred[start:end] = (
                 classifier.output_layer(pred_embedding).cpu().numpy()
-            )            
+            )
 
     print("Done!")
 
@@ -149,22 +145,31 @@ if __name__ == "__main__":
     desc = """Evaluate the trained EDM model.
 
 This script generates waveforms using the same conditional features as the dataset.
-The generated waveforms are saved along with original waveforms, conditional features, 
-and classifier outputs in an HDF5 file. The created file can be read by the corresponding 
+The generated waveforms are saved along with original waveforms, conditional features,
+and classifier outputs in an HDF5 file. The created file can be read by the corresponding
 notebook to compute metrics and create plots.
 """
     import argparse
     from argparse import ArgumentParser
-    parser = ArgumentParser(
-        description=desc, formatter_class=argparse.RawTextHelpFormatter
+
+    parser = ArgumentParser(description=desc, formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument(
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all outputs are saved to (same as used during training)",
     )
     parser.add_argument(
-        "--workdir", type=str, help="the working directory in which checkpoints and all outputs are saved to (same as used during training)"
-    )    
-    parser.add_argument("--split", type=str, default="test", help="Dataset split (train, val, or test)")
-    parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
-    parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
-    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
+        "--split", type=str, default="test", help="Dataset split (train, val, or test)"
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32
+    )
+    parser.add_argument(
+        "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256
+    )
     parser.add_argument(
         "--edm_checkpoint",
         type=str,
@@ -173,7 +178,7 @@ notebook to compute metrics and create plots.
     )
     parser.add_argument(
         "--autoencoder_checkpoint",
-        type=str,    
+        type=str,
         help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
     )
     parser.add_argument(
@@ -193,7 +198,7 @@ notebook to compute metrics and create plots.
     )
     args = parser.parse_args()
     if "latent" not in args.config.lower():
-        args.autoencoder_checkpoint = None    
+        args.autoencoder_checkpoint = None
 
     config = getattr(conf, args.config)(args.workdir)
     try:
@@ -208,12 +213,12 @@ notebook to compute metrics and create plots.
 
     predict(
         args.split,
-        args.workdir,        
+        args.workdir,
         args.num_devices,
         args.num_workers,
         args.batchsize,
         config,
-        classifier_config,        
+        classifier_config,
         args.edm_checkpoint,
         args.classifier_checkpoint,
         args.autoencoder_checkpoint,

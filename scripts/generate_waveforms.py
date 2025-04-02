@@ -77,7 +77,7 @@ def generate(
     autoencoder = None
     if autoencoder_checkpoint is not None:
         autoencoder = (
-            LithningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
+            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
         )
     edm = (
         LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()

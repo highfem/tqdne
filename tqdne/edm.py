@@ -239,7 +239,9 @@ class LightningEDM(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
         lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.optimizer_params["max_steps"], eta_min=self.optimizer_params["eta_min"]
+            optimizer,
+            T_max=self.optimizer_params["max_steps"],
+            eta_min=self.optimizer_params["eta_min"],
         )
 
         return {

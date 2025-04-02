@@ -109,7 +109,10 @@ class LogSpectrogram(Representation):
 
         elif library == "torchaudio":
             from torchaudio.transforms import Spectrogram
-            spec = Spectrogram(n_fft=stft_channels, hop_length=hop_size, power=1, center=True, pad_mode="constant")
+
+            spec = Spectrogram(
+                n_fft=stft_channels, hop_length=hop_size, power=1, center=True, pad_mode="constant"
+            )
             self.stft = lambda x: spec(x, n_fft=stft_channels, hop_length=hop_size)
             self.istft = lambda x: griffinlim(
                 x, hop_length=hop_size, n_fft=stft_channels, n_iter=128, random_state=0
@@ -160,7 +163,7 @@ class LogSpectrogram(Representation):
     def get_representation(self, waveform):
         spec = self.get_spectrogram(waveform)
         spec = np.abs(spec)
-        log_spec = np.log(np.clip(spec, self.clip, None)) # [log_clip, log_max]
+        log_spec = np.log(np.clip(spec, self.clip, None))  # [log_clip, log_max]
         norm_log_spec = (log_spec - self.log_clip) / (self.log_max - self.log_clip)  # [0, 1]
         norm_log_spec = norm_log_spec * 2 - 1  # [-1, 1]
         return norm_log_spec

@@ -25,6 +25,6 @@ def get_train_and_val_loader(config, num_workers, batchsize, cond=False):
         prefetch_factor=1,
         persistent_workers=True,
         num_workers=num_workers,
-        batch_size=batchsize,        
+        batch_size=batchsize,
     )
     return train_loader, val_loader

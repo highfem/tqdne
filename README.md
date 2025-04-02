@@ -16,19 +16,19 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md). Otherwise, you can install `tqdne` like this:
 
-1. 
+1.
    a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
-   
+
    b) Alternatively, clone the repository using:
-      
+
       ```bash
-      git clone (--depth 1) https://github.com/highfem/tqdne.git       
+      git clone (--depth 1) https://github.com/highfem/tqdne.git
       ```
 
-2. 
-   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will us the versions of all dependencies that we are using for development, or you install using the `pip` installer which will install the latest versions of all dependencies. 
+2.
+   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will us the versions of all dependencies that we are using for development, or you install using the `pip` installer which will install the latest versions of all dependencies.
 
-   a) **Recommended**: Install all dependencies and the package with [`uv`](https://github.com/astral-sh/uv), via 
+   a) **Recommended**: Install all dependencies and the package with [`uv`](https://github.com/astral-sh/uv), via
 
       ```bash
       uv sync

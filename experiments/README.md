@@ -12,19 +12,19 @@ To set up the environment and install all dependencies follow the steps below.
 1. First, download the `tqdne` code. There are two ways:
 
    a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
-   
+
    b) Alternatively, clone the repository using:
-      
+
       ```bash
-      git clone (--depth 1) https://github.com/highfem/tqdne.git       
+      git clone (--depth 1) https://github.com/highfem/tqdne.git
       ```
 
-      Omit `--depth 1` if you want to access the full commit history.      
+      Omit `--depth 1` if you want to access the full commit history.
 
 2. Second, create and activate a `conda` environment. Again, there are multiple options:
 
    a) If you prefer to create an environment in `conda`'s default path, use:
-   
+
       ```bash
       conda env create -f environment.yaml
       conda activate tqdne
@@ -47,26 +47,26 @@ To set up the environment and install all dependencies follow the steps below.
 To make running experiments as easy as possible we expect the user to adopt the following folder structure. We refer to the base folder as `workdir` which will be used to automatically store all results. The structure is as follows:
 
 ```shell
-workdir/   
+workdir/
    /data/
    /data/preprocessed_waveforms.h5
    /data/raw_waveforms.h5
    /evaluation/
    /figures/
    /outputs/
-   /outputs/Autoencoder-32x96x4-LogSpectrogram   
-   /outputs/Latent-EDM-LogSpectrogram   
+   /outputs/Autoencoder-32x96x4-LogSpectrogram
+   /outputs/Latent-EDM-LogSpectrogram
 ```
 
 To create each file, follow the steps below.
 
 ### Build the Raw Dataset
 
-Download the STEAD Dataset, extract the `*.zip` file in this directory, and then simply run `create_dataset_from_STEAD.py`. It will generate 
+Download the STEAD Dataset, extract the `*.zip` file in this directory, and then simply run `create_dataset_from_STEAD.py`. It will generate
 
 ```shell
-workdir/         
-   /data/raw_waveforms.h5   
+workdir/
+   /data/raw_waveforms.h5
 ```
 
 Note that, some of the parameters (e.g., the length of the waveforms, data sampling rate, vs30 values, and starting time of the waveforms) are hardcoded, therefore, please adjust accordingly.
@@ -76,8 +76,8 @@ Note that, some of the parameters (e.g., the length of the waveforms, data sampl
 Run `build_dataset.py` to create the cleaned dataset
 
 ```shell
-workdir/         
-   /data/preprocessed_waveforms.h5  
+workdir/
+   /data/preprocessed_waveforms.h5
 ```
 
 from the raw `raw_waveforms.h5` file.
@@ -87,7 +87,7 @@ from the raw `raw_waveforms.h5` file.
 Run `train_classifier.py` to train a classifier predicting the earthquake distance-magnitude bin. This classifier will be used to evaluate the generated data. Model checkpoints will be saved as
 
 ```shell
-workdir/         
+workdir/
    /outputs/Classifier-LogSpectrogram
 ```
 
@@ -101,9 +101,9 @@ Train the latent diffusion model using the [EDM diffusion framework](https://arx
 This will create
 
 ```shell
-workdir/         
+workdir/
    /outputs/Autoencoder-32x96x4-LogSpectrogram
-   /outputs/Latent-EDM-LogSpectrogram   
+   /outputs/Latent-EDM-LogSpectrogram
 ```
 
 **Make sure to create a soft link `best.ckpt` in `/outputs/Autoencoder-32x96x4-LogSpectrogram` such that the best checkpoint will be used for training the latent EDM.**
@@ -118,11 +118,11 @@ Conduct the following ablation studies:
 This will create
 
 ```shell
-workdir/      
-   /outputs/Autoencoder-1024x16-MovingAvg      
+workdir/
+   /outputs/Autoencoder-1024x16-MovingAvg
    /outputs/Latent-EDM-MovingAvg
    /outputs/EDM-LogSpectrogram
-   /outputs/EDM-MovingAvg      
+   /outputs/EDM-MovingAvg
 ```
 
 ### Evaluation
