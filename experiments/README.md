@@ -5,6 +5,45 @@ This directory contains scripts for dataset building, model training, and evalua
 > [!NOTE]
 > The user is recommended to download the dataset and preprocessed the data by following the data section in our [manuscript](https://arxiv.org/abs/2410.19343). However, to ease the trial, we provide script to generate the `raw_waveforms.h5` using STEAD dataset [link](https://github.com/smousavi05/STEAD) in `create_dataset_from_STEAD.py`. This example using STEAD dataset will *NOT* reproduce the results we provided in our manuscript.
 
+### Installation
+
+To set up the environment and install all dependencies follow the steps below.
+
+1. First, download the `tqdne` code. There are two ways:
+
+   a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
+   
+   b) Alternatively, clone the repository using:
+      
+      ```bash
+      git clone (--depth 1) https://github.com/highfem/tqdne.git       
+      ```
+
+      Omit `--depth 1` if you want to access the full commit history.      
+
+2. Second, create and activate a `conda` environment. Again, there are multiple options:
+
+   a) If you prefer to create an environment in `conda`'s default path, use:
+   
+      ```bash
+      conda env create -f environment.yaml
+      conda activate tqdne
+      ```
+
+   If conda is not installed, download it from [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+
+   b) If you prefer to install the environment in a custom path, e.g., in cluster environments, run:
+
+      ```bash
+      conda env create -f environment.yaml -p <PATH>
+      conda activate <PATH>
+      ```
+
+      Replace `<PATH>` with your desired installation directory.
+
+
+## Usage
+
 To make running experiments as easy as possible we expect the user to adopt the following folder structure. We refer to the base folder as `workdir` which will be used to automatically store all results. The structure is as follows:
 
 ```shell
@@ -12,15 +51,14 @@ workdir/
    /data/
    /data/preprocessed_waveforms.h5
    /data/raw_waveforms.h5
+   /evaluation/
+   /figures/
    /outputs/
-   /outputs/Autoencoder-1024x16-MovingAvg
-   /outputs/Autoencoder-32x96x4-LogSpectrogram
-   /outputs/Classifier-LogSpectrogram
-   /outputs/EDM-LogSpectrogram
-   /outputs/EDM-MovingAvg
+   /outputs/Autoencoder-32x96x4-LogSpectrogram   
    /outputs/Latent-EDM-LogSpectrogram   
 ```
 
+To create each file, follow the steps below.
 
 ### Build the Raw Dataset
 
