@@ -26,7 +26,7 @@ To set up the environment and install all dependencies follow the steps below.
    a) If you prefer to create an environment in `conda`'s default path, use:
 
       ```bash
-      conda env create -f environment.yaml
+      conda env create -f envs/environment.yaml
       conda activate tqdne
       ```
 
@@ -35,7 +35,7 @@ To set up the environment and install all dependencies follow the steps below.
    b) If you prefer to install the environment in a custom path, e.g., in cluster environments, run:
 
       ```bash
-      conda env create -f environment.yaml -p <PATH>
+      conda env create -f envs/environment.yaml -p <PATH>
       conda activate <PATH>
       ```
 
