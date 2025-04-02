@@ -14,9 +14,13 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "EDM-MovingAvg"
+<<<<<<< HEAD
     config = MovingAverageEnvelopeConfig(args.workdir)
+=======
+    config = MovingAverageEnvelopeConfig(args.workdir, None)
+>>>>>>> 85a9fa989aa03d68818e0bdd44dddd6034f1c96f
 
-    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
+    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ]
@@ -24,19 +28,18 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 200 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": optimizer_params["max_steps"],
     }
 
     logging.info("Build lightning module...")
-    model = LightningEDM(get_1d_unet_config(config), optimizer_params)
+    model = LightningEDM(get_1d_unet_config(config, config.channels, config.channels), optimizer_params)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
@@ -69,8 +72,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "Train a 1D diffusion model"
     )
+<<<<<<< HEAD
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
     parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
+=======
+    parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")    
+    parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=64)
+>>>>>>> 85a9fa989aa03d68818e0bdd44dddd6034f1c96f
     parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
     parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)
     args = parser.parse_args()

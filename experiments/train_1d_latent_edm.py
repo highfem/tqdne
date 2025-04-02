@@ -3,13 +3,11 @@ import sys
 
 import torch
 from config import LatentMovingAverageEnvelopeConfig
-from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
 from tqdne.architectures import get_1d_unet_config
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataloader import get_train_and_val_loader
-from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
 from tqdne.training import get_pl_trainer
 from tqdne.utils import get_last_checkpoint, get_device
@@ -17,9 +15,9 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "Latent-EDM-MovingAvg"
-    config = LatentMovingAverageEnvelopeConfig(args.workdir, args.infile)
+    config = LatentMovingAverageEnvelopeConfig(args.workdir)
 
-    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
+    train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ]
@@ -27,14 +25,13 @@ def run(args):
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader)}
+    optimizer_params = {"learning_rate": 0.0001, "max_steps": 300 * len(train_loader), "eta_min": 0.0}
     trainer_params = {
         "precision": 32,
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": optimizer_params["max_steps"],
     }
 
@@ -44,7 +41,7 @@ def run(args):
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
-    model = LightningEDM(get_1d_unet_config(config), optimizer_params, autoencoder=autoencoder)
+    model = LightningEDM(get_1d_unet_config(config, config.latent_channels, config.latent_channels), optimizer_params, autoencoder=autoencoder)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
@@ -62,7 +59,7 @@ def run(args):
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    checkpoint = get_last_checkpoint(trainer.default_root_dir) if resume else None
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)
     trainer.fit(
         model,
         train_dataloaders=train_loader,
@@ -79,7 +76,6 @@ if __name__ == "__main__":
         "Train a 1D latent diffusion model"
     )
     parser.add_argument("--workdir", type=str, help="the working directory in which checkpoints and all output are saved to")
-    parser.add_argument("--infile", type=str, default=None, help="location of the training file; if not given assumes training data is located as `workdir/data/preprocessed_waveforms.h5`")
     parser.add_argument('-b', '--batchsize', type=int, help='size of a batch of each gradient step', default=256)
     parser.add_argument('-w', '--num-workers', type=int, help='number of separate processes for file/io', default=32)
     parser.add_argument('-d', '--num-devices', type=int, help='number of CPUs/GPUs to train on', default=4)

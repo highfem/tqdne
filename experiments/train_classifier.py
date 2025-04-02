@@ -18,7 +18,8 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "Classifier-LogSpectrogram"
-    config = SpectrogramClassificationConfig(args.workdir, None)
+    config = SpectrogramClassificationConfig(args.workdir)
+    config.representation.disable_multiprocessing()
 
     train_dataset = ClassificationDataset(
         config.datapath,
@@ -46,7 +47,7 @@ def run(args):
         val_dataset,
         batch_size=args.batchsize, num_workers=args.num_workers,
         prefetch_factor=2,
-        drop_last=True,
+        drop_last=False,
         persistent_workers=True,
     )
 
@@ -96,9 +97,9 @@ def run(args):
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
-        name,
-        val_loader,
-        config.representation,
+        name=name,
+        val_loader=val_loader,
+        config=config,
         metrics=[],
         plots=[],
         eval_every=5,

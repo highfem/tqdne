@@ -15,7 +15,7 @@ from tqdne.utils import get_last_checkpoint, get_device
 
 def run(args):
     name = "Latent-EDM-LogSpectrogram"
-    config = LatentSpectrogramConfig(args.workdir, None)
+    config = LatentSpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize, cond=True)
@@ -32,17 +32,16 @@ def run(args):
         "accelerator": get_device(),
         "devices": args.num_devices,
         "num_nodes": 1,
-        "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "num_sanity_val_steps": 0,        
         "max_steps": 200 * len(train_loader),
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = (config.outputdir / "Autoencoder-32x96x4-LogSpectrogram-5" / "last.ckpt")
+    checkpoint = (config.outputdir / "Autoencoder-32x96x4-LogSpectrogram" / "best.ckpt")
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
-    model = LightningEDM(get_2d_unet_config(config), optimizer_params, autoencoder=autoencoder)
+    model = LightningEDM(get_2d_unet_config(config, config.latent_channels, config.latent_channels), optimizer_params, autoencoder=autoencoder)
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
@@ -52,8 +51,8 @@ def run(args):
         metrics=metrics,
         plots=plots,
         ema_decay=0.999,
-        eval_every=20,
-        limit_eval_batches=5,
+        eval_every=10,
+        limit_eval_batches=2,
         log_to_wandb=True,
         **trainer_params,
     )
