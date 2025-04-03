@@ -159,7 +159,7 @@ notebook to compute metrics and create plots.
         help="the working directory in which checkpoints and all outputs are saved to (same as used during training)",
     )
     parser.add_argument(
-        "--split", type=str, default="test", help="Dataset split (train, val, or test)"
+        "--split", type=str, default="test", help="Dataset split (full, train_validation, or test)"
     )
     parser.add_argument(
         "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32

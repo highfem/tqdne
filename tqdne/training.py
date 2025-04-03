@@ -25,6 +25,7 @@ def get_pl_trainer(
         wandb_logger = WandbLogger(
             project=config.project_name,
             name=name,
+            id=name,
             resume="allow",
         )
     else:
