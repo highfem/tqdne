@@ -46,6 +46,7 @@ ignore = ["S301", "PLR0913", "S101", "PLR2004", "S603", "S607", "PLW2901", "E721
 
 [tool.uv]
 dev-dependencies = [
+    "jupyter>=1.1.1",
     "pre-commit>=3.8.0",
     "ruff",
 ]
