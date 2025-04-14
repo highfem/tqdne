@@ -12,10 +12,16 @@ from tqdne.training import get_pl_trainer
 from tqdne.utils import get_device, get_last_checkpoint
 
 
+def fake_represent(representation, leng_signal):
+    signal = torch.ones((1, leng_signal))
+    spectr = representation.get_representation(signal)
+    return spectr
+
 def run(args):
-    name = "Autoencoder-32x96x4-LogSpectrogram"
-    config = LatentSpectrogramConfig(args.workdir)
+    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
+    spectr = fake_represent(config.representation, args.maxlen)
+    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
     metrics = [
@@ -81,6 +87,9 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
+    )
+    parser.add_argument(
+        "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128
     )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=128
