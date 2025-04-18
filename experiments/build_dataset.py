@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 def run(args):
     config = Config(args.workdir)
-    with File(args.original_datapath, "r") as f:
+    with File(config.original_datapath, "r") as f:
         # remove samples with vs30 <= 0
         mask = f["vs30"][:] > 0
         indices = np.arange(len(mask))[mask]
@@ -20,12 +20,15 @@ def run(args):
                 feature = f[key][mask]
                 f_new.create_dataset(key, data=feature)
                 features.append(feature)
+                print(key, "", f["indices_valid_waveforms"].shape)
+            indices = f["indices_valid_waveforms"][mask]            
+            f_new.create_dataset("indices_valid_waveforms", data=indices)
 
             features = np.stack(features, axis=1)
             print("normalized features ", features.shape)
             normalized_features = (features - features.mean(axis=0)) / features.std(axis=0)
             f_new.create_dataset("normalized_features", data=normalized_features)
-
+            
             _, t, channels = f["waveforms"].shape
             print("waveforms ", f["waveforms"].shape)
 
@@ -46,7 +49,7 @@ if __name__ == "__main__":
         "--workdir", type=str, help="the working directory containing `data/raw_waveforms.h5`"
     )
     args = parser.parse_args()
-    if args.infile is None or args.outfile is None:
+    if args.workdir is None:
         parser.print_help()
         sys.exit(0)
     run(args)

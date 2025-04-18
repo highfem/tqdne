@@ -69,15 +69,16 @@ class SamplePlot(Plot):
         self.plot_target = plot_target
         self.fs = fs
 
-    def plot(self, pred, target=None, *args, **kwargs):
+    def plot(self, pred, batch=None, *args, **kwargs):
         time = np.arange(0, pred.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(18, 6))
-        ax.plot(time, pred[0], "b", label="Predicted")
-        if self.plot_target:
-            ax.plot(time, target[0], "orange", label="Target")
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Amplitude")
-        ax.legend()
+        fig, axes = plt.subplots(figsize=(18, 6  * 5), nrows=5)
+        for i, ax in enumerate(axes):            
+            ax.plot(time, pred[i], "b", label="Predicted", alpha=0.7)
+            if self.plot_target:
+                ax.plot(time, batch["waveform"][i], "orange", label="Target", alpha=0.7)
+            ax.set_ylabel("Amplitude")
+            ax.legend()
+        ax.set_xlabel("Time [s]")        
         fig.tight_layout()
         return fig
 
@@ -113,9 +114,9 @@ class AmplitudeSpectralDensity(Plot, ABC):
         log_sd = np.log(np.clip(sd, self.log_eps, None))
         return log_sd
 
-    def plot(self, pred, target, *args, **kwargs):
+    def plot(self, pred, batch, *args, **kwargs):
         pred_sd = self.spectral_density(pred)
-        target_sd = self.spectral_density(target)
+        target_sd = self.spectral_density(batch["waveform"])
 
         # Compute mean and std of SD in log scale
         pred_mean = pred_sd.mean(axis=0)

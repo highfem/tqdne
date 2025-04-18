@@ -1,3 +1,4 @@
+import wandb
 from pathlib import Path
 
 import pytorch_lightning as pl
@@ -24,9 +25,9 @@ def get_pl_trainer(
     if log_to_wandb:
         wandb_logger = WandbLogger(
             project=config.project_name,
-            name=name,
-            id=name,
+            name=name,            
             resume="allow",
+            settings=wandb.Settings(init_timeout=300)
         )
     else:
         wandb_logger = None

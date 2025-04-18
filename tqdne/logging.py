@@ -1,3 +1,4 @@
+import torch as th
 import time
 import warnings
 
@@ -53,10 +54,14 @@ class LogCallback(Callback):
                 k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
+            if th.any(th.isnan(pred)):
+                  warnings.warn("found nan in prediction, setting to zero")
+                pred = th.nan_to_num(pred)
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
         pred = np.concatenate(preds, axis=0)
+        prspecs_hatd = np.concatenate(specs_hat, axis=0)
         batch = {
             k: torch.cat([b[k] for b in batches], dim=0).numpy(force=True)
             for k in batches[0].keys()
@@ -71,7 +76,7 @@ class LogCallback(Callback):
         for plot in self.plots:
             fig = plot(
                 pred=pred,
-                target=batch["waveform"],
+                target=batch,
                 cond_signal=batch["cond_waveform"] if "cond_waveform" in batch else None,
                 cond=batch["cond"] if "cond" in batch else None,
             )
@@ -79,9 +84,9 @@ class LogCallback(Callback):
                 trainer.logger.experiment.log(
                     {f"{plot.name} (Image)": wandb.Image(fig)}, step=pl_module.global_step
                 )
-                trainer.logger.experiment.log(
-                    {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
-                )
+                # trainer.logger.experiment.log(
+                #     {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
+                # )
             except Exception as e:
                 warnings.warn(f"Failed to log plot: {e}")
 
