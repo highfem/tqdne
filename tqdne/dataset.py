@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import torch as th
 from h5py import File
@@ -21,9 +22,9 @@ class Dataset(th.utils.data.Dataset):
         The split of the dataset. One of "train", "test", or "full".
     """
 
-    def __init__(self, datapath, representaion, cut=None, cond=False, split="train"):
+    def __init__(self, datapath, representation, cut=None, cond=False, split="train"):
         super().__init__()
-        self.representation = representaion
+        self.representation = representation
         self.cut = cut
         self.cond = cond
 
@@ -68,11 +69,36 @@ class Dataset(th.utils.data.Dataset):
         if self.cut:
             waveform = waveform[:, : self.cut]
 
+        valid_index = self.file["indices_valid_waveforms"][self.indices[index]]
         signal = self.representation.get_representation(waveform)
+        # ii = (valid_index - 256 // 2) // 32 + 1
+        #
+        # for i in range(3):
+        #     plt.plot(waveform[i])
+        #     plt.axvline(x = valid_index, color = 'black')
+        #     plt.axvline(x = valid_index, color = 'red')
+        #     plt.show()
+        #
+        # plt.imshow(signal[0])
+        # plt.show()
+        #
+        # print(np.min(waveform))
+        # waveform[:, valid_index:] = -10000000
+        # signal = self.representation.get_representation(waveform)
+        # plt.imshow(signal[0])
+        # plt.show()
+        #
+        #
+        # print(np.min(waveform))
+        # signal[:, :, ii:] = np.nan
+        # plt.imshow(signal[0, ])
+        # plt.show()
 
+        signal[..., ii:] = np.nan
         out = {
             "waveform": th.tensor(waveform, dtype=th.float32),
             "signal": th.tensor(signal, dtype=th.float32),
+            "valid_index": th.tensor(valid_index, dtype=th.int32)
         }
 
         if self.cond:

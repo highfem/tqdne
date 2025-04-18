@@ -55,13 +55,13 @@ class LogCallback(Callback):
             }
             pred = pl_module.evaluate(batch)
             if th.any(th.isnan(pred)):
-                  warnings.warn("found nan in prediction, setting to zero")
+                warnings.warn("found nan in prediction, setting to zero")
                 pred = th.nan_to_num(pred)
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
         pred = np.concatenate(preds, axis=0)
-        prspecs_hatd = np.concatenate(specs_hat, axis=0)
+        pred = np.concatenate(pred, axis=0)
         batch = {
             k: torch.cat([b[k] for b in batches], dim=0).numpy(force=True)
             for k in batches[0].keys()

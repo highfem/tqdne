@@ -17,6 +17,7 @@ def fake_represent(representation, leng_signal):
     spectr = representation.get_representation(signal)
     return spectr
 
+
 def run(args):
     config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
@@ -47,11 +48,16 @@ def run(args):
 
     logging.info("Build lightning module...")
     encoder_config, decoder_config = get_2d_autoencoder_configs(config)
+    mask = None
+    if args.mask:
+        print("using masked loss")
+        mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
     autoencoder = LightningAutoencoder(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
         optimizer_params=optimizer_params,
         kl_weight=config.kl_weight,
+        mask=mask
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -87,6 +93,9 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
+    )
+    parser.add_argument(
+        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=True
     )
     parser.add_argument(
         "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128

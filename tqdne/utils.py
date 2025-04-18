@@ -5,7 +5,7 @@ from pathlib import Path
 import PIL
 import pytorch_lightning as pl
 import torch
-
+import torch as th
 
 def get_device():
     """Get the available accelerator device."""
@@ -98,3 +98,24 @@ def get_last_checkpoint(dirpath):
     checkpoint = checkpoints[-1]
     logging.info(f"Last checkpoint is : {checkpoint}")
     return checkpoint
+
+
+def mask_from_indexes(mask_idxs, x, fill_with=th.nan):
+    mask = th.arange(x.size(-1), device=x.device).expand(x.size(0), x.size(-1)) >= mask_idxs.unsqueeze(1)
+    if x.ndim == 4:
+        mask = mask[:, None, None, :]
+    else:
+        mask = mask[:, None, :]
+    x = x.masked_fill(mask, fill_with)
+    return x
+
+
+def get_latent_mask_indexes(mask, dim=2):
+    if dim == 2:
+        low = (((((mask - 8) / 2) - 8) / 2) - 3).type(torch.int32)
+        up = ((((low - 6) * 2) - 6) * 2)
+        return low, up
+    else:
+        raise ValueError("only have dim 2")
+
+
