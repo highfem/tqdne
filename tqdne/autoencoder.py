@@ -1,7 +1,9 @@
+import numpy as np
 import pytorch_lightning as pl
 import torch as th
 
 from .blocks import Decoder, Encoder
+from .utils import mask_from_indexes, get_latent_mask_indexes
 
 
 class LightningAutoencoder(pl.LightningModule):
@@ -25,12 +27,15 @@ class LightningAutoencoder(pl.LightningModule):
         decoder_config: dict,
         optimizer_params: dict,
         kl_weight: float = 1e-6,
+        mask=None
     ):
         super().__init__()
         self.encoder = Encoder(**encoder_config)
         self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
         self.kl_weight = kl_weight
+        self.mask = mask
+        self.config = encoder_config
         self.save_hyperparameters()
 
     def _encode(self, x):
@@ -53,14 +58,23 @@ class LightningAutoencoder(pl.LightningModule):
     def kl_divergence(self, mean, log_std):
         """Computes the KL divergence between the latent distribution and an isotropic Gaussian distribution."""
         log_var = 2 * log_std
-        return 0.5 * th.sum(mean**2 + th.exp(log_var) - log_var - 1, dim=1)
+        return 0.5 * th.nansum(mean**2 + th.exp(log_var) - log_var - 1, dim=1)
 
-    def step(self, batch, stage="training"):        
+    def step(self, batch, stage="training"):
         x = batch["signal"]
         latent, mean, log_std = self._encode(x)
         x_recon = self.decode(latent)
-        recon_loss = th.mean((x - x_recon) ** 2)
-        kl_div = self.kl_divergence(mean, log_std).mean()
+        # if there is a mask, put nans and then compute the loss on that
+        if self.mask is not None:
+            mask_idxs = self.mask(batch["valid_index"])
+            lowm, _ = get_latent_mask_indexes(mask_idxs, self.config["dims"])
+            x = mask_from_indexes(mask_idxs, x)
+            x_recon = mask_from_indexes(mask_idxs, x_recon)
+            mean = mask_from_indexes(lowm, mean)
+            log_std = mask_from_indexes(lowm, log_std)
+
+        recon_loss = th.nanmean((x - x_recon) ** 2)
+        kl_div = th.nanmean(self.kl_divergence(mean, log_std))
         loss = recon_loss + self.kl_weight * kl_div
         self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
         self.log(f"{stage}/kl_divergence", kl_div.item(), sync_dist=True)
