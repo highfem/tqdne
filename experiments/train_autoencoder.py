@@ -95,7 +95,7 @@ if __name__ == "__main__":
         help="the working directory in which checkpoints and all output are saved to",
     )
     parser.add_argument(
-        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=True
+        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=False
     )
     parser.add_argument(
         "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128

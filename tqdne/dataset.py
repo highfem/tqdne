@@ -93,8 +93,7 @@ class Dataset(th.utils.data.Dataset):
         # signal[:, :, ii:] = np.nan
         # plt.imshow(signal[0, ])
         # plt.show()
-
-        signal[..., ii:] = np.nan
+        
         out = {
             "waveform": th.tensor(waveform, dtype=th.float32),
             "signal": th.tensor(signal, dtype=th.float32),
