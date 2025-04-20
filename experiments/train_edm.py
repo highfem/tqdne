@@ -42,8 +42,14 @@ def run(args):
     }
 
     logging.info("Build lightning module...")
+    mask = None
+    if args.mask:
+        logging.info("using masked loss")
+        mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
     model = LightningEDM(
-        get_2d_unet_config(config, config.channels, config.channels), optimizer_params
+        get_2d_unet_config(config, config.channels, config.channels),
+        optimizer_params,
+        mask=mask
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -74,6 +80,14 @@ def run(args):
 
 
 if __name__ == "__main__":
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     import argparse
 
     parser = argparse.ArgumentParser("Train a 2D diffusion model")
@@ -81,6 +95,12 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
+    )
+    parser.add_argument(
+        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=False
+    )
+    parser.add_argument(
+        "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128
     )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=64

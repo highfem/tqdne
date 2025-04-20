@@ -1,9 +1,11 @@
+import numpy as np
 import pytorch_lightning as pl
 import torch as th
 
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.nn import append_dims
 from tqdne.unet import UNetModel
+from tqdne.utils import get_latent_mask_indexes, mask_from_indexes
 
 
 class EDM:
@@ -86,6 +88,7 @@ class LightningEDM(pl.LightningModule):
         deterministic_sampling: bool = True,
         edm: EDM = EDM(),
         autoencoder: None | LightningAutoencoder = None,
+        mask=None
     ):
         super().__init__()
 
@@ -95,6 +98,8 @@ class LightningEDM(pl.LightningModule):
         self.deterministic_sampling = deterministic_sampling
         self.edm = edm
         self.autoencoder = autoencoder.eval() if autoencoder else None
+        self.mask = mask
+        self.config = unet_config
         if self.autoencoder:
             for param in self.autoencoder.parameters():
                 param.requires_grad = False
@@ -127,10 +132,16 @@ class LightningEDM(pl.LightningModule):
         noise = th.randn_like(sample) * append_dims(sigma, sample.dim())
         pred = self(sample + noise, sigma, cond_sample, cond)
 
+        if self.mask is not None:
+            mask_idxs = self.mask(batch["valid_index"])
+            lowm, _ = get_latent_mask_indexes(mask_idxs, self.config["dims"])
+            sample = mask_from_indexes(lowm, sample)
+            pred = mask_from_indexes(lowm, pred)
+
         loss = (pred - sample) ** 2
         loss_weight = append_dims(self.edm.loss_weight(sigma), loss.dim())
 
-        return (loss * loss_weight).mean()
+        return th.nanmean(loss * loss_weight)
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)

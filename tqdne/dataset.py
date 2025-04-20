@@ -71,7 +71,7 @@ class Dataset(th.utils.data.Dataset):
 
         valid_index = self.file["indices_valid_waveforms"][self.indices[index]]
         signal = self.representation.get_representation(waveform)
-        # ii = (valid_index - 256 // 2) // 32 + 1
+        #ii = (valid_index - 256 // 2) // 32 + 1
         #
         # for i in range(3):
         #     plt.plot(waveform[i])
@@ -83,14 +83,14 @@ class Dataset(th.utils.data.Dataset):
         # plt.show()
         #
         # print(np.min(waveform))
-        # waveform[:, valid_index:] = -10000000
+        #waveform[:, valid_index:] = -10000000
         # signal = self.representation.get_representation(waveform)
         # plt.imshow(signal[0])
         # plt.show()
         #
         #
         # print(np.min(waveform))
-        # signal[:, :, ii:] = np.nan
+#        signal[:, :, ii:] = np.nan
         # plt.imshow(signal[0, ])
         # plt.show()
         

@@ -13,10 +13,17 @@ from tqdne.training import get_pl_trainer
 from tqdne.utils import get_device, get_last_checkpoint
 
 
+def fake_represent(representation, leng_signal):
+    signal = torch.ones((1, leng_signal))
+    spectr = representation.get_representation(signal)
+    return spectr
+
+
 def run(args):
-    name = "Latent-EDM-LogSpectrogram"
-    config = LatentSpectrogramConfig(args.workdir)
+    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
+    spectr = fake_represent(config.representation, args.maxlen)
+    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -43,14 +50,19 @@ def run(args):
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = config.outputdir / "Autoencoder-32x96x4-LogSpectrogram" / "best.ckpt"
+    checkpoint = config.outputdir / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram" / "last.ckpt"
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
+    mask = None
+    if args.mask:
+        print("using masked loss")
+        mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
     model = LightningEDM(
-        get_2d_unet_config(config, config.latent_channels, config.latent_channels),
+        get_2d_unet_config(config, config.latent_channels, config.latent_channels, use_causal_mask=mask is not None),
         optimizer_params,
         autoencoder=autoencoder,
+        mask=mask
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -81,6 +93,13 @@ def run(args):
 
 
 if __name__ == "__main__":
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
     import argparse
 
     parser = argparse.ArgumentParser("Train a 2D latent diffusion model")
@@ -88,6 +107,12 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
+    )
+    parser.add_argument(
+        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=False
+    )
+    parser.add_argument(
+        "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128
     )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256

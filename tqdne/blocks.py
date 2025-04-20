@@ -118,6 +118,7 @@ class AttentionBlock(nn.Module):
         use_checkpoint=False,
         flash_attention=True,
         dims=2,
+        use_causal_mask=False,
     ):
         super().__init__()
         self.channels = channels
@@ -128,7 +129,7 @@ class AttentionBlock(nn.Module):
         if flash_attention:
             self.attention = QKVFlashAttention(channels, self.num_heads)
         else:
-            self.attention = QKVAttention(self.num_heads)
+            self.attention = QKVAttention(self.num_heads, use_causal_mask=use_causal_mask)
 
         self.proj_out = zero_module(conv_nd(dims, channels, channels, 1))
 
@@ -137,7 +138,9 @@ class AttentionBlock(nn.Module):
 
     def _forward(self, x):
         b, _, *spatial = x.shape
-        qkv = self.qkv(self.norm(x)).view(b, -1, np.prod(spatial))
+        qkv = self.qkv(
+            self.norm(x)
+        ).view(b, -1, np.prod(spatial))
         h = self.attention(qkv.contiguous())
         h = h.view(b, -1, *spatial)
         h = self.proj_out(h)
@@ -147,9 +150,10 @@ class AttentionBlock(nn.Module):
 class QKVAttention(nn.Module):
     """A module which performs QKV attention. Fallback from Blocksparse if use_fp16=False"""
 
-    def __init__(self, n_heads):
+    def __init__(self, n_heads, use_causal_mask=False):
         super().__init__()
         self.n_heads = n_heads
+        self.use_causal_mask = use_causal_mask
 
     def forward(self, qkv):
         """Apply QKV attention.
@@ -169,11 +173,18 @@ class QKVAttention(nn.Module):
         ch = width // (3 * self.n_heads)
         q, k, v = qkv.chunk(3, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
+
         weight = th.einsum(
             "bct,bcs->bts",
             (q * scale).view(bs * self.n_heads, ch, length),
             (k * scale).view(bs * self.n_heads, ch, -1),
         )  # More stable with f16 than dividing afterwards
+
+        if self.use_causal_mask:
+            causal_mask = th.tril(th.ones(length, length, device=weight.device)).unsqueeze(0)  # [1 x T x T]
+            causal_mask = causal_mask.expand(weight.size(0), -1, -1)  # [B*H x T x T]
+            weight = weight.masked_fill(causal_mask == 0, -th.inf)
+
         weight = th.softmax(weight.float(), dim=-1).type(weight.dtype)
         a = th.einsum("bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, -1))
         return a.reshape(bs, -1, length)

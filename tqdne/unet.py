@@ -203,9 +203,9 @@ class UNetModel(nn.Module):
         num_heads=1,
         use_scale_shift_norm=False,
         flash_attention=True,
+        use_causal_mask=False
     ):
         super().__init__()
-
         embed_dim = model_channels * 4
         self.time_embed = GaussianFourierProjection(model_channels)
         self.time_mlp = nn.Sequential(
@@ -260,6 +260,7 @@ class UNetModel(nn.Module):
                             dims=dims,
                             use_checkpoint=use_checkpoint,
                             flash_attention=flash_attention,
+                            use_causal_mask=use_causal_mask
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -293,6 +294,7 @@ class UNetModel(nn.Module):
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 flash_attention=flash_attention,
+                use_causal_mask=use_causal_mask
             ),
             ResBlock(
                 ch,
@@ -331,6 +333,7 @@ class UNetModel(nn.Module):
                             dims=dims,
                             use_checkpoint=use_checkpoint,
                             flash_attention=flash_attention,
+                            use_causal_mask=use_causal_mask
                         )
                     )
                 if level and i == num_res_blocks:
