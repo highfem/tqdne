@@ -60,8 +60,7 @@ class LogCallback(Callback):
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
-        pred = np.concatenate(preds, axis=0)
-        pred = np.concatenate(pred, axis=0)
+        pred = np.concatenate(preds, axis=0)        
         batch = {
             k: torch.cat([b[k] for b in batches], dim=0).numpy(force=True)
             for k in batches[0].keys()
@@ -76,7 +75,7 @@ class LogCallback(Callback):
         for plot in self.plots:
             fig = plot(
                 pred=pred,
-                target=batch,
+                target=batch["waveform"],
                 cond_signal=batch["cond_waveform"] if "cond_waveform" in batch else None,
                 cond=batch["cond"] if "cond" in batch else None,
             )
