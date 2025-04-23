@@ -50,7 +50,7 @@ def generate(
         hypocentral_distances = df.hypocentral_distance.to_list()
         magnitudes = df.magnitude.to_list()
         vs30s = df.vs30.to_list()
-        hypocentre_depths = df.hyhypocentre_depth.to_list()
+        hypocentre_depths = df.hypocentre_depth.to_list()
         azimuthal_gaps = df.azimuthal_gap.to_list()
     elif np.all(
         [
