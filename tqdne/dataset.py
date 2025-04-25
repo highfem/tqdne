@@ -26,7 +26,7 @@ class Dataset(th.utils.data.Dataset):
         super().__init__()
         self.representation = representation
         self.cut = cut
-        self.cond = cond
+        self.use_conditioning = cond
 
         self.file = File(datapath, "r")
         self.waveforms = self.file["waveforms"]
@@ -100,7 +100,7 @@ class Dataset(th.utils.data.Dataset):
             "valid_index": th.tensor(valid_index, dtype=th.int32)
         }
 
-        if self.cond:
+        if self.use_conditioning:
             out["cond"] = th.tensor(self.cond[self.indices[index]], dtype=th.float32)
 
         return out

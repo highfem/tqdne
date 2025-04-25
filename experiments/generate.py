@@ -138,6 +138,7 @@ def generate(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
+            break
 
     print("Done!")
 

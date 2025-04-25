@@ -23,6 +23,8 @@ def run(args):
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, args.maxlen)
     name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+    if args.name != "":
+        name += f"-{args.name}"
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
     metrics = [
@@ -108,6 +110,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "-n", "--name", type=str, help="suffix to append to the name of the training run", default=""
     )
     args = parser.parse_args()
     if args.workdir is None:
