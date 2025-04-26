@@ -19,10 +19,10 @@ def fake_represent(representation, leng_signal):
 
 
 def run(args):
-    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
-    config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
+    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen, latent_channels=args.nlatent)
+    config.representation.disable_multiprocessing() # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, args.maxlen)
-    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x8-LogSpectrogram"
+    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{args.nlatent}-LogSpectrogram"
     if args.name != "":
         name += f"-{args.name}"
 
@@ -54,11 +54,17 @@ def run(args):
     if args.mask:
         print("using masked loss")
         mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
+    weight = 1
+    if args.frequencyweight:
+        weight = torch.ones(spectr.shape[1])
+        weight[0] = 10
+        weight = weight.view(1, 1, -1, 1).to(get_device())
     autoencoder = LightningAutoencoder(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
         optimizer_params=optimizer_params,
         kl_weight=config.kl_weight,
+        frequency_weights=weight,
         mask=mask
     )
 
@@ -71,7 +77,7 @@ def run(args):
         plots=plots,
         eval_every=5,
         limit_eval_batches=10,
-        log_to_wandb=True,
+        log_to_wandb=False,
         **trainer_params,
     )
 
@@ -113,6 +119,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-n", "--name", type=str, help="suffix to append to the name of the training run", default=""
+    )
+    parser.add_argument(
+        "-l", "--nlatent", type=int, help="number of latent channels", default=4
+    )
+    parser.add_argument(
+        "--frequencyweight", action=argparse.BooleanOptionalAction, help="use a weight for the frequency components", default=False
     )
     args = parser.parse_args()
     if args.workdir is None:

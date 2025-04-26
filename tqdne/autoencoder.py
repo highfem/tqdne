@@ -27,12 +27,14 @@ class LightningAutoencoder(pl.LightningModule):
         decoder_config: dict,
         optimizer_params: dict,
         kl_weight: float = 1e-6,
+        frequency_weights=1,
         mask=None
     ):
         super().__init__()
         self.encoder = Encoder(**encoder_config)
         self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
+        self.frequency_weights = frequency_weights
         self.kl_weight = kl_weight
         self.mask = mask
         self.config = encoder_config
@@ -58,7 +60,7 @@ class LightningAutoencoder(pl.LightningModule):
     def kl_divergence(self, mean, log_std):
         """Computes the KL divergence between the latent distribution and an isotropic Gaussian distribution."""
         log_var = 2 * log_std
-        return 0.5 * th.nansum(mean**2 + th.exp(log_var) - log_var - 1, dim=1)
+        return 0.5 * th.sum(mean**2 + th.exp(log_var) - log_var - 1, dim=1)
 
     def step(self, batch, stage="training"):
         x = batch["signal"]
@@ -68,13 +70,13 @@ class LightningAutoencoder(pl.LightningModule):
         if self.mask is not None:
             mask_idxs = self.mask(batch["valid_index"])
             lowm, _ = get_latent_mask_indexes(mask_idxs, self.config["dims"])
-            x = mask_from_indexes(mask_idxs, x)
-            x_recon = mask_from_indexes(mask_idxs, x_recon)
-            mean = mask_from_indexes(lowm, mean)
-            log_std = mask_from_indexes(lowm, log_std)
+            x = mask_from_indexes(mask_idxs, x, 0)
+            x_recon = mask_from_indexes(mask_idxs, x_recon, 0)
+            mean = mask_from_indexes(lowm, mean, 0)
+            log_std = mask_from_indexes(lowm, log_std, 0)
 
-        recon_loss = th.nanmean((x - x_recon) ** 2)
-        kl_div = th.nanmean(self.kl_divergence(mean, log_std))
+        recon_loss = th.mean(self.frequency_weights * (x - x_recon) ** 2)
+        kl_div = th.mean(self.kl_divergence(mean, log_std))
         loss = recon_loss + self.kl_weight * kl_div
         self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
         self.log(f"{stage}/kl_divergence", kl_div.item(), sync_dist=True)
