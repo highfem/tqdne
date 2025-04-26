@@ -22,7 +22,7 @@ def run(args):
     config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, args.maxlen)
-    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x8-LogSpectrogram"
     if args.name != "":
         name += f"-{args.name}"
 
@@ -36,7 +36,7 @@ def run(args):
 
     optimizer_params = {
         "learning_rate": 0.0001,
-        "max_steps": 200 * len(train_loader),
+        "max_steps": 100 * len(train_loader),
         "eta_min": 0.0,
     }
     trainer_params = {
@@ -45,7 +45,7 @@ def run(args):
         "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": 200 * len(train_loader),
+        "max_steps": 100 * len(train_loader),
     }
 
     logging.info("Build lightning module...")

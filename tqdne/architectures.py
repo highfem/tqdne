@@ -39,10 +39,10 @@ def get_1d_unet_config(config, in_channels, out_channels):
 
 def get_2d_autoencoder_configs(config):
     base_config = {
-        "model_channels": 128,
+        "model_channels": 64,
         "channel_mult": (1, 2, 4),
         "attention_resolutions": (),
-        "num_res_blocks": 3,
+        "num_res_blocks": 2,
         "dims": 2,
         "conv_kernel_size": 3,
         "dropout": 0.1,

@@ -46,7 +46,7 @@ class SpectrogramConfig(Config):
 class LatentSpectrogramConfig(SpectrogramConfig):
     """Configuration class for latent diffusion on spectrogram representation."""
 
-    latent_channels: int = 4
+    latent_channels: int = 8
     kl_weight: float = 1e-6
 
 
