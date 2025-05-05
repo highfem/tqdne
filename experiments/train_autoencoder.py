@@ -36,7 +36,7 @@ def run(args):
 
     optimizer_params = {
         "learning_rate": 0.0001,
-        "max_steps": 250 * len(train_loader),
+        "max_steps": 300 * len(train_loader),
         "eta_min": 0.0,
     }
     trainer_params = {
@@ -45,7 +45,7 @@ def run(args):
         "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": 250 * len(train_loader),
+        "max_steps": 300 * len(train_loader),
     }
 
     logging.info("Build lightning module...")
