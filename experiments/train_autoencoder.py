@@ -36,7 +36,7 @@ def run(args):
 
     optimizer_params = {
         "learning_rate": 0.0001,
-        "max_steps": 200 * len(train_loader),
+        "max_steps": 250 * len(train_loader),
         "eta_min": 0.0,
     }
     trainer_params = {
@@ -45,7 +45,7 @@ def run(args):
         "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": 200 * len(train_loader),
+        "max_steps": 250 * len(train_loader),
     }
 
     logging.info("Build lightning module...")
@@ -54,11 +54,11 @@ def run(args):
     if args.mask:
         print("using masked loss")
         mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
-    weight = 1
+    weight = torch.tensor(1)
     if args.frequencyweight:
         weight = torch.ones(spectr.shape[1])
         weight[0] = 10
-        weight = weight.view(1, 1, -1, 1).to(get_device())
+        weight = weight.view(1, 1, -1, 1)
     autoencoder = LightningAutoencoder(
         encoder_config=encoder_config,
         decoder_config=decoder_config,

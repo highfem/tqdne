@@ -80,6 +80,7 @@ class SamplePlot(Plot):
             ax.legend()
         ax.set_xlabel("Time [s]")        
         fig.tight_layout()
+        plt.close()
         return fig
 
 
@@ -137,6 +138,7 @@ class AmplitudeSpectralDensity(Plot, ABC):
         ax.set_ylabel("Log-Amplitude $[m/s^2 \ Hz^{-1}]$")
         ax.legend()
         fig.tight_layout()
+        plt.close()
         return fig
 
 

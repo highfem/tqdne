@@ -20,10 +20,12 @@ def fake_represent(representation, leng_signal):
 
 
 def run(args):
-    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen)
+    config = LatentSpectrogramConfig(args.workdir, t=args.maxlen, latent_channels=args.nlatent)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, args.maxlen)
-    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{args.nlatent}-LogSpectrogram"
+    if args.name != "":
+        name += f"-{args.name}"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -50,7 +52,7 @@ def run(args):
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = config.outputdir / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram" / "last.ckpt"
+    checkpoint = config.outputdir / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{args.nlatent}-LogSpectrogram-{args.name}" / "last.ckpt"
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
@@ -58,10 +60,16 @@ def run(args):
     if args.mask:
         print("using masked loss")
         mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
+    weight = torch.tensor(1)
+    if args.frequencyweight:
+        weight = torch.ones(spectr.shape[1] // 4)
+        weight[0] = 10
+        weight = weight.view(1, 1, -1, 1)
     model = LightningEDM(
         get_2d_unet_config(config, config.latent_channels, config.latent_channels, use_causal_mask=mask is not None),
         optimizer_params,
         autoencoder=autoencoder,
+        frequency_weights=weight,
         mask=mask
     )
 
@@ -122,6 +130,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "-n", "--name", type=str, help="suffix to append to the name of the training run", default=""
+    )
+    parser.add_argument(
+        "-l", "--nlatent", type=int, help="number of latent channels", default=4
+    )
+    parser.add_argument(
+        "--frequencyweight", action=argparse.BooleanOptionalAction, help="use a weight for the frequency components", default=False
     )
     args = parser.parse_args()
     if args.workdir is None:

@@ -75,7 +75,7 @@ class LightningAutoencoder(pl.LightningModule):
             mean = mask_from_indexes(lowm, mean, 0)
             log_std = mask_from_indexes(lowm, log_std, 0)
 
-        recon_loss = th.mean(self.frequency_weights * (x - x_recon) ** 2)
+        recon_loss = th.mean(self.frequency_weights.to(x.device) * (x - x_recon) ** 2)
         kl_div = th.mean(self.kl_divergence(mean, log_std))
         loss = recon_loss + self.kl_weight * kl_div
         self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
