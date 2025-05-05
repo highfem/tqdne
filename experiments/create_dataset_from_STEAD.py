@@ -12,6 +12,7 @@ import obspy
 import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
+from obspy.geodetics.base import gps2dist_azimuth
 
 
 def make_stream(dataset):
@@ -57,6 +58,54 @@ def make_stream(dataset):
     stream = obspy.Stream([tr_N, tr_E, tr_Z])
 
     return stream
+    
+def calculate_azimuthal_gap(hypocenter, station_coords):
+    """
+    Calculates the azimuthal gap of an earthquake.
+    
+    The azimuthal gap is defined as the largest angular gap (in degrees)
+    between any two consecutive station azimuths as seen from the hypocenter.
+    This metric is often used in seismology to assess the station coverage quality.
+    
+    Parameters:
+        hypocenter: A tuple (latitude, longitude) in degrees for the earthquake.
+        station_coords: A list of tuples [(lat, lon), ...] for each station in degrees.
+    
+    Returns:
+        The maximum azimuthal gap in degrees. If fewer than two stations are provided,
+        the function returns None.
+    
+    References:
+        - Shearer, P. M. (2009). Introduction to Seismology. Cambridge University Press.
+    """
+    hypo_lat, hypo_lon = hypocenter
+    
+    # Compute azimuths from the hypocenter to each station.
+    azimuths = []
+    for (st_lat, st_lon) in station_coords:
+        azimuth = gps2dist_azimuth(hypo_lat, hypo_lon, st_lat, st_lon)
+        azimuths.append(azimuth[1])
+    
+    if len(azimuths) < 2:
+        print("Not enough stations to calculate an azimuthal gap. Using azimuth only instead")
+        return azimuth
+    
+    # Sort the azimuth angles in ascending order.
+    azimuths.sort()
+    
+    # Calculate gaps between successive azimuth angles.
+    gaps = []
+    for i in range(1, len(azimuths)):
+        gap = azimuths[i] - azimuths[i - 1]
+        gaps.append(gap)
+    
+    # Add the gap between the last and the first angle (wrap-around gap)
+    wrap_gap = 360 - (azimuths[-1] - azimuths[0])
+    gaps.append(wrap_gap)
+    
+    # The azimuthal gap is the maximum gap.
+    max_gap = max(gaps)
+    return max_gap
 
 
 def create_h5_file(file_path, df, dtfl):
@@ -80,7 +129,8 @@ def create_h5_file(file_path, df, dtfl):
     time_arrival_list = []
     trace_start_time_list = []
     vs30_list = []
-    waveform_list = []  # will hold arrays of shape (3, n_samples) for each event
+    waveform_list = []  # will hold arrays of shape (n_samples, 3) for each event
+    azimuthal_gap = []
 
     # ObsPy FDSN client for removing response
     client = Client("IRIS")
@@ -134,7 +184,7 @@ def create_h5_file(file_path, df, dtfl):
         # For demonstration, we assume 6000 samples max
         max_samples = 6000
         # slice if st_data is longer than 6000
-        st_data_clipped = st_data[:, :max_samples]
+        st_data_clipped = st_data[:, :max_samples].T
 
         # store waveforms
         waveform_list.append(st_data_clipped)
@@ -157,6 +207,11 @@ def create_h5_file(file_path, df, dtfl):
         trace_start_time_list.append(row["trace_start_time"])
         # vs30 could be real data or random for demonstration
         vs30_list.append(np.random.randint(400, 1501))
+        
+        # azimuthal gap calculation
+        stations = np.vstack((row["receiver_latitude"], row["receiver_longitude"])).T
+        hypo = (row["source_latitude"], row["source_longitude"])
+        azimuthal_gap.append(calculate_azimuthal_gap(hypo, stations))
 
         print(f"Processed {iter}/{len(df)}: {trace_name} successfully.")
 
@@ -176,14 +231,15 @@ def create_h5_file(file_path, df, dtfl):
     time_arrival_arr = np.array(time_arrival_list)
     trace_start_time_arr = np.array(trace_start_time_list).astype("S")
     vs30_arr = np.array(vs30_list)
+    azimuthal_gap_arr = np.array(azimuthal_gap)
 
-    # Waveforms: we need shape (3, 6000, n_events)
+    # Waveforms: we need shape (n_events, 6000, 3)
     # waveform_list is a list of (3, <=6000) arrays
     n_events = len(waveform_list)
-    waveforms_arr = np.zeros((3, max_samples, n_events), dtype=np.float32)
+    waveforms_arr = np.zeros((n_events, max_samples, 3), dtype=np.float32)
     for i in range(n_events):
         n_samps = waveform_list[i].shape[1]
-        waveforms_arr[:, :n_samps, i] = waveform_list[i]
+        waveforms_arr[i, :n_samps, :] = waveform_list[i]
 
     with h5py.File(file_path, "w") as h5f:
         h5f.create_dataset("event_ID", data=event_ID_arr)
@@ -203,8 +259,9 @@ def create_h5_file(file_path, df, dtfl):
         h5f.create_dataset("trace_start_time", data=trace_start_time_arr)
         h5f.create_dataset("vs30", data=vs30_arr)
         h5f.create_dataset("waveforms", data=waveforms_arr)
+        h5f.create_dataset("azimuthal_gap", data=azimuthal_gap_arr)
 
-    print(f"\nHDF5 file '{file_path}' created successfully with {n_events} valid events.")
+    print(f"\nHDF5 file '{file_path}' created successfully!")
 
 
 def main():
