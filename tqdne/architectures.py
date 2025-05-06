@@ -58,16 +58,16 @@ def get_2d_autoencoder_configs(config):
     return encoder_config, decoder_config
 
 
-def get_2d_unet_config(config, in_channels, out_channels, use_causal_mask=False):
+def get_2d_unet_config(config, in_channels, out_channels, model_channels=64, use_causal_mask=False):
     unet_config = {
         "in_channels": in_channels,
         "out_channels": out_channels,
         "cond_features": len(config.features_keys),
         "dims": 2,
         "conv_kernel_size": 3,
-        "model_channels": 64,
+        "model_channels": model_channels,
         "channel_mult": (1, 2, 4, 4),
-        "attention_resolutions": (8,),
+        "attention_resolutions": (4,),
         "num_res_blocks": 2,
         "num_heads": 4,
         "dropout": 0.1,
