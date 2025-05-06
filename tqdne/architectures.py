@@ -67,7 +67,7 @@ def get_2d_unet_config(config, in_channels, out_channels, model_channels=64, use
         "conv_kernel_size": 3,
         "model_channels": model_channels,
         "channel_mult": (1, 2, 4, 4),
-        "attention_resolutions": (4, 8,),
+        "attention_resolutions": (8,),
         "num_res_blocks": 2,
         "num_heads": 4,
         "dropout": 0.1,

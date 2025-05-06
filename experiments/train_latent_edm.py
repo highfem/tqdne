@@ -57,14 +57,14 @@ def run(args):
 
     logging.info("Build lightning module...")
     mask = None
-    if args.mask:
-        print("using masked loss")
-        mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
+    # if args.mask:
+    #     print("using masked loss")
+    #     mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
     weight = torch.tensor(1)
-    if args.frequencyweight:
-        weight = torch.ones(spectr.shape[1] // 4)
-        weight[0] = 10
-        weight = weight.view(1, 1, -1, 1)
+    # if args.frequencyweight:
+    #     weight = torch.ones(spectr.shape[1] // 4)
+    #     weight[0] = 10
+    #     weight = weight.view(1, 1, -1, 1)
     model = LightningEDM(
         get_2d_unet_config(config, config.latent_channels, config.latent_channels, args.model_channels, use_causal_mask=mask is not None),
         optimizer_params,
