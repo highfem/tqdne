@@ -147,12 +147,12 @@ class LightningEDM(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
-        self.log("training/loss", loss.item(), sync_dist=True)
+        self.log("training/loss", loss.detach().item(), sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
-        self.log("validation/loss", loss.item(), sync_dist=True)
+        self.log("validation/loss", loss.detach().item(), sync_dist=True)
         return loss
 
     @th.no_grad()

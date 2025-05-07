@@ -51,8 +51,9 @@ def run(args):
         "max_steps": 200 * len(train_loader),
     }
 
-    logging.info("Loading autoencoder...")
+    
     checkpoint = config.outputdir / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{args.nlatent}-LogSpectrogram-{args.autoencodername}" / "last.ckpt"
+    logging.info(f"Loading autoencoder: {checkpoint}")
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
@@ -66,7 +67,7 @@ def run(args):
     #     weight[0] = 10
     #     weight = weight.view(1, 1, -1, 1)
     model = LightningEDM(
-        get_2d_unet_config(config, config.latent_channels, config.latent_channels, args.model_channels, use_causal_mask=mask is not None),
+        get_2d_unet_config(config, config.latent_channels, config.latent_channels, args.modelchannels, use_causal_mask=mask is not None),
         optimizer_params,
         autoencoder=autoencoder,
         frequency_weights=weight,
@@ -141,7 +142,7 @@ if __name__ == "__main__":
         "-l", "--nlatent", type=int, help="number of latent channels", default=4
     )
     parser.add_argument(
-        "-m", "--model_channels", type=int, help="number of model channels", default=64
+        "-m", "--modelchannels", type=int, help="number of model channels", default=64
     )
     parser.add_argument(
         "--frequencyweight", action=argparse.BooleanOptionalAction, help="use a weight for the frequency components", default=False

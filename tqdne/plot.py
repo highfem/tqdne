@@ -128,13 +128,13 @@ class AmplitudeSpectralDensity(Plot, ABC):
         # Plot
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(freq, pred_mean, "b", label="Predicted")
-        ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
-        ax.plot(freq, target_mean, "orange", label="Target")
+        ax.plot(np.log(freq), pred_mean, "b", label="Predicted")
+        ax.fill_between(np.log(freq), pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
+        ax.plot(np.log(freq), target_mean, "orange", label="Target")
         ax.fill_between(
-            freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
+            np.log(freq), target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
         )
-        ax.set_xlabel("Frequency [Hz]")
+        ax.set_xlabel("Log-Frequency [Hz]")
         ax.set_ylabel("Log-Amplitude $[m/s^2 \ Hz^{-1}]$")
         ax.legend()
         fig.tight_layout()
