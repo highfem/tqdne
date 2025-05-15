@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
     "pathos>=0.3.4",
+    "pytorch-lightning==2.5.1",
 ]
 
 [tool.setuptools]
