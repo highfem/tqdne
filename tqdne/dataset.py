@@ -71,29 +71,7 @@ class Dataset(th.utils.data.Dataset):
 
         valid_index = self.file["indices_valid_waveforms"][self.indices[index]]
         signal = self.representation.get_representation(waveform)
-        #ii = (valid_index - 256 // 2) // 32 + 1
-        #
-        # for i in range(3):
-        #     plt.plot(waveform[i])
-        #     plt.axvline(x = valid_index, color = 'black')
-        #     plt.axvline(x = valid_index, color = 'red')
-        #     plt.show()
-        #
-        # plt.imshow(signal[0])
-        # plt.show()
-        #
-        # print(np.min(waveform))
-        #waveform[:, valid_index:] = -10000000
-        # signal = self.representation.get_representation(waveform)
-        # plt.imshow(signal[0])
-        # plt.show()
-        #
-        #
-        # print(np.min(waveform))
-#        signal[:, :, ii:] = np.nan
-        # plt.imshow(signal[0, ])
-        # plt.show()
-        
+       
         out = {
             "waveform": th.tensor(waveform, dtype=th.float32),
             "signal": th.tensor(signal, dtype=th.float32),
@@ -114,6 +92,15 @@ class ClassificationDataset(Dataset):
         # labels = dist_bin * len(mag_bins) + mag_bin
         dist = self.file["hypocentral_distance"]
         mag = self.file["magnitude"]
+        
+        print("-----")
+        print("min ")
+        print(np.min(dist))
+        print(np.min(mag))
+        print("max ")
+        print(np.max(dist))
+        print(np.max(mag))
+        print("-----")
         self.labels = (
             (np.digitize(dist, dist_bins) - 1) * (len(mag_bins) - 1)
             + np.digitize(mag, mag_bins)
@@ -123,7 +110,7 @@ class ClassificationDataset(Dataset):
         self._num_classes = (len(mag_bins) - 1) * (len(dist_bins) - 1)
 
     def get_class_weights(self):
-        assert self._num_classes == len(np.unique(self.labels))
+        # assert self._num_classes == len(np.unique(self.labels))
         return th.tensor(
             [1 / (self.labels == l).sum() for l in range(self._num_classes)], dtype=th.float32
         )

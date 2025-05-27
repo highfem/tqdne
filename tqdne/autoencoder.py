@@ -27,7 +27,7 @@ class LightningAutoencoder(pl.LightningModule):
         decoder_config: dict,
         optimizer_params: dict,
         kl_weight: float = 1e-6,
-        frequency_weights=1,
+        frequency_weights=th.tensor(1),
         mask=None
     ):
         super().__init__()

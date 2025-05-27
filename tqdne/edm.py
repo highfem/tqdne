@@ -88,7 +88,7 @@ class LightningEDM(pl.LightningModule):
         deterministic_sampling: bool = True,
         edm: EDM = EDM(),
         autoencoder: None | LightningAutoencoder = None,
-        frequency_weights=1,
+        frequency_weights=th.tensor(1),
         mask=None
     ):
         super().__init__()

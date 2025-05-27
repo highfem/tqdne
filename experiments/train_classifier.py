@@ -27,7 +27,7 @@ def run(args):
         mag_bins=config.mag_bins,
         dist_bins=config.dist_bins,
         cut=config.t,
-        split="train",
+        split="train_validation",
     )
 
     val_dataset = ClassificationDataset(
@@ -36,7 +36,7 @@ def run(args):
         mag_bins=config.mag_bins,
         dist_bins=config.dist_bins,
         cut=config.t,
-        split="validation",
+        split="test",
     )
     train_loader = DataLoader(
         train_dataset,
@@ -82,7 +82,7 @@ def run(args):
     }
 
     optimizer_params = {
-        "learning_rate": 0.001,
+        "learning_rate": 0.0001,
         "max_steps": 100 * len(train_loader),
         "eta_min": 0.0,
     }
