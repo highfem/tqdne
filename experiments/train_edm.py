@@ -12,10 +12,10 @@ from tqdne.training import get_pl_trainer
 from tqdne.utils import get_device, get_last_checkpoint
 
 
-def run(args):
-    name = "EDM-LogSpectrogram"
+def run(args):    
     config = SpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
+    name = f"Latent-EDM-128x128x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -41,15 +41,11 @@ def run(args):
         "max_steps": optimizer_params["max_steps"],
     }
 
-    logging.info("Build lightning module...")
-    mask = None
-    if args.mask:
-        logging.info("using masked loss")
-        mask = lambda x: (x - config.stft_channels // 2) // config.hop_size + 1
+    logging.info("Build lightning module...")    
     model = LightningEDM(
-        get_2d_unet_config(config, config.channels, config.channels),
+        get_2d_unet_config(config, config.channels, config.channels, args.modelchannels),
         optimizer_params,
-        mask=mask
+        mask=None
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -95,13 +91,7 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
-    )
-    parser.add_argument(
-        "--mask", action=argparse.BooleanOptionalAction, help="mask out faulty waveforms", default=False
-    )
-    parser.add_argument(
-        "-t", "--maxlen", type=int, help="trim the signal to length 'maxlen' (needed for the spectrogram)", default=128
-    )
+    )        
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=64
     )
@@ -110,6 +100,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "-m", "--modelchannels", type=int, help="number of model channels", default=64
     )
     args = parser.parse_args()
     if args.workdir is None:

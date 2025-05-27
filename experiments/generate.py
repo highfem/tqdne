@@ -137,7 +137,9 @@ def generate(
                 sample = edm.sample(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
+            print(sample.shape)
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
+            print(waveforms[i : i + batch_size].shape)
             break
 
     print("Done!")
@@ -192,7 +194,7 @@ are saved in an HDF5 file with the given name in the outputs directory.
     )
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
-    )
+    )    
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     args = parser.parse_args()
 
