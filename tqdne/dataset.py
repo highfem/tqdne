@@ -90,17 +90,9 @@ class ClassificationDataset(Dataset):
 
         # compute labels
         # labels = dist_bin * len(mag_bins) + mag_bin
-        dist = self.file["hypocentral_distance"]
-        mag = self.file["magnitude"]
-        
-        print("-----")
-        print("min ")
-        print(np.min(dist))
-        print(np.min(mag))
-        print("max ")
-        print(np.max(dist))
-        print(np.max(mag))
-        print("-----")
+        dist = self.file["hypocentral_distance"][:] * 1000
+        mag = self.file["magnitude"][:]
+            
         self.labels = (
             (np.digitize(dist, dist_bins) - 1) * (len(mag_bins) - 1)
             + np.digitize(mag, mag_bins)
@@ -110,7 +102,7 @@ class ClassificationDataset(Dataset):
         self._num_classes = (len(mag_bins) - 1) * (len(dist_bins) - 1)
 
     def get_class_weights(self):
-        # assert self._num_classes == len(np.unique(self.labels))
+        assert self._num_classes == len(np.unique(self.labels))
         return th.tensor(
             [1 / (self.labels == l).sum() for l in range(self._num_classes)], dtype=th.float32
         )

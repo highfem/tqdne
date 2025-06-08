@@ -14,7 +14,7 @@ from tqdne.utils import get_device, get_last_checkpoint
 
 
 def run(args):
-    name = "Latent-EDM-MovingAvg"
+    name = "Latent-EDM-MovingAvg-1024x16"
     config = LatentMovingAverageEnvelopeConfig(args.workdir)
 
     train_loader, val_loader = get_train_and_val_loader(
@@ -42,7 +42,7 @@ def run(args):
     }
 
     logging.info("Loading autoencoder...")
-    checkpoint = config.outputdir / "Autoencoder-1024x16-MovingAvg" / "best.ckpt"
+    checkpoint = config.outputdir / "Autoencoder-1024x16-MovingAvg" / "last.ckpt"
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")

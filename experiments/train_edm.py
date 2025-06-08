@@ -15,7 +15,7 @@ from tqdne.utils import get_device, get_last_checkpoint
 def run(args):    
     config = SpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    name = f"Latent-EDM-128x128x4-LogSpectrogram"
+    name = f"EDM-128x128x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -76,16 +76,7 @@ def run(args):
 
 
 if __name__ == "__main__":
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
     import argparse
-
     parser = argparse.ArgumentParser("Train a 2D diffusion model")
     parser.add_argument(
         "--workdir",

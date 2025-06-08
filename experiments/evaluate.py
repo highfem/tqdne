@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import torch as th
 from h5py import File
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import torch.distributed as dist
+
 
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.classifier import LithningClassifier
@@ -55,15 +58,16 @@ def predict(
     waveform_shape = batch["waveform"].shape[1:]
     classifier_embedding = classifier.embed(
         th.tensor(
-            classifier_config.representation.get_representation(batch["waveform"]), device=device
+            classifier_config.representation.get_representation(batch["waveform"]), device=device, dtype=torch.float
         )
     )
     classifier_embedding_shape = classifier_embedding.shape[1:]
     classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
 
+    rank = os.environ["LOCAL_RANK"]
     outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)
     Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
-    outfile = Path(workdir, "evaluation", outfile + f"-split_{split}.h5")
+    outfile = Path(workdir, "evaluation", outfile + f"-split_{split}-rank_{rank}.h5")
     with File(outfile, "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
@@ -120,11 +124,11 @@ def predict(
             else:
                 target_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(batch["waveform"]),
-                    device=device,
+                    device=device, dtype=torch.float
                 )
                 predicted_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(pred_waveform),
-                    device=device,
+                    device=device, dtype=torch.float
                 )
 
             target_embedding = classifier.embed(target_classifier_input)
@@ -168,7 +172,7 @@ notebook to compute metrics and create plots.
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
     )
     parser.add_argument(
-        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=128
     )
     parser.add_argument(
         "--edm_checkpoint",
