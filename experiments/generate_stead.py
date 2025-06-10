@@ -122,7 +122,7 @@ def generate(
 
     print(f"Generating waveforms using {device}...")
     with h5py.File(outfile, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances)*1e3)
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
         f.create_dataset("vs30s", data=np.array(vs30s))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))

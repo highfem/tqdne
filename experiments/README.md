@@ -147,3 +147,84 @@ python generate.py \
     --outfile workdir/generated_waveforms.h5 \
     --batch_size 32
 ```
+
+### Reproducing using STEAD datasets
+
+Follow these steps to reproduce the basic HighFEM analysis with the STEAD dataset (see supplementary material Text S3).
+
+#### 1. Download the STEAD dataset
+
+```bash
+python stead_download.py --local_path /absolute/path/to/STEAD
+```
+
+*Edit `local_path` inside `stead_download.py` or pass the `--local_path` flag so files are stored where you want.*
+
+#### 2. Convert STEAD to HDF5
+
+```bash
+python create_dataset_from_STEAD.py \
+  --file_name /absolute/path/to/STEAD/waveforms \
+  --csv_file /absolute/path/to/STEAD/metadata.csv \
+  --output_file_path /absolute/path/to/data/raw_waveforms.h5
+```
+
+*Update the script arguments (or variables inside the script) to point to the freshly downloaded STEAD files and choose an output location.*
+
+#### 3. Build the training dataset
+
+```bash
+python build_dataset.py --workdir /absolute/path/to/data
+```
+
+This command assumes the file `data/raw_waveforms.h5` is inside the specified `--workdir`.
+
+#### 4. Train the autoencoder
+
+```bash
+torchrun \
+  --standalone \
+  --nproc_per_node=4 \
+  train_autoencoder.py \
+  --workdir experiments/workdir/stead \
+  --mask \
+  --maxlen 4064 \
+  --nlatent 4 \
+  --name latent-4
+```
+
+#### 5. Train the diffusion model
+
+```bash
+torchrun \
+  --standalone \
+  --nproc_per_node=4 \
+  train_latent_edm.py \
+  --workdir experiments/workdir/stead \
+  --mask \
+  --maxlen 4064 \
+  --nlatent 4 \
+  --modelchannels 128 \
+  --batchsize 128 \
+  --autoencodername latent-4 \
+  --name c128-b128-latent-4
+```
+
+#### 6. Generate synthetic waveforms
+
+```bash
+torchrun --nproc_per_node=1 generate_stead.py \
+  --workdir experiments/workdir/stead \
+  --outfile experiments/workdir/stead/gwm_stead_v1.h5 \
+  --edm_checkpoint experiments/workdir/stead/outputs/Latent-EDM-32x32x4-LogSpectrogram-c128-b128-latent-4/last.ckpt \
+  --autoencoder_checkpoint experiments/workdir/stead/outputs/Autoencoder-32x32x4-LogSpectrogram-latent-4/last.ckpt
+```
+
+#### 7. Visualize residuals
+
+Open and run **`Residual_plot_stead.ipynb`** to plot residuals for the generated waveforms.
+
+---
+
+
+

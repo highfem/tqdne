@@ -39,7 +39,7 @@ class SpectrogramConfig(Config):
     hop_size: int = 32
     representation = representation.LogSpectrogram(stft_channels=stft_channels, hop_size=hop_size)
     # we need to increase this from earlier version, since now data is bigger
-    t: int = 12256
+    t: int = 4064
 
 
 @dataclass

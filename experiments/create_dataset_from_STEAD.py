@@ -13,7 +13,7 @@ import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
 from obspy.geodetics.base import gps2dist_azimuth
-
+np.random.seed(42)
 
 def make_stream(dataset):
     """
@@ -88,7 +88,7 @@ def calculate_azimuthal_gap(hypocenter, station_coords):
     
     if len(azimuths) < 2:
         print("Not enough stations to calculate an azimuthal gap. Using azimuth only instead")
-        return azimuth
+        return azimuth[1]
     
     # Sort the azimuth angles in ascending order.
     azimuths.sort()
@@ -131,6 +131,7 @@ def create_h5_file(file_path, df, dtfl):
     vs30_list = []
     waveform_list = []  # will hold arrays of shape (n_samples, 3) for each event
     azimuthal_gap = []
+    indices_valid_waveforms = []
 
     # ObsPy FDSN client for removing response
     client = Client("IRIS")
@@ -212,6 +213,8 @@ def create_h5_file(file_path, df, dtfl):
         stations = np.vstack((row["receiver_latitude"], row["receiver_longitude"])).T
         hypo = (row["source_latitude"], row["source_longitude"])
         azimuthal_gap.append(calculate_azimuthal_gap(hypo, stations))
+        print(calculate_azimuthal_gap(hypo, stations))
+        indices_valid_waveforms.append(6000)
 
         print(f"Processed {iter}/{len(df)}: {trace_name} successfully.")
 
@@ -232,17 +235,19 @@ def create_h5_file(file_path, df, dtfl):
     trace_start_time_arr = np.array(trace_start_time_list).astype("S")
     vs30_arr = np.array(vs30_list)
     azimuthal_gap_arr = np.array(azimuthal_gap)
+    indices_valid_waveforms_arr = np.array(indices_valid_waveforms)
 
     # Waveforms: we need shape (n_events, 6000, 3)
     # waveform_list is a list of (3, <=6000) arrays
     n_events = len(waveform_list)
     waveforms_arr = np.zeros((n_events, max_samples, 3), dtype=np.float32)
+    print(n_events, waveforms_arr.shape, len(waveform_list), len(waveform_list[0]), waveform_list[0].shape[1])
     for i in range(n_events):
-        n_samps = waveform_list[i].shape[1]
+        n_samps = waveform_list[i].shape[0]
         waveforms_arr[i, :n_samps, :] = waveform_list[i]
 
     with h5py.File(file_path, "w") as h5f:
-        h5f.create_dataset("event_ID", data=event_ID_arr)
+        # h5f.create_dataset("event_ID", data=event_ID_arr)
         h5f.create_dataset("hypocentral_distance", data=hypocentral_distance_arr)
         h5f.create_dataset("hypocentre_depth", data=hypocentre_depth_arr)
         h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude_arr)
@@ -260,6 +265,7 @@ def create_h5_file(file_path, df, dtfl):
         h5f.create_dataset("vs30", data=vs30_arr)
         h5f.create_dataset("waveforms", data=waveforms_arr)
         h5f.create_dataset("azimuthal_gap", data=azimuthal_gap_arr)
+        h5f.create_dataset("indices_valid_waveforms", data=indices_valid_waveforms_arr)
 
     print(f"\nHDF5 file '{file_path}' created successfully!")
 
@@ -269,8 +275,8 @@ def main():
     Main function to demonstrate reading a CSV, filtering a DataFrame,
     and creating an HDF5 file.
     """
-    file_name = "chunk2/chunk2.hdf5"
-    csv_file = "chunk2/chunk2.csv"
+    file_name = "workdir/stead/merge.hdf5"
+    csv_file = "workdir/stead/merge.csv"
 
     # Load the CSV file into a DataFrame
     df = pd.read_csv(csv_file)
@@ -282,16 +288,16 @@ def main():
     # Filter the DataFrame for local earthquakes:
     # (1) category: 'earthquake_local'
     # (2) distance <= 200 km
-    # (3) magnitude > 4
+    # (3) magnitude > 4.5
     df = df[
         (df.trace_category == "earthquake_local")
         & (df.source_distance_km <= 200)
-        & (df.source_magnitude > 4)
+        & (df.source_magnitude > 4.5)
     ]
     print(f"Total events selected: {len(df)}")
 
     # Create a new HDF5 file with selected events
-    output_file_path = "raw_waveforms.h5"
+    output_file_path = "workdir/stead/raw_waveforms.h5"
     create_h5_file(output_file_path, df, dtfl)
 
     # Close the original HDF5 file
