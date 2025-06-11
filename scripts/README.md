@@ -18,9 +18,10 @@ Create 32 samples using command line arguments:
 ```shell
 python generate_waveforms.py \
   --hypocentral_distance 531 \
-  --is_shallow_crustal 1 \
   --magnitude 6 \
   --vs30 154 \
+  --hypocentre_depth 10.0 \
+  --azimuthal_gap 130 \
   --num_samples 32 \
   --output waveforms.h5 \
   --edm_checkpoint ../weights/edm.ckpt \

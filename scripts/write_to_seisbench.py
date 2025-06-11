@@ -66,7 +66,8 @@ hypocentral_distance = files_path["hypocentral_distance"][:]
 magnitude = files_path["magnitude"][:]
 vs30 = files_path["vs30"][:]
 waveforms = files_path["waveforms"][:]
-is_shallow_crustal = files_path["is_shallow_crustal"][:]
+hypocentral_depth = files_path["hypocentre_depth"][:]
+azimuthal_gap = files_path["azimuthal_gap"][:]
 
 # Earthquake information
 eq_lat = args.hypocenter[0]
@@ -83,10 +84,10 @@ source_location = {"longitude": eq_lon, "latitude": eq_lat, "depth": depth}
 source_origin_time = UTCDateTime(args.origin_time[0])
 waveform_unit = "m/s^2"
 instrument_response = "not restituted"
-component_order = "NEZ"
+component_order = "RTZ"
 trace_sampling_rate = args.trace_sampling_rate[0]
 locations = ["*"] * n
-channels = ["BHN", "BHE", "BHZ"]
+channels = ["BHR", "BHT", "BHZ"]
 Vp = 6.0  # P-wave velocity in km/s
 
 # Define the paths for metadata and waveforms
@@ -119,7 +120,7 @@ def get_event_params():
 
 # Function to create trace parameters
 def get_trace_params(
-    station, trace_start_time, vs30_value, hypocentral_distance_km, is_shallow_crustal_value
+    station, trace_start_time, vs30_value, hypocentral_distance_km, hypocentral_depth_km, azimuthal_gap_deg
 ):
     trace_params = {
         "station_network_code": station["Network"],
@@ -128,8 +129,9 @@ def get_trace_params(
         "station_latitude_deg": station["Latitude"],
         "station_longitude_deg": station["Longitude"],
         "station_vs30": vs30_value,
-        "station_is_shallow_crustal": bool(is_shallow_crustal_value),
+        "hypocentral_depth_km": hypocentral_depth_km,
         "hypocentral_distance_km": hypocentral_distance_km,
+        "azimuthal_gap_deg": azimuthal_gap_deh,
         "trace_channel": component_order,
         "trace_sampling_rate_hz": trace_sampling_rate,
         "trace_start_time": str(trace_start_time),
@@ -187,7 +189,8 @@ with sbd.WaveformDataWriter(metadata_path, waveforms_path) as writer:
             waveform = waveforms[waveform_index]
             vs30_value = vs30[waveform_index]
             hypocentral_distance_km = hypocentral_distance[waveform_index]
-            is_shallow_crustal_value = is_shallow_crustal[waveform_index]
+            hypocentral_depth_km = hypocentral_depth[waveform_index]
+            azimuthal_gap_deg = azimuthal_gap[waveform_index]
 
             # Convert waveform to obspy Stream
             stream = create_obspy_stream(
@@ -208,7 +211,8 @@ with sbd.WaveformDataWriter(metadata_path, waveforms_path) as writer:
                 trace_start_time,
                 vs30_value,
                 hypocentral_distance_km,
-                is_shallow_crustal_value,
+                hypocentral_depth_km,
+                azimuthal_gap_deg,
             )
 
             actual_t_start, data, _ = sbu.stream_to_array(stream, component_order=component_order)

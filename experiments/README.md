@@ -140,9 +140,10 @@ Run `generate.py` with a model checkpoint as an argument to generate synthetic s
 ```shell
 python generate.py \
     --hypocentral_distance 10.0 \
-    --is_shallow_crustal 1 \
     --magnitude 5.5 \
     --vs30 760 \
+    --hypocentre_depth 10.0 \
+    --azimuthal_gap 130 \
     --num_samples 100 \
     --outfile workdir/generated_waveforms.h5 \
     --batch_size 32
