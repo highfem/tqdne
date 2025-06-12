@@ -68,6 +68,7 @@ def predict(
     outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)
     Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
     outfile = Path(workdir, "evaluation", outfile + f"-split_{split}-rank_{rank}.h5")
+    
     with File(outfile, "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
