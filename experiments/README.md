@@ -151,7 +151,12 @@ python generate.py \
 
 ### Reproducing using STEAD datasets
 
-Follow these steps to reproduce the basic HighFEM analysis with the STEAD dataset (see supplementary material Text S3).
+Although the **KiK-net** and **K-NET** datasets are freely accessible, their licenses *prohibit redistribution*. Consequently, we cannot share the pre-processed data required for full reproducibility.
+Instead, you can access all preprocessing scripts in **`tqdne/scripts/preprocessing`**.
+
+For a fully reproducible example, we provide a small dataset derived from the **STEAD** repository (Mousavi *et al.*, 2019) — [https://github.com/smousavi05/STEAD](https://github.com/smousavi05/STEAD).
+
+To reproduce the basic **HighFEM** analysis with this STEAD sample, follow the steps outlined in *Supplementary Text S3*.
 
 #### 1. Download the STEAD dataset
 
