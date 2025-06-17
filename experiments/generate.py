@@ -122,26 +122,22 @@ def generate(
 
     print(f"Generating waveforms using {device}...")
     with h5py.File(outfile, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances)*1e3)
         f.create_dataset("magnitude", data=np.array(magnitudes))
         f.create_dataset("vs30s", data=np.array(vs30s))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
         f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
 
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
-
+        
         for i in tqdm(range(0, len(cond), batch_size)):
             cond_batch = cond[i : i + batch_size]
             shape = [len(cond_batch), *signal_shape]
             with th.no_grad():
                 sample = edm.sample(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
-                )
-            print(sample.shape)
+                )            
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
-            print(waveforms[i : i + batch_size].shape)
-            break
-
     print("Done!")
 
 

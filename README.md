@@ -5,7 +5,7 @@
 
 > Generative modelling of seismic waveforms using denoising diffusion.
 >
-> ![Generative pipeline](figures/pipeline.jpg)
+> ![Generative pipeline](figures/figure1.jpg)
 
 ## About
 
