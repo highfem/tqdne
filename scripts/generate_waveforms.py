@@ -75,7 +75,7 @@ def generate(
         ]
     ):
         print("using command line input data")
-        hypocentral_distances = [hypocentral_distance] * num_samples
+        hypocentral_distances = [hypocentral_distance] * num_samples * 1e-3
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
         hypocentre_depths = [hypocentre_depth] * num_samples

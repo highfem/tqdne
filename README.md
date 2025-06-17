@@ -50,7 +50,7 @@ You can generate your own waveforms using the scripts in [scripts](./scripts). S
 
 ## Weight files
 
-You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
+You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/15683650), under the `weights` folder.
 
 ## Acknowledgements
 
