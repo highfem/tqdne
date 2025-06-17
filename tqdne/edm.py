@@ -98,10 +98,8 @@ class LightningEDM(pl.LightningModule):
         self.num_sampling_steps = num_sampling_steps
         self.deterministic_sampling = deterministic_sampling
         self.edm = edm
-        self.autoencoder = autoencoder.eval() if autoencoder else None
-        self.mask = mask
-        self.config = unet_config
-        self.frequency_weights = frequency_weights
+        self.autoencoder = autoencoder.eval() if autoencoder else None        
+        self.config = unet_config        
         if self.autoencoder:
             for param in self.autoencoder.parameters():
                 param.requires_grad = False
@@ -134,16 +132,10 @@ class LightningEDM(pl.LightningModule):
         noise = th.randn_like(sample) * append_dims(sigma, sample.dim())
         pred = self(sample + noise, sigma, cond_sample, cond)
 
-        # if self.mask is not None:
-        #     mask_idxs = self.mask(batch["valid_index"])
-        #     lowm, _ = get_latent_mask_indexes(mask_idxs, self.config["dims"])
-        #     sample = mask_from_indexes(lowm, sample, 0)
-        #     pred = mask_from_indexes(lowm, pred, 0)
-
         loss = (pred - sample) ** 2
         loss_weight = append_dims(self.edm.loss_weight(sigma), loss.dim())
 
-        return th.mean(self.frequency_weights.to(loss.device) * (loss * loss_weight))
+        return th.mean(loss * loss_weight)
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)

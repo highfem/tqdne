@@ -27,16 +27,14 @@ class LightningAutoencoder(pl.LightningModule):
         decoder_config: dict,
         optimizer_params: dict,
         kl_weight: float = 1e-6,
-        frequency_weights=th.tensor(1),
-        mask=None
+        frequency_weights=th.tensor(1)        
     ):
         super().__init__()
         self.encoder = Encoder(**encoder_config)
         self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
         self.frequency_weights = frequency_weights
-        self.kl_weight = kl_weight
-        self.mask = mask
+        self.kl_weight = kl_weight        
         self.config = encoder_config
         self.save_hyperparameters()
 
@@ -66,14 +64,6 @@ class LightningAutoencoder(pl.LightningModule):
         x = batch["signal"]
         latent, mean, log_std = self._encode(x)
         x_recon = self.decode(latent)
-        # if there is a mask, put nans and then compute the loss on that
-        if self.mask is not None:
-            mask_idxs = self.mask(batch["valid_index"])
-            lowm, _ = get_latent_mask_indexes(mask_idxs, self.config["dims"])
-            x = mask_from_indexes(mask_idxs, x, 0)
-            x_recon = mask_from_indexes(mask_idxs, x_recon, 0)
-            mean = mask_from_indexes(lowm, mean, 0)
-            log_std = mask_from_indexes(lowm, log_std, 0)
 
         recon_loss = th.mean(self.frequency_weights.to(x.device) * (x - x_recon) ** 2)
         kl_div = th.mean(self.kl_divergence(mean, log_std))

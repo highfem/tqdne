@@ -92,9 +92,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
     )
-    parser.add_argument(
-        "-m", "--modelchannels", type=int, help="number of model channels", default=64
-    )
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()

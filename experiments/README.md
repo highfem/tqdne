@@ -54,8 +54,8 @@ workdir/
    /evaluation/
    /figures/
    /outputs/
-   /outputs/Autoencoder-32x96x4-LogSpectrogram
-   /outputs/Latent-EDM-LogSpectrogram
+   /outputs/Autoencoder-32x32x4-LogSpectrogram
+   /outputs/Latent-EDM-32x32x4-LogSpectrogram
 ```
 
 To create each file, follow the steps below.
@@ -102,7 +102,7 @@ This will create
 
 ```shell
 workdir/
-   /outputs/Autoencoder-32x96x4-LogSpectrogram
+   /outputs/Autoencoder-32x32x4-LogSpectrogram
    /outputs/Latent-EDM-LogSpectrogram
 ```
 
@@ -189,31 +189,19 @@ This command assumes the file `data/raw_waveforms.h5` is inside the specified `-
 
 ```bash
 torchrun \
-  --standalone \
   --nproc_per_node=4 \
   train_autoencoder.py \
-  --workdir experiments/workdir/stead \
-  --mask \
-  --maxlen 4064 \
-  --nlatent 4 \
-  --name latent-4
+  --workdir experiments/workdir/stead
 ```
 
 #### 5. Train the diffusion model
 
 ```bash
 torchrun \
-  --standalone \
   --nproc_per_node=4 \
   train_latent_edm.py \
   --workdir experiments/workdir/stead \
-  --mask \
-  --maxlen 4064 \
-  --nlatent 4 \
-  --modelchannels 128 \
-  --batchsize 128 \
-  --autoencodername latent-4 \
-  --name c128-b128-latent-4
+  --batchsize 128
 ```
 
 #### 6. Generate synthetic waveforms
@@ -222,15 +210,10 @@ torchrun \
 torchrun --nproc_per_node=1 generate_stead.py \
   --workdir experiments/workdir/stead \
   --outfile experiments/workdir/stead/gwm_stead_v1.h5 \
-  --edm_checkpoint experiments/workdir/stead/outputs/Latent-EDM-32x32x4-LogSpectrogram-c128-b128-latent-4/last.ckpt \
-  --autoencoder_checkpoint experiments/workdir/stead/outputs/Autoencoder-32x32x4-LogSpectrogram-latent-4/last.ckpt
+  --edm_checkpoint experiments/workdir/stead/outputs/Latent-EDM-32x32x4-LogSpectrogram/last.ckpt \
+  --autoencoder_checkpoint experiments/workdir/stead/outputs/Autoencoder-32x32x4-LogSpectrogram/last.ckpt
 ```
 
 #### 7. Visualize residuals
 
 Open and run **`Residual_plot_stead.ipynb`** to plot residuals for the generated waveforms.
-
----
-
-
-
