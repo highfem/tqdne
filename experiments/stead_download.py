@@ -11,6 +11,7 @@ local_path = "./stead"
 os.makedirs(local_path, exist_ok=True)
 
 # Initialize the Kaggle API
+# You need to register kaggle and do pip install kaggle. To get kaggle.json please follow: https://www.kaggle.com/docs/api
 api = KaggleApi()
 api.authenticate()  # Make sure you've set up ~/.kaggle/kaggle.json
 
