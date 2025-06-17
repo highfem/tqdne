@@ -71,14 +71,14 @@ class SamplePlot(Plot):
 
     def plot(self, pred, target, *args, **kwargs):
         time = np.arange(0, pred.shape[-1]) / self.fs
-        fig, axes = plt.subplots(figsize=(18, 6  * 5), nrows=5)
-        for i, ax in enumerate(axes):            
+        fig, axes = plt.subplots(figsize=(18, 6 * 5), nrows=5)
+        for i, ax in enumerate(axes):
             ax.plot(time, pred[i], "b", label="Predicted", alpha=0.7)
             if self.plot_target:
                 ax.plot(time, target[i], "orange", label="Target", alpha=0.7)
             ax.set_ylabel("Amplitude")
             ax.legend()
-        ax.set_xlabel("Time [s]")        
+        ax.set_xlabel("Time [s]")
         fig.tight_layout()
         plt.close()
         return fig
@@ -129,10 +129,16 @@ class AmplitudeSpectralDensity(Plot, ABC):
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(np.log(freq), pred_mean, "b", label="Predicted")
-        ax.fill_between(np.log(freq), pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
+        ax.fill_between(
+            np.log(freq), pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2
+        )
         ax.plot(np.log(freq), target_mean, "orange", label="Target")
         ax.fill_between(
-            np.log(freq), target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
+            np.log(freq),
+            target_mean - target_std,
+            target_mean + target_std,
+            color="orange",
+            alpha=0.2,
         )
         ax.set_xlabel("Log-Frequency [Hz]")
         ax.set_ylabel("Log-Amplitude $[m/s^2 \ Hz^{-1}]$")

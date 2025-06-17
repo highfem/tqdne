@@ -1,5 +1,5 @@
-import re
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -9,8 +9,6 @@ import torch as th
 from h5py import File
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import torch.distributed as dist
-
 
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.classifier import LithningClassifier
@@ -58,7 +56,9 @@ def predict(
     waveform_shape = batch["waveform"].shape[1:]
     classifier_embedding = classifier.embed(
         th.tensor(
-            classifier_config.representation.get_representation(batch["waveform"]), device=device, dtype=torch.float
+            classifier_config.representation.get_representation(batch["waveform"]),
+            device=device,
+            dtype=torch.float,
         )
     )
     classifier_embedding_shape = classifier_embedding.shape[1:]
@@ -68,7 +68,7 @@ def predict(
     outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)
     Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
     outfile = Path(workdir, "evaluation", outfile + f"-split_{split}-rank_{rank}.h5")
-    
+
     with File(outfile, "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
@@ -125,11 +125,13 @@ def predict(
             else:
                 target_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(batch["waveform"]),
-                    device=device, dtype=torch.float
+                    device=device,
+                    dtype=torch.float,
                 )
                 predicted_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(pred_waveform),
-                    device=device, dtype=torch.float
+                    device=device,
+                    dtype=torch.float,
                 )
 
             target_embedding = classifier.embed(target_classifier_input)

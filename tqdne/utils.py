@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 import torch
 import torch as th
 
+
 def get_device():
     """Get the available accelerator device."""
     if torch.cuda.is_available():
@@ -101,7 +102,9 @@ def get_last_checkpoint(dirpath):
 
 
 def mask_from_indexes(mask_idxs, x, fill_with=th.nan):
-    mask = th.arange(x.size(-1), device=x.device).expand(x.size(0), x.size(-1)) >= mask_idxs.unsqueeze(1)
+    mask = th.arange(x.size(-1), device=x.device).expand(
+        x.size(0), x.size(-1)
+    ) >= mask_idxs.unsqueeze(1)
     if x.ndim == 4:
         mask = mask[:, None, None, :]
     else:
@@ -113,9 +116,7 @@ def mask_from_indexes(mask_idxs, x, fill_with=th.nan):
 def get_latent_mask_indexes(mask, dim=2):
     if dim == 2:
         low = (((((mask - 8) / 2) - 8) / 2) - 3).type(torch.int32)
-        up = ((((low - 6) * 2) - 6) * 2)
+        up = (((low - 6) * 2) - 6) * 2
         return low, up
     else:
         raise ValueError("only have dim 2")
-
-

@@ -20,9 +20,9 @@ def fake_represent(representation, leng_signal):
 
 def run(args):
     config = LatentSpectrogramConfig(args.workdir)
-    config.representation.disable_multiprocessing() # needed for Pytorch Lightning
+    config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation)
-    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"    
+    name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)
     metrics = [
@@ -53,8 +53,6 @@ def run(args):
         decoder_config=decoder_config,
         optimizer_params=optimizer_params,
         kl_weight=config.kl_weight,
-        frequency_weights=weight,
-        mask=mask
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -90,7 +88,7 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
-    )        
+    )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=128
     )
@@ -99,7 +97,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
-    )    
+    )
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()

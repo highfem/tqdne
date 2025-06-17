@@ -138,9 +138,7 @@ class AttentionBlock(nn.Module):
 
     def _forward(self, x):
         b, _, *spatial = x.shape
-        qkv = self.qkv(
-            self.norm(x)
-        ).view(b, -1, np.prod(spatial))
+        qkv = self.qkv(self.norm(x)).view(b, -1, np.prod(spatial))
         h = self.attention(qkv.contiguous())
         h = h.view(b, -1, *spatial)
         h = self.proj_out(h)
@@ -181,7 +179,9 @@ class QKVAttention(nn.Module):
         )  # More stable with f16 than dividing afterwards
 
         if self.use_causal_mask:
-            causal_mask = th.tril(th.ones(length, length, device=weight.device)).unsqueeze(0)  # [1 x T x T]
+            causal_mask = th.tril(th.ones(length, length, device=weight.device)).unsqueeze(
+                0
+            )  # [1 x T x T]
             causal_mask = causal_mask.expand(weight.size(0), -1, -1)  # [B*H x T x T]
             weight = weight.masked_fill(causal_mask == 0, -th.inf)
 

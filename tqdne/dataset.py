@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import torch as th
 from h5py import File
@@ -71,11 +70,11 @@ class Dataset(th.utils.data.Dataset):
 
         valid_index = self.file["indices_valid_waveforms"][self.indices[index]]
         signal = self.representation.get_representation(waveform)
-       
+
         out = {
             "waveform": th.tensor(waveform, dtype=th.float32),
             "signal": th.tensor(signal, dtype=th.float32),
-            "valid_index": th.tensor(valid_index, dtype=th.int32)
+            "valid_index": th.tensor(valid_index, dtype=th.int32),
         }
 
         if self.use_conditioning:
@@ -92,7 +91,7 @@ class ClassificationDataset(Dataset):
         # labels = dist_bin * len(mag_bins) + mag_bin
         dist = self.file["hypocentral_distance"][:] * 1000
         mag = self.file["magnitude"][:]
-            
+
         self.labels = (
             (np.digitize(dist, dist_bins) - 1) * (len(mag_bins) - 1)
             + np.digitize(mag, mag_bins)

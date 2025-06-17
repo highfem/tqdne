@@ -23,7 +23,7 @@ def run(args):
     config = LatentSpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, config.t)
-    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"    
+    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -49,17 +49,18 @@ def run(args):
         "max_steps": 200 * len(train_loader),
     }
 
-    
-    checkpoint = config.outputdir / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram" / "last.ckpt"
+    checkpoint = (
+        config.outputdir
+        / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+        / "last.ckpt"
+    )
     logging.info(f"Loading autoencoder: {checkpoint}")
     autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
-    
+
     model = LightningEDM(
         get_2d_unet_config(config, config.latent_channels, config.latent_channels),
         optimizer_params,
         autoencoder=autoencoder,
-        frequency_weights=weight,
-        mask=mask
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -94,7 +95,7 @@ if __name__ == "__main__":
     root.setLevel(logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     root.addHandler(handler)
     import argparse
@@ -104,7 +105,7 @@ if __name__ == "__main__":
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
-    )       
+    )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256
     )
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
-    )        
+    )
     args = parser.parse_args()
     if args.workdir is None:
         parser.print_help()

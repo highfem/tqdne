@@ -1,10 +1,9 @@
 """Generate waveforms using the trained EDM model."""
 
 import argparse
-import sys
 from dataclasses import dataclass
-import config as conf
 
+import config as conf
 import h5py
 import numpy as np
 import pandas as pd
@@ -13,8 +12,8 @@ from tqdm import tqdm
 
 import tqdne
 from tqdne.autoencoder import LightningAutoencoder
-from tqdne.representation import LogSpectrogram
 from tqdne.edm import LightningEDM
+from tqdne.representation import LogSpectrogram
 from tqdne.utils import get_device
 
 
@@ -52,7 +51,6 @@ def generate(
     edm_checkpoint,
     autoencoder_checkpoint,
 ):
-
     if csv:
         print("using csv data")
         df = pd.read_csv(csv)
@@ -110,11 +108,11 @@ def generate(
     )
 
     # normalize features
-    hypocentral_distances_norm = ( np.array(hypocentral_distances) - ss[0,0]) / ss[0,1]
-    magnitudes_norm = (np.array(magnitudes) - ss[1,0]) / ss[1,1]
-    vs30s_norm = (np.array(vs30s) - ss[2,0]) / ss[2,1]
-    hypocentre_depths_norm = (np.array(hypocentre_depths) - ss[3,0]) / ss[3,1]
-    azimuthal_gaps_norm = (np.array(azimuthal_gaps) - ss[4,0]) / ss[4,1]
+    hypocentral_distances_norm = (np.array(hypocentral_distances) - ss[0, 0]) / ss[0, 1]
+    magnitudes_norm = (np.array(magnitudes) - ss[1, 0]) / ss[1, 1]
+    vs30s_norm = (np.array(vs30s) - ss[2, 0]) / ss[2, 1]
+    hypocentre_depths_norm = (np.array(hypocentre_depths) - ss[3, 0]) / ss[3, 1]
+    azimuthal_gaps_norm = (np.array(azimuthal_gaps) - ss[4, 0]) / ss[4, 1]
 
     cond = np.stack(
         [
@@ -144,14 +142,14 @@ def generate(
 
     print(f"Generating waveforms using {device}...")
     with h5py.File(outfile, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances)*1e3)
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances) * 1e3)
         f.create_dataset("magnitude", data=np.array(magnitudes))
         f.create_dataset("vs30s", data=np.array(vs30s))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
         f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
 
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
-        
+
         for i in tqdm(range(0, len(cond), batch_size)):
             cond_batch = cond[i : i + batch_size]
             shape = [len(cond_batch), 3, 128, 128]
@@ -160,7 +158,7 @@ def generate(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
-            #break
+            # break
 
     print("Done!")
 

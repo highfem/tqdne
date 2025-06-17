@@ -1,11 +1,9 @@
-import numpy as np
 import pytorch_lightning as pl
 import torch as th
 
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.nn import append_dims
 from tqdne.unet import UNetModel
-from tqdne.utils import get_latent_mask_indexes, mask_from_indexes
 
 
 class EDM:
@@ -88,8 +86,6 @@ class LightningEDM(pl.LightningModule):
         deterministic_sampling: bool = True,
         edm: EDM = EDM(),
         autoencoder: None | LightningAutoencoder = None,
-        frequency_weights=th.tensor(1),
-        mask=None
     ):
         super().__init__()
 
@@ -98,8 +94,8 @@ class LightningEDM(pl.LightningModule):
         self.num_sampling_steps = num_sampling_steps
         self.deterministic_sampling = deterministic_sampling
         self.edm = edm
-        self.autoencoder = autoencoder.eval() if autoencoder else None        
-        self.config = unet_config        
+        self.autoencoder = autoencoder.eval() if autoencoder else None
+        self.config = unet_config
         if self.autoencoder:
             for param in self.autoencoder.parameters():
                 param.requires_grad = False

@@ -13,7 +13,9 @@ import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
 from obspy.geodetics.base import gps2dist_azimuth
+
 np.random.seed(42)
+
 
 def make_stream(dataset):
     """
@@ -58,51 +60,52 @@ def make_stream(dataset):
     stream = obspy.Stream([tr_N, tr_E, tr_Z])
 
     return stream
-    
+
+
 def calculate_azimuthal_gap(hypocenter, station_coords):
     """
     Calculates the azimuthal gap of an earthquake.
-    
+
     The azimuthal gap is defined as the largest angular gap (in degrees)
     between any two consecutive station azimuths as seen from the hypocenter.
     This metric is often used in seismology to assess the station coverage quality.
-    
+
     Parameters:
         hypocenter: A tuple (latitude, longitude) in degrees for the earthquake.
         station_coords: A list of tuples [(lat, lon), ...] for each station in degrees.
-    
+
     Returns:
         The maximum azimuthal gap in degrees. If fewer than two stations are provided,
         the function returns None.
-    
+
     References:
         - Shearer, P. M. (2009). Introduction to Seismology. Cambridge University Press.
     """
     hypo_lat, hypo_lon = hypocenter
-    
+
     # Compute azimuths from the hypocenter to each station.
     azimuths = []
-    for (st_lat, st_lon) in station_coords:
+    for st_lat, st_lon in station_coords:
         azimuth = gps2dist_azimuth(hypo_lat, hypo_lon, st_lat, st_lon)
         azimuths.append(azimuth[1])
-    
+
     if len(azimuths) < 2:
         print("Not enough stations to calculate an azimuthal gap. Using azimuth only instead")
         return azimuth[1]
-    
+
     # Sort the azimuth angles in ascending order.
     azimuths.sort()
-    
+
     # Calculate gaps between successive azimuth angles.
     gaps = []
     for i in range(1, len(azimuths)):
         gap = azimuths[i] - azimuths[i - 1]
         gaps.append(gap)
-    
+
     # Add the gap between the last and the first angle (wrap-around gap)
     wrap_gap = 360 - (azimuths[-1] - azimuths[0])
     gaps.append(wrap_gap)
-    
+
     # The azimuthal gap is the maximum gap.
     max_gap = max(gaps)
     return max_gap
@@ -208,7 +211,7 @@ def create_h5_file(file_path, df, dtfl):
         trace_start_time_list.append(row["trace_start_time"])
         # vs30 could be real data or random for demonstration
         vs30_list.append(np.random.randint(400, 1501))
-        
+
         # azimuthal gap calculation
         stations = np.vstack((row["receiver_latitude"], row["receiver_longitude"])).T
         hypo = (row["source_latitude"], row["source_longitude"])
@@ -218,7 +221,7 @@ def create_h5_file(file_path, df, dtfl):
 
         print(f"Processed {iter}/{len(df)}: {trace_name} successfully.")
 
-    event_ID_arr = np.array(event_ID_list)
+    # event_ID_arr = np.array(event_ID_list)
     hypocentral_distance_arr = np.array(hypocentral_distance_list)
     hypocentre_depth_arr = np.array(hypocentre_depth_list)
     hypocentre_latitude_arr = np.array(hypocentre_latitude_list)
@@ -241,7 +244,13 @@ def create_h5_file(file_path, df, dtfl):
     # waveform_list is a list of (3, <=6000) arrays
     n_events = len(waveform_list)
     waveforms_arr = np.zeros((n_events, max_samples, 3), dtype=np.float32)
-    print(n_events, waveforms_arr.shape, len(waveform_list), len(waveform_list[0]), waveform_list[0].shape[1])
+    print(
+        n_events,
+        waveforms_arr.shape,
+        len(waveform_list),
+        len(waveform_list[0]),
+        waveform_list[0].shape[1],
+    )
     for i in range(n_events):
         n_samps = waveform_list[i].shape[0]
         waveforms_arr[i, :n_samps, :] = waveform_list[i]

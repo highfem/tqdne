@@ -1,9 +1,7 @@
-import numpy as np
 import pytorch_lightning as pl
 import torch as th
 
 from .blocks import Decoder, Encoder
-from .utils import mask_from_indexes, get_latent_mask_indexes
 
 
 class LightningAutoencoder(pl.LightningModule):
@@ -27,14 +25,12 @@ class LightningAutoencoder(pl.LightningModule):
         decoder_config: dict,
         optimizer_params: dict,
         kl_weight: float = 1e-6,
-        frequency_weights=th.tensor(1)        
     ):
         super().__init__()
         self.encoder = Encoder(**encoder_config)
         self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
-        self.frequency_weights = frequency_weights
-        self.kl_weight = kl_weight        
+        self.kl_weight = kl_weight
         self.config = encoder_config
         self.save_hyperparameters()
 
@@ -65,7 +61,7 @@ class LightningAutoencoder(pl.LightningModule):
         latent, mean, log_std = self._encode(x)
         x_recon = self.decode(latent)
 
-        recon_loss = th.mean(self.frequency_weights.to(x.device) * (x - x_recon) ** 2)
+        recon_loss = th.mean((x - x_recon) ** 2)
         kl_div = th.mean(self.kl_divergence(mean, log_std))
         loss = recon_loss + self.kl_weight * kl_div
         self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
@@ -94,7 +90,9 @@ class LightningAutoencoder(pl.LightningModule):
         return self.step(batch, stage="validation")
 
     def configure_optimizers(self):
-        optimizer = th.optim.AdamW(self.parameters(), lr=self.optimizer_params["learning_rate"], weight_decay=1e-4)
+        optimizer = th.optim.AdamW(
+            self.parameters(), lr=self.optimizer_params["learning_rate"], weight_decay=1e-4
+        )
         lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=self.optimizer_params["max_steps"],

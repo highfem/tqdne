@@ -1,9 +1,9 @@
-import torch as th
 import time
 import warnings
 
 import numpy as np
 import torch
+import torch as th
 import wandb
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
@@ -60,7 +60,7 @@ class LogCallback(Callback):
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
-        pred = np.concatenate(preds, axis=0)        
+        pred = np.concatenate(preds, axis=0)
         batch = {
             k: torch.cat([b[k] for b in batches], dim=0).numpy(force=True)
             for k in batches[0].keys()

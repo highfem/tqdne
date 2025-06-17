@@ -20,14 +20,14 @@ def run(args):
                 feature = f[key][mask]
                 f_new.create_dataset(key, data=feature)
                 features.append(feature)
-                     
-            val_indices = f["indices_valid_waveforms"][mask]            
+
+            val_indices = f["indices_valid_waveforms"][mask]
             f_new.create_dataset("indices_valid_waveforms", data=val_indices)
 
-            features = np.stack(features, axis=1)            
+            features = np.stack(features, axis=1)
             normalized_features = (features - features.mean(axis=0)) / features.std(axis=0)
             f_new.create_dataset("normalized_features", data=normalized_features)
-            
+
             _, t, channels = f["waveforms"].shape
             f_new.create_dataset("waveforms", (len(indices), channels, t))
             batch_size = 1000

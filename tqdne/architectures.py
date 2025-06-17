@@ -58,7 +58,9 @@ def get_2d_autoencoder_configs(config):
     return encoder_config, decoder_config
 
 
-def get_2d_unet_config(config, in_channels, out_channels, model_channels=128, use_causal_mask=False):
+def get_2d_unet_config(
+    config, in_channels, out_channels, model_channels=128, use_causal_mask=False
+):
     unet_config = {
         "in_channels": in_channels,
         "out_channels": out_channels,

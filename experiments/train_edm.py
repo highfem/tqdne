@@ -12,10 +12,10 @@ from tqdne.training import get_pl_trainer
 from tqdne.utils import get_device, get_last_checkpoint
 
 
-def run(args):    
+def run(args):
     config = SpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    name = f"EDM-128x128x4-LogSpectrogram"
+    name = "EDM-128x128x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -41,11 +41,11 @@ def run(args):
         "max_steps": optimizer_params["max_steps"],
     }
 
-    logging.info("Build lightning module...")    
+    logging.info("Build lightning module...")
     model = LightningEDM(
         get_2d_unet_config(config, config.channels, config.channels, args.modelchannels),
         optimizer_params,
-        mask=None
+        mask=None,
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
@@ -77,12 +77,13 @@ def run(args):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser("Train a 2D diffusion model")
     parser.add_argument(
         "--workdir",
         type=str,
         help="the working directory in which checkpoints and all output are saved to",
-    )        
+    )
     parser.add_argument(
         "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=64
     )

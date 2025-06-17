@@ -129,7 +129,7 @@ def generate(
         f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
 
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
-        
+
         for i in tqdm(range(0, len(cond), batch_size)):
             cond_batch = cond[i : i + batch_size]
             shape = [len(cond_batch), *signal_shape]
@@ -138,7 +138,7 @@ def generate(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
-            #break
+            # break
 
     print("Done!")
 

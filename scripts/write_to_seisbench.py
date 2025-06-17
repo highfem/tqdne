@@ -120,7 +120,12 @@ def get_event_params():
 
 # Function to create trace parameters
 def get_trace_params(
-    station, trace_start_time, vs30_value, hypocentral_distance_km, hypocentral_depth_km, azimuthal_gap_deg
+    station,
+    trace_start_time,
+    vs30_value,
+    hypocentral_distance_km,
+    hypocentral_depth_km,
+    azimuthal_gap_deg,
 ):
     trace_params = {
         "station_network_code": station["Network"],
