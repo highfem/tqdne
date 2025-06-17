@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytorch_lightning as pl
+import wandb
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
@@ -11,7 +12,6 @@ from tqdne.logging import LogCallback
 def get_pl_trainer(
     name,
     val_loader,
-    representation,
     config,
     metrics=None,
     plots=None,
@@ -23,7 +23,12 @@ def get_pl_trainer(
 ):
     # wandb logger
     if log_to_wandb:
-        wandb_logger = WandbLogger(project=config.project_name, name=name)
+        wandb_logger = WandbLogger(
+            project=config.project_name,
+            name=name,
+            resume="allow",
+            settings=wandb.Settings(init_timeout=300),
+        )
     else:
         wandb_logger = None
 
@@ -37,7 +42,7 @@ def get_pl_trainer(
         callbacks.append(
             LogCallback(
                 val_loader,
-                representation,
+                config.representation,
                 metrics,
                 plots,
                 limit_batches=limit_eval_batches,

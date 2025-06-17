@@ -1,16 +1,17 @@
 """Generate waveforms using the trained EDM model."""
 
 import argparse
-import sys
 from dataclasses import dataclass
 
+import config as conf
 import h5py
 import numpy as np
 import pandas as pd
 import torch as th
 from tqdm import tqdm
 
-from tqdne.autoencoder import LithningAutoencoder
+import tqdne
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.edm import LightningEDM
 from tqdne.representation import LogSpectrogram
 from tqdne.utils import get_device
@@ -20,9 +21,10 @@ from tqdne.utils import get_device
 class LatentSpectrogramConfig:
     features_keys: tuple[str] = (
         "hypocentral_distance",
-        "is_shallow_crustal",
         "magnitude",
         "vs30",
+        "hypocentre_depth",
+        "azimuthal_gap",
     )
     channels: int = 3
     fs: int = 100
@@ -37,37 +39,47 @@ class LatentSpectrogramConfig:
 @th.no_grad()
 def generate(
     hypocentral_distance,
-    is_shallow_crustal,
     magnitude,
     vs30,
+    hypocentre_depth,
+    azimuthal_gap,
     num_samples,
     csv,
-    output,
+    outfile,
+    config,
     batch_size,
     edm_checkpoint,
     autoencoder_checkpoint,
 ):
-    print("Prepare conditional features...")
-    if csv is not None:
-        print("Using CSV file as input (discarding other possible parameters)")
+    if csv:
+        print("using csv data")
         df = pd.read_csv(csv)
         df = df.loc[df.index.repeat(df.num_samples)]
         hypocentral_distances = df.hypocentral_distance.to_list()
-        is_shallow_crustals = df.is_shallow_crustal.to_list()
+        hypocentral_distances = np.array(hypocentral_distances) * 1e-3
         magnitudes = df.magnitude.to_list()
         vs30s = df.vs30.to_list()
-    elif (
-        hypocentral_distance is not None
-        and is_shallow_crustal is not None
-        and magnitude is not None
-        and vs30 is not None
-        and num_samples is not None
+        hypocentre_depths = df.hypocentre_depth.to_list()
+        azimuthal_gaps = df.azimuthal_gap.to_list()
+    elif np.all(
+        [
+            c is not None
+            for c in [
+                hypocentral_distance,
+                magnitude,
+                vs30,
+                hypocentre_depth,
+                magnitude,
+                num_samples,
+            ]
+        ]
     ):
-        print("Using command line parameters")
+        print("using command line input data")
         hypocentral_distances = [hypocentral_distance] * num_samples
-        is_shallow_crustals = [is_shallow_crustal] * num_samples
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
+        hypocentre_depths = [hypocentre_depth] * num_samples
+        azimuthal_gaps = [azimuthal_gap] * num_samples
     else:
         raise ValueError("Provide either a CSV or a full parameter set")
 
@@ -77,7 +89,7 @@ def generate(
     autoencoder = None
     if autoencoder_checkpoint is not None:
         autoencoder = (
-            LithningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
+            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
         )
     edm = (
         LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
@@ -87,29 +99,55 @@ def generate(
     # we need them to normalize the inputs
     ss = np.array(
         [
-            [1.15387660e02, 3.75770132e01],
-            [2.48447079e-01, 4.32112402e-01],
-            [5.09614190e00, 5.33373464e-01],
-            [3.56826229e02, 2.08365895e02],
+            [0.10196523161124325, 0.040784282611932066],
+            [4.730266447282116, 0.6278049031313433],
+            [371.9033679970052, 214.68149233229866],
+            [39.06279937237003, 22.487259252475628],
+            [129.88750553380498, 89.67082312013503],
         ]
     )
 
     # normalize features
     hypocentral_distances_norm = (np.array(hypocentral_distances) - ss[0, 0]) / ss[0, 1]
-    is_shallow_crustals_norm = (np.array(is_shallow_crustals) - ss[1, 0]) / ss[1, 1]
-    magnitudes_norm = (np.array(magnitudes) - ss[2, 0]) / ss[2, 1]
-    vs30s_norm = (np.array(vs30s) - ss[3, 0]) / ss[3, 1]
+    magnitudes_norm = (np.array(magnitudes) - ss[1, 0]) / ss[1, 1]
+    vs30s_norm = (np.array(vs30s) - ss[2, 0]) / ss[2, 1]
+    hypocentre_depths_norm = (np.array(hypocentre_depths) - ss[3, 0]) / ss[3, 1]
+    azimuthal_gaps_norm = (np.array(azimuthal_gaps) - ss[4, 0]) / ss[4, 1]
 
     cond = np.stack(
-        [hypocentral_distances_norm, is_shallow_crustals_norm, magnitudes_norm, vs30s_norm], axis=1
+        [
+            hypocentral_distances_norm,
+            magnitudes_norm,
+            vs30s_norm,
+            hypocentre_depths_norm,
+            azimuthal_gaps_norm,
+        ],
+        axis=1,
+    )
+
+    print("Loading models...")
+    device = get_device()
+    autoencoder = None
+    if autoencoder_checkpoint is not None:
+        autoencoder_checkpoint = Path(autoencoder_checkpoint)
+        autoencoder = (
+            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
+        )
+
+    th.serialization.add_safe_globals([tqdne.edm.EDM])
+    edm_checkpoint = Path(edm_checkpoint)
+    edm = (
+        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
     )
 
     print(f"Generating waveforms using {device}...")
-    with h5py.File(output, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
-        f.create_dataset("is_shallow_crustal", data=np.array(is_shallow_crustals))
+    with h5py.File(outfile, "w") as f:
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances) * 1e3)
         f.create_dataset("magnitude", data=np.array(magnitudes))
-        f.create_dataset("vs30", data=np.array(vs30s))
+        f.create_dataset("vs30s", data=np.array(vs30s))
+        f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))
+        f.create_dataset("azimuthal_gap", data=np.array(azimuthal_gaps))
+
         waveforms = f.create_dataset("waveforms", (len(cond), 3, config.t))
 
         for i in tqdm(range(0, len(cond), batch_size)):
@@ -120,54 +158,82 @@ def generate(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
+            # break
+
     print("Done!")
 
 
 if __name__ == "__main__":
-    desc = """Generate synthetic waveforms using the DWM.
+    desc = """Generate waveforms using the trained EDM model.
 
-Waveforms can be generated by specifying the arguments `hypocentral_distance`,
-`is_shallow_crustal`, `magnitude`, and `vs30`. Alternatively, samples can be
-generated by providing a CSV file of parameters in the following format:
+By default, the script generates a waveform for every sample in the test set of
+`preprocessed_waveforms.h5` dataset using the corresponding conditional features.
+Alternatively, a number of waveforms can be generated for a given set of conditioning
+variables values provided as arguments. The same can be done for a set of parameters
+given in a CSV file, where each line should have the following format:
 ```
-hypocentral_distance,is_shallow_crustal,magnitude,vs30,num_samples
+hypocentral_distance,magnitude,vs30,hypocentre_depth,azimuthal_gap,num_samples
 ```
-where `num_samples` is the number of samples to be generated for the given
-parameter set, `is_shallow_crustal` is a boolean flag (0 or 1), and the rest
-are floating-point values.
+where `num_samples` is the number of samples to generate for the given parameters.
+The generated waveforms along with the corresponding conditional features
+are saved in an HDF5 file with the given name in the outputs directory.
 """
-
     parser = argparse.ArgumentParser(
         description=desc, formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument("--hypocentral_distance", type=float, default=None)
-    parser.add_argument("--is_shallow_crustal", type=int, default=None)
     parser.add_argument("--magnitude", type=float, default=None)
     parser.add_argument("--vs30", type=float, default=None)
+    parser.add_argument("--hypocentre_depth", type=float, default=None)
+    parser.add_argument("--azimuthal_gap", type=float, default=None)
     parser.add_argument("--num_samples", type=int, default=None)
     parser.add_argument("--csv", type=str, default=None, help="csv file with args")
     parser.add_argument(
-        "--output", type=str, help="Output file name with generated waveforms", required=True
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all outputs are saved to (same as used during training)",
+    )
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        required=True,
+        help="Output file name with generated waveforms",
+    )
+    parser.add_argument(
+        "--edm_checkpoint",
+        type=str,
+        required=True,
+        help="EDM checkpoint",
+    )
+    parser.add_argument(
+        "--autoencoder_checkpoint",
+        type=str,
+        help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
+    )
+    parser.add_argument(
+        "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument("--edm_checkpoint", type=str, help="EDM checkpoint", required=True)
-    parser.add_argument(
-        "--autoencoder_checkpoint", type=str, help="Autoencoder checkpoint.", required=True
-    )
     args = parser.parse_args()
-    # check that either CSV or one of the params is given
-    if args.csv is None and args.vs30 is None:
-        parser.print_help()
-        sys.exit(0)
+
+    config = getattr(conf, args.config)(args.workdir)
+    if "latent" not in args.config.lower():
+        args.autoencoder_checkpoint = None
+    try:
+        config.representation.disable_multiprocessing()
+    except:
+        pass
 
     generate(
         args.hypocentral_distance,
-        args.is_shallow_crustal,
         args.magnitude,
         args.vs30,
+        args.hypocentre_depth,
+        args.azimuthal_gap,
         args.num_samples,
         args.csv,
-        args.output,
+        args.outfile,
+        config,
         args.batch_size,
         args.edm_checkpoint,
         args.autoencoder_checkpoint,

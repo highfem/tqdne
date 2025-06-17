@@ -69,16 +69,18 @@ class SamplePlot(Plot):
         self.plot_target = plot_target
         self.fs = fs
 
-    def plot(self, pred, target=None, *args, **kwargs):
+    def plot(self, pred, target, *args, **kwargs):
         time = np.arange(0, pred.shape[-1]) / self.fs
-        fig, ax = plt.subplots(figsize=(18, 6))
-        ax.plot(time, pred[0], "b", label="Predicted")
-        if self.plot_target:
-            ax.plot(time, target[0], "orange", label="Target")
+        fig, axes = plt.subplots(figsize=(18, 6 * 5), nrows=5)
+        for i, ax in enumerate(axes):
+            ax.plot(time, pred[i], "b", label="Predicted", alpha=0.7)
+            if self.plot_target:
+                ax.plot(time, target[i], "orange", label="Target", alpha=0.7)
+            ax.set_ylabel("Amplitude")
+            ax.legend()
         ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Amplitude")
-        ax.legend()
         fig.tight_layout()
+        plt.close()
         return fig
 
 
@@ -126,16 +128,23 @@ class AmplitudeSpectralDensity(Plot, ABC):
         # Plot
         freq = np.fft.rfftfreq(pred.shape[-1], d=1 / self.fs)
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(freq, pred_mean, "b", label="Predicted")
-        ax.fill_between(freq, pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2)
-        ax.plot(freq, target_mean, "orange", label="Target")
+        ax.plot(np.log(freq), pred_mean, "b", label="Predicted")
         ax.fill_between(
-            freq, target_mean - target_std, target_mean + target_std, color="orange", alpha=0.2
+            np.log(freq), pred_mean - pred_std, pred_mean + pred_std, color="b", alpha=0.2
         )
-        ax.set_xlabel("Frequency [Hz]")
+        ax.plot(np.log(freq), target_mean, "orange", label="Target")
+        ax.fill_between(
+            np.log(freq),
+            target_mean - target_std,
+            target_mean + target_std,
+            color="orange",
+            alpha=0.2,
+        )
+        ax.set_xlabel("Log-Frequency [Hz]")
         ax.set_ylabel("Log-Amplitude $[m/s^2 \ Hz^{-1}]$")
         ax.legend()
         fig.tight_layout()
+        plt.close()
         return fig
 
 

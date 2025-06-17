@@ -5,7 +5,7 @@
 
 > Generative modelling of seismic waveforms using denoising diffusion.
 >
-> ![Generative pipeline](figures/pipeline.jpg)
+> ![Generative pipeline](figures/figure1.png)
 
 ## About
 
@@ -14,38 +14,31 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
-To set up the environment and install dependencies:
+If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md). Otherwise, you can install `tqdne` like this:
 
-1. **Clone the repository:**
+1.
+   a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
 
-   ```bash
-   git clone --depth 1 https://github.com/highfem/tqdne.git
-   cd tqdne
-   ```
+   b) Alternatively, clone the repository using:
 
-   Omit `--depth 1` if you want to access the full commit history. Alternatively, download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commmit history.
+      ```bash
+      git clone (--depth 1) https://github.com/highfem/tqdne.git
+      ```
 
-2. **Create and activate a conda environment:**
+2.
+   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will us the versions of all dependencies that we are using for development, or you install using the `pip` installer which will install the latest versions of all dependencies.
 
-   ```bash
-   conda env create -f environment.yaml
-   conda activate tqdne
-   ```
+   a) **Recommended**: Install all dependencies and the package with [`uv`](https://github.com/astral-sh/uv), via
 
-   If conda is not installed, download it from [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+      ```bash
+      uv sync
+      ```
 
-3. (Optional) If you prefer to install the environment in a custom path, run:
+   b) Install using the `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
 
-   ```bash
-   conda env create -f environment.yaml -p <PATH>
-   conda activate <PATH>
-   ```
-
-   Replace `<PATH>` with your desired installation directory.
-
-## Weight files
-
-You can find the weight files for the neural networks on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
+      ```bash
+      pip install -e .
+      ```
 
 ## Experiments
 
@@ -54,6 +47,10 @@ To reproduce the experiments from the manuscript, including data preprocessing, 
 ## Sampling waveforms
 
 You can generate your own waveforms using the scripts in [scripts](./scripts). See the corresponding README files for more information.
+
+## Weight files
+
+You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
 
 ## Acknowledgements
 

@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 import torch as th
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.nn import append_dims
 from tqdne.unet import UNetModel
 
@@ -68,7 +68,7 @@ class LightningEDM(pl.LightningModule):
         Stochastic sampling can be more accurate but usually requires more (e.g. 256) steps.
     edm : EDM, optional
         The EDM model parameters.
-    autoencoder : None or LithningAutoencoder, optional
+    autoencoder : None or LightningAutoencoder, optional
         If provided, the autoencoder used to obtain the latent representations.
         The diffusion model will then generate these latent representations instead of the original signal [2].
 
@@ -85,7 +85,7 @@ class LightningEDM(pl.LightningModule):
         num_sampling_steps: int = 25,
         deterministic_sampling: bool = True,
         edm: EDM = EDM(),
-        autoencoder: None | LithningAutoencoder = None,
+        autoencoder: None | LightningAutoencoder = None,
     ):
         super().__init__()
 
@@ -95,6 +95,7 @@ class LightningEDM(pl.LightningModule):
         self.deterministic_sampling = deterministic_sampling
         self.edm = edm
         self.autoencoder = autoencoder.eval() if autoencoder else None
+        self.config = unet_config
         if self.autoencoder:
             for param in self.autoencoder.parameters():
                 param.requires_grad = False
@@ -130,16 +131,16 @@ class LightningEDM(pl.LightningModule):
         loss = (pred - sample) ** 2
         loss_weight = append_dims(self.edm.loss_weight(sigma), loss.dim())
 
-        return (loss * loss_weight).mean()
+        return th.mean(loss * loss_weight)
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
-        self.log("training/loss", loss.item())
+        self.log("training/loss", loss.item(), sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
-        self.log("validation/loss", loss.item())
+        self.log("validation/loss", loss.item(), sync_dist=True)
         return loss
 
     @th.no_grad()
@@ -239,7 +240,9 @@ class LightningEDM(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
         lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.optimizer_params["max_steps"]
+            optimizer,
+            T_max=self.optimizer_params["max_steps"],
+            eta_min=self.optimizer_params["eta_min"],
         )
 
         return {

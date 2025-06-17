@@ -4,7 +4,7 @@ import torch as th
 from .blocks import Decoder, Encoder
 
 
-class LithningAutoencoder(pl.LightningModule):
+class LightningAutoencoder(pl.LightningModule):
     """A PyTorch Lightning module for training an autoencoder.
 
     Parameters
@@ -31,6 +31,7 @@ class LithningAutoencoder(pl.LightningModule):
         self.decoder = Decoder(**decoder_config)
         self.optimizer_params = optimizer_params
         self.kl_weight = kl_weight
+        self.config = encoder_config
         self.save_hyperparameters()
 
     def _encode(self, x):
@@ -59,12 +60,13 @@ class LithningAutoencoder(pl.LightningModule):
         x = batch["signal"]
         latent, mean, log_std = self._encode(x)
         x_recon = self.decode(latent)
+
         recon_loss = th.mean((x - x_recon) ** 2)
-        kl_div = self.kl_divergence(mean, log_std).mean()
+        kl_div = th.mean(self.kl_divergence(mean, log_std))
         loss = recon_loss + self.kl_weight * kl_div
-        self.log(f"{stage}/reconstruction_loss", recon_loss.item())
-        self.log(f"{stage}/kl_divergence", kl_div.item())
-        self.log(f"{stage}/loss", loss.item())
+        self.log(f"{stage}/reconstruction_loss", recon_loss.item(), sync_dist=True)
+        self.log(f"{stage}/kl_divergence", kl_div.item(), sync_dist=True)
+        self.log(f"{stage}/loss", loss.item(), sync_dist=True)
 
         if "cond_signal" not in batch:
             return loss
@@ -88,9 +90,13 @@ class LithningAutoencoder(pl.LightningModule):
         return self.step(batch, stage="validation")
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
+        optimizer = th.optim.AdamW(
+            self.parameters(), lr=self.optimizer_params["learning_rate"], weight_decay=1e-4
+        )
         lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.optimizer_params["max_steps"]
+            optimizer,
+            T_max=self.optimizer_params["max_steps"],
+            eta_min=self.optimizer_params["eta_min"],
         )
 
         return {

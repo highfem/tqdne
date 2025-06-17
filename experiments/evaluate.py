@@ -1,12 +1,7 @@
-"""Evaluate the trained EDM model.
-
-This script generates waveforms using the same conditional features as the dataset.
-The generated waveforms are saved along with original waveforms, conditional features, and classifier outputs in an HDF5 file.
-The created file can be read by the corresponding notebook to compute metrics and create plots.
-"""
-
+import os
+import re
 import sys
-from argparse import ArgumentParser
+from pathlib import Path
 
 import config as conf
 import torch
@@ -15,7 +10,7 @@ from h5py import File
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from tqdne.autoencoder import LithningAutoencoder
+from tqdne.autoencoder import LightningAutoencoder
 from tqdne.classifier import LithningClassifier
 from tqdne.dataset import Dataset
 from tqdne.edm import LightningEDM
@@ -25,61 +20,34 @@ from tqdne.utils import get_device
 @torch.no_grad()
 def predict(
     split,
-    outputdir,
+    workdir,
+    num_devices,
+    num_workers,
+    batchsize,
     config,
     classifier_config,
-    batch_size,
     edm_checkpoint,
     classifier_checkpoint,
     autoencoder_checkpoint,
 ):
-    """Evaluate the trained EDM model.
-
-    Parameters
-    ----------
-    split : str
-        Dataset split (`train`, `test`, or `full`).
-    outputdir : str
-        Output directory for the evaluation results.
-    config : str
-        One of the configuration classes in `tqdne.config`.
-    classifier_config : str
-        One of the configuration classes in `tqdne.config`.
-    batch_size : int
-        Batch size used for the generation.
-    edm_checkpoint : str
-        Saved EDM model checkpoint. Relative to the output directory.
-    classifier_checkpoint : str
-        Saved classifier model checkpoint. Relative to the output directory.
-    autoencoder_checkpoint : str
-        Optional autoencoder model checkpoint. Needed for the Latent-EDM model. Relative to the output directory.
-    """
-
     print(f"Predicting {split} set...")
-
     dataset = Dataset(config.datapath, config.representation, cut=config.t, cond=True, split=split)
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=0)
+    loader = DataLoader(dataset, batch_size=batchsize, num_workers=num_workers)
 
-    print("Loading model...")
-
+    print("Loading models...")
     device = get_device()
     autoencoder = (
-        LithningAutoencoder.load_from_checkpoint(config.outputdir / autoencoder_checkpoint)
+        LightningAutoencoder.load_from_checkpoint(Path(autoencoder_checkpoint))
         if autoencoder_checkpoint is not None
         else None
     )
     edm = (
-        LightningEDM.load_from_checkpoint(
-            config.outputdir / edm_checkpoint, autoencoder=autoencoder
-        )
+        LightningEDM.load_from_checkpoint(Path(edm_checkpoint), autoencoder=autoencoder)
         .to(device)
         .eval()
     )
-
     classifier = (
-        LithningClassifier.load_from_checkpoint(config.outputdir / classifier_checkpoint)
-        .to(device)
-        .eval()
+        LithningClassifier.load_from_checkpoint(Path(classifier_checkpoint)).to(device).eval()
     )
 
     # generate a single batch to get the output size
@@ -88,15 +56,20 @@ def predict(
     waveform_shape = batch["waveform"].shape[1:]
     classifier_embedding = classifier.embed(
         th.tensor(
-            classifier_config.representation.get_representation(batch["waveform"]), device=device
+            classifier_config.representation.get_representation(batch["waveform"]),
+            device=device,
+            dtype=torch.float,
         )
     )
     classifier_embedding_shape = classifier_embedding.shape[1:]
     classifier_pred_shape = classifier.output_layer(classifier_embedding).shape[1:]
 
-    outputdir = config.outputdir / outputdir
-    outputdir.mkdir(exist_ok=True)
-    with File(outputdir / f"{split}.h5", "w") as f:
+    rank = os.environ["LOCAL_RANK"]
+    outfile = re.match(".*/(.*)/.+.ckpt", edm_checkpoint).group(1)
+    Path(workdir, "evaluation").mkdir(parents=True, exist_ok=True)
+    outfile = Path(workdir, "evaluation", outfile + f"-split_{split}-rank_{rank}.h5")
+
+    with File(outfile, "w") as f:
         for key in config.features_keys:
             f.create_dataset(key, data=dataset.get_feature(key))
 
@@ -130,9 +103,8 @@ def predict(
         )
 
         print(f"Generating waveforms using {device}...")
-
         for i, batch in enumerate(tqdm(loader, file=sys.stdout)):
-            start = i * batch_size
+            start = i * batchsize
             end = start + len(batch["signal"])
 
             # target
@@ -154,10 +126,12 @@ def predict(
                 target_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(batch["waveform"]),
                     device=device,
+                    dtype=torch.float,
                 )
                 predicted_classifier_input = th.tensor(
                     classifier_config.representation.get_representation(pred_waveform),
                     device=device,
+                    dtype=torch.float,
                 )
 
             target_embedding = classifier.embed(target_classifier_input)
@@ -175,13 +149,50 @@ def predict(
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument("--split", type=str, default="test", help="Dataset split (train or test)")
+    desc = """Evaluate the trained EDM model.
+
+This script generates waveforms using the same conditional features as the dataset.
+The generated waveforms are saved along with original waveforms, conditional features,
+and classifier outputs in an HDF5 file. The created file can be read by the corresponding
+notebook to compute metrics and create plots.
+"""
+    import argparse
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(description=desc, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
-        "--outputdir",
+        "--workdir",
         type=str,
-        default="evaluation",
-        help="Output subdirectory in the output directory",
+        help="the working directory in which checkpoints and all outputs are saved to (same as used during training)",
+    )
+    parser.add_argument(
+        "--split", type=str, default="test", help="Dataset split (full, train_validation, or test)"
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32
+    )
+    parser.add_argument(
+        "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=128
+    )
+    parser.add_argument(
+        "--edm_checkpoint",
+        type=str,
+        required=True,
+        help="EDM checkpoint",
+    )
+    parser.add_argument(
+        "--autoencoder_checkpoint",
+        type=str,
+        help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
+    )
+    parser.add_argument(
+        "--classifier_checkpoint",
+        type=str,
+        required=True,
+        help="Classifier checkpoint",
     )
     parser.add_argument(
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class for the EDM"
@@ -192,37 +203,29 @@ if __name__ == "__main__":
         default="SpectrogramClassificationConfig",
         help="Config class for the classifier",
     )
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument(
-        "--edm_checkpoint",
-        type=str,
-        default="Latent-EDM-LogSpectrogram/0_299-val_loss=1.18e+00.ckpt",
-        help="EDM checkpoint",
-    )
-    parser.add_argument(
-        "--classifier_checkpoint",
-        type=str,
-        default="Classifier-LogSpectrogram/0_21-val_loss=1.09e+00.ckpt",
-        help="Classifier checkpoint",
-    )
-    parser.add_argument(
-        "--autoencoder_checkpoint",
-        type=str,
-        default="Autoencoder-32x32x4-LogSpectrogram/0_199-val_loss=1.55e-03.ckpt",
-        help="Optional autoencoder checkpoint. Needed for Latent-EDM.",
-    )
     args = parser.parse_args()
     if "latent" not in args.config.lower():
         args.autoencoder_checkpoint = None
 
-    config = getattr(conf, args.config)()
-    classifier_config = getattr(conf, args.classifier_config)()
+    config = getattr(conf, args.config)(args.workdir)
+    try:
+        config.representation.disable_multiprocessing()
+    except:
+        pass
+    classifier_config = getattr(conf, args.classifier_config)(args.workdir)
+    try:
+        classifier_config.representation.disable_multiprocessing()
+    except:
+        pass
+
     predict(
         args.split,
-        args.outputdir,
+        args.workdir,
+        args.num_devices,
+        args.num_workers,
+        args.batchsize,
         config,
         classifier_config,
-        args.batch_size,
         args.edm_checkpoint,
         args.classifier_checkpoint,
         args.autoencoder_checkpoint,

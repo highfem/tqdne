@@ -1,106 +1,104 @@
 import logging
+import sys
 
 import torch
 from config import LatentMovingAverageEnvelopeConfig
-from torch.utils.data import DataLoader
 
 from tqdne import metric, plot
-from tqdne.autoencoder import LithningAutoencoder
-from tqdne.dataset import Dataset
+from tqdne.architectures import get_1d_unet_config
+from tqdne.autoencoder import LightningAutoencoder
+from tqdne.dataloader import get_train_and_val_loader
 from tqdne.edm import LightningEDM
 from tqdne.training import get_pl_trainer
-from tqdne.utils import get_last_checkpoint
+from tqdne.utils import get_device, get_last_checkpoint
 
-if __name__ == "__main__":
-    logging.info("Set parameters...")
 
-    name = "Latent-EDM-MovingAvg"
-    config = LatentMovingAverageEnvelopeConfig()
-    max_epochs = 300
-    batch_size = 1536
-    lr = 1e-4
-    ema_decay = 0.999
-    resume = True
+def run(args):
+    name = "Latent-EDM-MovingAvg-1024x16"
+    config = LatentMovingAverageEnvelopeConfig(args.workdir)
 
-    train_dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, cond=True, split="train"
+    train_loader, val_loader = get_train_and_val_loader(
+        config, args.num_workers, args.batchsize, cond=True
     )
-    test_dataset = Dataset(
-        config.datapath, config.representation, cut=config.t, cond=True, split="test"
-    )
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, num_workers=4, shuffle=True, drop_last=True
-    )
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=4)
-
-    # metrics
     metrics = [
         metric.AmplitudeSpectralDensity(fs=config.fs, channel=c, isotropic=True) for c in range(3)
     ]
-
-    # plots
     plots = [plot.SamplePlot(plot_target=False, fs=config.fs, channel=c) for c in range(3)] + [
         plot.AmplitudeSpectralDensity(fs=config.fs, channel=c) for c in range(3)
     ]
 
-    # Unet parameters
-    unet_config = {
-        "in_channels": config.latent_channels,
-        "out_channels": config.latent_channels,
-        "cond_features": len(config.features_keys),
-        "dims": 1,
-        "conv_kernel_size": 5,
-        "model_channels": 64,
-        "channel_mult": (1, 2, 4, 4),
-        "attention_resolutions": (8,),
-        "num_res_blocks": 2,
-        "num_heads": 4,
-        "dropout": 0.1,
-        "flash_attention": False,  # flash attention not tested (potentially faster)
+    optimizer_params = {
+        "learning_rate": 0.0001,
+        "max_steps": 300 * len(train_loader),
+        "eta_min": 0.0,
     }
-
-    max_steps = max_epochs * len(train_loader)
     trainer_params = {
         "precision": 32,
-        "max_steps": max_steps,
-        "accelerator": "auto",
-        "devices": "1",
+        "accelerator": get_device(),
+        "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "check_val_every_n_epoch": 5,
+        "max_steps": optimizer_params["max_steps"],
     }
-
-    optimizer_params = {"learning_rate": lr, "max_steps": max_steps}
 
     logging.info("Loading autoencoder...")
     checkpoint = config.outputdir / "Autoencoder-1024x16-MovingAvg" / "last.ckpt"
-    autoencoder = LithningAutoencoder.load_from_checkpoint(checkpoint)
+    autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
 
     logging.info("Build lightning module...")
-    model = LightningEDM(unet_config, optimizer_params, autoencoder=autoencoder)
+    model = LightningEDM(
+        get_1d_unet_config(config, config.latent_channels, config.latent_channels),
+        optimizer_params,
+        autoencoder=autoencoder,
+    )
 
     logging.info("Build Pytorch Lightning Trainer...")
     trainer = get_pl_trainer(
-        name,
-        test_loader,
-        config.representation,
-        metrics,
-        plots,
-        ema_decay=ema_decay,
-        eval_every=20,
-        limit_eval_batches=1,
+        name=name,
+        val_loader=val_loader,
+        config=config,
+        metrics=metrics,
+        plots=plots,
+        ema_decay=0.999,
+        eval_every=10,
+        limit_eval_batches=2,
         log_to_wandb=True,
         **trainer_params,
     )
 
     logging.info("Start training...")
     torch.set_float32_matmul_precision("high")
-    checkpoint = get_last_checkpoint(trainer.default_root_dir) if resume else None
+    checkpoint = get_last_checkpoint(trainer.default_root_dir)
     trainer.fit(
         model,
         train_dataloaders=train_loader,
-        val_dataloaders=test_loader,
+        val_dataloaders=val_loader,
         ckpt_path=checkpoint,
     )
 
     logging.info("Done!")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser("Train a 1D latent diffusion model")
+    parser.add_argument(
+        "--workdir",
+        type=str,
+        help="the working directory in which checkpoints and all output are saved to",
+    )
+    parser.add_argument(
+        "-b", "--batchsize", type=int, help="size of a batch of each gradient step", default=256
+    )
+    parser.add_argument(
+        "-w", "--num-workers", type=int, help="number of separate processes for file/io", default=32
+    )
+    parser.add_argument(
+        "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    args = parser.parse_args()
+    if args.workdir is None:
+        parser.print_help()
+        sys.exit(0)
+    run(args)

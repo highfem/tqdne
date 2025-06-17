@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 import torch
+import torch as th
 import wandb
 from pytorch_lightning.callbacks import Callback
 from torch import Tensor
@@ -53,6 +54,9 @@ class LogCallback(Callback):
                 k: v.to(pl_module.device) if isinstance(v, Tensor) else v for k, v in batch.items()
             }
             pred = pl_module.evaluate(batch)
+            if th.any(th.isnan(pred)):
+                warnings.warn("found nan in prediction, setting to zero")
+                pred = th.nan_to_num(pred)
             pred = self.representation.invert_representation(pred)
             preds.append(pred)
 
@@ -65,7 +69,7 @@ class LogCallback(Callback):
         # Log metrics
         for metric in self.metrics:
             result = metric(pred=pred, target=batch["waveform"])
-            pl_module.log(metric.name, result)
+            pl_module.log(metric.name, result, sync_dist=True)
 
         # Log plots
         for plot in self.plots:
@@ -79,9 +83,9 @@ class LogCallback(Callback):
                 trainer.logger.experiment.log(
                     {f"{plot.name} (Image)": wandb.Image(fig)}, step=pl_module.global_step
                 )
-                trainer.logger.experiment.log(
-                    {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
-                )
+                # trainer.logger.experiment.log(
+                #     {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
+                # )
             except Exception as e:
                 warnings.warn(f"Failed to log plot: {e}")
 

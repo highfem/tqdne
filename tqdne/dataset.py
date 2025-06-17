@@ -21,11 +21,11 @@ class Dataset(th.utils.data.Dataset):
         The split of the dataset. One of "train", "test", or "full".
     """
 
-    def __init__(self, datapath, representaion, cut=None, cond=False, split="train"):
+    def __init__(self, datapath, representation, cut=None, cond=False, split="train"):
         super().__init__()
-        self.representation = representaion
+        self.representation = representation
         self.cut = cut
-        self.cond = cond
+        self.use_conditioning = cond
 
         self.file = File(datapath, "r")
         self.waveforms = self.file["waveforms"]
@@ -35,15 +35,23 @@ class Dataset(th.utils.data.Dataset):
         indices = np.arange(len(self.waveforms))
         rng = np.random.default_rng(seed=42)
         shuffled_indices = rng.permutation(indices)
-        num_train_samples = int(len(indices) * 0.9)
+        num_train_samples = int(len(indices) * 0.85)
+        num_val_samples = int(len(indices) * 0.9)
         if split == "full":
             self.indices = indices
         elif split == "train":
             self.indices = shuffled_indices[:num_train_samples]
+        elif split == "validation":
+            self.indices = shuffled_indices[num_train_samples:num_val_samples]
+        elif split == "train_validation":
+            self.indices = shuffled_indices[:num_val_samples]
         elif split == "test":
-            self.indices = shuffled_indices[num_train_samples:]
+            self.indices = shuffled_indices[num_val_samples:]
         else:
             raise ValueError(f"Unknown split {split}")
+
+    def sorted_indices(self):
+        return np.sort(self.indices)
 
     def get_feature(self, key):
         return self.file[key][:][self.indices]
@@ -60,14 +68,16 @@ class Dataset(th.utils.data.Dataset):
         if self.cut:
             waveform = waveform[:, : self.cut]
 
+        valid_index = self.file["indices_valid_waveforms"][self.indices[index]]
         signal = self.representation.get_representation(waveform)
 
         out = {
             "waveform": th.tensor(waveform, dtype=th.float32),
             "signal": th.tensor(signal, dtype=th.float32),
+            "valid_index": th.tensor(valid_index, dtype=th.int32),
         }
 
-        if self.cond:
+        if self.use_conditioning:
             out["cond"] = th.tensor(self.cond[self.indices[index]], dtype=th.float32)
 
         return out
@@ -79,19 +89,21 @@ class ClassificationDataset(Dataset):
 
         # compute labels
         # labels = dist_bin * len(mag_bins) + mag_bin
-        dist = self.file["hypocentral_distance"]
-        mag = self.file["magnitude"]
+        dist = self.file["hypocentral_distance"][:] * 1000
+        mag = self.file["magnitude"][:]
+
         self.labels = (
             (np.digitize(dist, dist_bins) - 1) * (len(mag_bins) - 1)
             + np.digitize(mag, mag_bins)
             - 1
         )
+        self._split = split
+        self._num_classes = (len(mag_bins) - 1) * (len(dist_bins) - 1)
 
     def get_class_weights(self):
-        num_classes = len(np.unique(self.labels))
-        assert (self.labels.max() + 1) == num_classes
+        assert self._num_classes == len(np.unique(self.labels))
         return th.tensor(
-            [1 / (self.labels == l).sum() for l in range(num_classes)], dtype=th.float32
+            [1 / (self.labels == l).sum() for l in range(self._num_classes)], dtype=th.float32
         )
 
     def __getitem__(self, index):
