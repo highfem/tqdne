@@ -7,9 +7,35 @@ on:
     branches: [ main ]
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Run Ruff to auto-fix code
+        run: ruff format .
+      - name: Commit formatted code
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: autoformat code with black"
+          branch: ${{ github.head_ref }}
+
   precommit:
     name: Pre-commit checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: pre-commit/action@v3.0.0
+
+
