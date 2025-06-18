@@ -3519,7 +3519,7 @@ requires-dist = [
     { name = "librosa", specifier = ">=0.11.0" },
     { name = "obspy", specifier = ">=1.4.2" },
     { name = "pathos", specifier = ">=0.3.4" },
-    { name = "pytorch-lightning", specifier = "==2.5.1" },
+    { name = "pytorch-lightning", specifier = ">=2.5.1" },
     { name = "scikit-image", specifier = ">=0.25.2" },
     { name = "scikit-learn", specifier = ">=1.7.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
