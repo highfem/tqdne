@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tqdne"
-authors= [{name = "HighFEM team", email = "example@mail.com"}]
+authors= [{name = "HighFEM team", email = "kadek.palgunadi93@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
