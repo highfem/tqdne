@@ -23,7 +23,7 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
       - name: Run Ruff to auto-fix code
-        run: ruff format . --fix
+        run: ruff format .
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
