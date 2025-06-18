@@ -50,7 +50,21 @@ You can generate your own waveforms using the scripts in [scripts](./scripts). S
 
 ## Weight files
 
-You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/15687691), under the `weights` folder.
+You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
+
+## Contributing
+
+Contributions in the form of pull requests are more than welcome.
+
+In order to contribute:
+
+1) Clone `tqdne` and install `uv` from [here](https://docs.astral.sh/uv/).
+2) create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`,
+3) Install all dependencies using: `uv sync --all-extras`
+4) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pre-commit install`
+5) implement your contribution,
+6) run `uv run ruff check .` to check the code for issues,
+7) push your changes and submit a PR 🙂
 
 ## Acknowledgements
 
