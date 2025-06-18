@@ -1,0 +1,32 @@
+name: format
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [ main ]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Run Ruff to auto-fix code
+        run: ruff check . --fix
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: format code with Ruff" || echo "No changes to commit"
+          git push
