@@ -25,7 +25,7 @@ jobs:
       - name: Commit formatted code
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "style: autoformat code with ruff"          
+          commit_message: "style: autoformat code with ruff"
 
   precommit:
     name: Pre-commit checks
@@ -34,5 +34,3 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: pre-commit/action@v3.0.0
-
-

@@ -1,4 +1,4 @@
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 
 import numpy as np
 from openquake.hazardlib.contexts import ContextMaker
@@ -216,7 +216,6 @@ def compute_sa_mean(i, wf_NS, wf_EW, dt, periods, percentile):
 
 def parallel_processing_sa(wf_NS, wf_EW, dt, periods, percentile):
     indices = range(len(wf_NS[:, 0]))
-    num_workers = min(cpu_count(), len(indices))
     pool = Pool(processes=10)
 
     # Wrap indices with tqdm for progress tracking

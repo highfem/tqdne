@@ -241,43 +241,9 @@ def plot_seismic_waveforms(
 ):
     """
     Plot seismic waveforms in radial, tangential, and vertical components.
-
-    Parameters:
-    -----------
-    waveforms : numpy.ndarray
-        Array of shape [n, 3, n_samples] containing waveform data for n stations.
-        The 3 components are radial, tangential, and vertical respectively.
-    azimuthal_gap : float or list or numpy.ndarray, optional
-        Azimuthal gap values in degrees.
-    hypocentral_distance : float or list or numpy.ndarray, optional
-        Hypocentral distance values in km.
-    hypocentre_depth : float or list or numpy.ndarray, optional
-        Hypocentral depth values in km.
-    magnitude : float or list or numpy.ndarray, optional
-        Magnitude values.
-    vs30s : float or list or numpy.ndarray, optional
-        VS30 values in m/s.
-    time_vector : numpy.ndarray, optional
-        Time vector for x-axis. If None, will use sample indices.
-    station_names : list, optional
-        Names of stations for labeling plots.
-    figsize : tuple, optional
-        Figure size in inches. If None, automatically determined based on n_stations.
-    save_path : str, optional
-        Path to save the figure. If None, the figure is not saved.
-    normalize : bool, optional
-        Whether to normalize each waveform to its maximum absolute amplitude.
-
-    Returns:
-    --------
-    fig : matplotlib.figure.Figure
-        The figure object.
-    axes : numpy.ndarray
-        Array of axes objects.
     """
     # Get dimensions
     n_stations = waveforms.shape[0]
-    n_components = waveforms.shape[1]  # Should be 3
     n_samples = waveforms.shape[2]
 
     # Create time vector if not provided
@@ -293,49 +259,103 @@ def plot_seismic_waveforms(
         figsize = (12, max(4, 2.5 * n_stations))
 
     # Normalize waveforms if requested
-    if normalize:
-        # Find max amplitude for each station across all components
-        max_abs = np.max(np.abs(waveforms), axis=(1, 2), keepdims=True)
-        # Avoid division by zero
-        max_abs[max_abs == 0] = 1.0
-        waveforms_plot = waveforms / max_abs
-    else:
-        waveforms_plot = waveforms
+    waveforms_plot = _normalize_waveforms(waveforms) if normalize else waveforms
 
     # Function to check if a parameter is an array of correct length
     def is_station_array(param):
+        # Fix for Issue 2: UP038 Use `X | Y` in `isinstance` call instead of `(X, Y)`
         return (
-            param is not None and isinstance(param, (list, np.ndarray)) and len(param) == n_stations
+            param is not None and isinstance(param, list | np.ndarray) and len(param) == n_stations
         )
 
     # Check if parameters are per-station arrays
-    params_per_station = any(
-        is_station_array(p)
-        for p in [azimuthal_gap, hypocentral_distance, hypocentre_depth, magnitude, vs30s]
-        if p is not None
+    params_per_station = _check_params_per_station(
+        azimuthal_gap, hypocentral_distance, hypocentre_depth, magnitude, vs30s, is_station_array
     )
-
-    # Helper function to safely format values
-    def safe_format(value, format_str=".1f"):
-        try:
-            # Try to convert to float first
-            value_float = float(value)
-            return f"{value_float:{format_str}}"
-        except (ValueError, TypeError):
-            # If conversion fails, return as string
-            return str(value)
 
     # Component names
     components = ["Radial", "Tangential", "Vertical"]
 
     # Create figure and axes
-    fig, axes = plt.subplots(n_stations, 3, figsize=figsize, sharex=True)
+    fig, axes = _create_figure_axes(n_stations, figsize)
 
+    # Plot waveforms
+    _plot_waveform_data(
+        axes,
+        waveforms_plot,
+        time_vector,
+        n_stations,
+        components,
+        normalize,
+        station_names,
+        params_per_station,
+        azimuthal_gap,
+        hypocentral_distance,
+        hypocentre_depth,
+        magnitude,
+        vs30s,
+        is_station_array,
+    )
+
+    # Add x-label to bottom row
+    for j in range(3):
+        axes[-1, j].set_xlabel("Time")
+
+    plt.tight_layout()
+
+    # Save figure if a path is provided
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    return fig, axes
+
+
+def _normalize_waveforms(waveforms):
+    """Helper function to normalize waveforms"""
+    # Find max amplitude for each station across all components
+    max_abs = np.max(np.abs(waveforms), axis=(1, 2), keepdims=True)
+    # Avoid division by zero
+    max_abs[max_abs == 0] = 1.0
+    return waveforms / max_abs
+
+
+def _check_params_per_station(
+    azimuthal_gap, hypocentral_distance, hypocentre_depth, magnitude, vs30s, is_station_array
+):
+    """Helper function to check if parameters are per-station arrays"""
+    return any(
+        is_station_array(p)
+        for p in [azimuthal_gap, hypocentral_distance, hypocentre_depth, magnitude, vs30s]
+        if p is not None
+    )
+
+
+def _create_figure_axes(n_stations, figsize):
+    """Helper function to create figure and axes"""
+    fig, axes = plt.subplots(n_stations, 3, figsize=figsize, sharex=True)
     # If there's only one station, reshape axes for consistent indexing
     if n_stations == 1:
         axes = axes.reshape(1, 3)
+    return fig, axes
 
-    # Plot waveforms
+
+def _plot_waveform_data(
+    axes,
+    waveforms_plot,
+    time_vector,
+    n_stations,
+    components,
+    normalize,
+    station_names,
+    params_per_station,
+    azimuthal_gap,
+    hypocentral_distance,
+    hypocentre_depth,
+    magnitude,
+    vs30s,
+    is_station_array,
+):
+    """Helper function to plot waveform data"""
     for i in range(n_stations):
         for j in range(3):
             axes[i, j].plot(time_vector, waveforms_plot[i, j, :], "k-")
@@ -355,43 +375,17 @@ def plot_seismic_waveforms(
 
             # Add parameter text to the right of the third column
             if j == 2:
-                param_text = ""
+                param_text = _build_parameter_text(
+                    i,
+                    params_per_station,
+                    azimuthal_gap,
+                    hypocentral_distance,
+                    hypocentre_depth,
+                    magnitude,
+                    vs30s,
+                    is_station_array,
+                )
 
-                # Add parameters based on whether they're per-station or global
-                if params_per_station:
-                    # Per-station parameters
-                    if azimuthal_gap is not None and is_station_array(azimuthal_gap):
-                        param_text += f"Gap: {safe_format(azimuthal_gap[i])}°\n"
-
-                    if hypocentral_distance is not None and is_station_array(hypocentral_distance):
-                        param_text += f"Dist: {safe_format(hypocentral_distance[i])} km\n"
-
-                    if hypocentre_depth is not None and is_station_array(hypocentre_depth):
-                        param_text += f"Depth: {safe_format(hypocentre_depth[i])} km\n"
-
-                    if magnitude is not None and is_station_array(magnitude):
-                        param_text += f"Mag: {safe_format(magnitude[i])}\n"
-
-                    if vs30s is not None and is_station_array(vs30s):
-                        param_text += f"VS30: {safe_format(vs30s[i])} m/s"
-                else:
-                    # Global parameters (show on each station)
-                    if azimuthal_gap is not None:
-                        param_text += f"Gap: {safe_format(azimuthal_gap)}°\n"
-
-                    if hypocentral_distance is not None:
-                        param_text += f"Dist: {safe_format(hypocentral_distance)} km\n"
-
-                    if hypocentre_depth is not None:
-                        param_text += f"Depth: {safe_format(hypocentre_depth)} km\n"
-
-                    if magnitude is not None:
-                        param_text += f"Mag: {safe_format(magnitude)}\n"
-
-                    if vs30s is not None:
-                        param_text += f"VS30: {safe_format(vs30s)} m/s"
-
-                # Add the parameter text if we have any
                 if param_text:
                     axes[i, j].text(
                         1.05,
@@ -402,17 +396,54 @@ def plot_seismic_waveforms(
                         bbox=dict(boxstyle="round", facecolor="white", alpha=0.7),
                     )
 
-    # Add x-label to bottom row
-    for j in range(3):
-        axes[-1, j].set_xlabel("Time")
 
-    plt.tight_layout()
+def _build_parameter_text(
+    i,
+    params_per_station,
+    azimuthal_gap,
+    hypocentral_distance,
+    hypocentre_depth,
+    magnitude,
+    vs30s,
+    is_station_array,
+):
+    """Helper function to build parameter text"""
 
-    # Save figure if a path is provided
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    def safe_format(value, format_str=".1f"):
+        try:
+            value_float = float(value)
+            return f"{value_float:{format_str}}"
+        except (ValueError, TypeError):
+            return str(value)
 
-    return fig, axes
+    param_text = ""
+
+    if params_per_station:
+        # Per-station parameters
+        if azimuthal_gap is not None and is_station_array(azimuthal_gap):
+            param_text += f"Gap: {safe_format(azimuthal_gap[i])}°\n"
+        if hypocentral_distance is not None and is_station_array(hypocentral_distance):
+            param_text += f"Dist: {safe_format(hypocentral_distance[i])} km\n"
+        if hypocentre_depth is not None and is_station_array(hypocentre_depth):
+            param_text += f"Depth: {safe_format(hypocentre_depth[i])} km\n"
+        if magnitude is not None and is_station_array(magnitude):
+            param_text += f"Mag: {safe_format(magnitude[i])}\n"
+        if vs30s is not None and is_station_array(vs30s):
+            param_text += f"VS30: {safe_format(vs30s[i])} m/s"
+    else:
+        # Global parameters (show on each station)
+        if azimuthal_gap is not None:
+            param_text += f"Gap: {safe_format(azimuthal_gap)}°\n"
+        if hypocentral_distance is not None:
+            param_text += f"Dist: {safe_format(hypocentral_distance)} km\n"
+        if hypocentre_depth is not None:
+            param_text += f"Depth: {safe_format(hypocentre_depth)} km\n"
+        if magnitude is not None:
+            param_text += f"Mag: {safe_format(magnitude)}\n"
+        if vs30s is not None:
+            param_text += f"VS30: {safe_format(vs30s)} m/s"
+
+    return param_text
 
 
 class SeismicParameters:
@@ -772,7 +803,7 @@ def calculate_distance_binned_ratios(
     }
 
 
-def ratio_gmm_pgv(ave_magnitude, ave_vs30, depth):
+def ratio_gmm_pgv(ave_magnitude, ave_vs30, depths):
     mag = ave_magnitude
     if mag > 7.5 and mag < 8.0:
         rupture_aratio = 4
@@ -787,7 +818,7 @@ def ratio_gmm_pgv(ave_magnitude, ave_vs30, depth):
     rake = 110
     lon = 137.89
     lat = 36.69
-    depth = depth
+    depth = depths
     Vs30 = ave_vs30
     hypocenter = [lon, lat, depth]
     imts = ["PGV"]
@@ -800,7 +831,7 @@ def ratio_gmm_pgv(ave_magnitude, ave_vs30, depth):
     return gms, jb_distance
 
 
-def ratio_gmm_pga(ave_magnitude, ave_vs30, depth):
+def ratio_gmm_pga(ave_magnitude, ave_vs30, depths):
     mag = ave_magnitude
     if mag > 7.5 and mag < 8.0:
         rupture_aratio = 4
@@ -815,7 +846,7 @@ def ratio_gmm_pga(ave_magnitude, ave_vs30, depth):
     rake = 110
     lon = 137.89
     lat = 36.69
-    depth = depth
+    depth = depths
     Vs30 = ave_vs30
     hypocenter = [lon, lat, depth]
     imts = ["PGA"]

@@ -64,7 +64,7 @@ dataset_path = args.path_gwm
 files_path = h5py.File(dataset_path, "r", locking=False)
 hypocentral_distance = files_path["hypocentral_distance"][:]
 magnitude = files_path["magnitude"][:]
-vs30 = files_path["vs30"][:]
+vs30 = files_path["vs30s"][:]
 waveforms = files_path["waveforms"][:]
 hypocentral_depth = files_path["hypocentre_depth"][:]
 azimuthal_gap = files_path["azimuthal_gap"][:]
@@ -136,7 +136,7 @@ def get_trace_params(
         "station_vs30": vs30_value,
         "hypocentral_depth_km": hypocentral_depth_km,
         "hypocentral_distance_km": hypocentral_distance_km,
-        "azimuthal_gap_deg": azimuthal_gap_deh,
+        "azimuthal_gap_deg": azimuthal_gap_deg,
         "trace_channel": component_order,
         "trace_sampling_rate_hz": trace_sampling_rate,
         "trace_start_time": str(trace_start_time),
