@@ -27,11 +27,15 @@ dependencies = [
     "wandb>=0.20.1",
 ]
 
+[project.scripts]
+generate-waveforms = "tqdne.generate_waveforms:main"
+
 [tool.setuptools]
 packages = ["tqdne"]
 
 [tool.setuptools.dynamic]
 version = {attr = "tqdne.__init__.__version__"}
+
 
 [tool.bandit]
 skips = ["B101"]

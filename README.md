@@ -14,7 +14,16 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Installation
 
-If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md). Otherwise, you can install `tqdne` like this:
+If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md).
+If you are only interested in generating waveforms, install `tqdne` using
+
+```bash
+pip install git+https://github.com/highfem/tqdne@<RELEASE>
+```
+
+where `RELEASE` should be replaced with the latest release version to be found [here](https://github.com/highfem/tqdne/tags).
+
+You can also install `tqdne` by cloning the repository. Otherwise, you can install `tqdne` like this:
 
 1.
    a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
@@ -44,19 +53,18 @@ If you are interested in reproducing the results from the paper, please refer to
 
 To reproduce the experiments from the manuscript, including data preprocessing, training, and evaluation, navigate to the [experiments](./experiments) folder. Refer to the corresponding README files for step-by-step guidance.
 
-## Sampling waveforms
-
-You can generate your own waveforms using the scripts in [scripts](./scripts). See the corresponding README files for more information.
-
 ## Weight files
 
-You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/14017182), under the `weights` folder.
+You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/15687691), under the `weights` folder.
+
+## Sampling waveforms
+
+You can generate your own waveforms by installing `tqdne` and then calling `generate-waveforms` from the command line or using the scripts in [scripts](./scripts).
+See the corresponding README files for more information.
 
 ## Contributing
 
-Contributions in the form of pull requests are more than welcome.
-
-In order to contribute:
+Contributions in the form of pull requests are more than welcome. In order to contribute:
 
 1) Clone `tqdne` and install `uv` from [here](https://docs.astral.sh/uv/).
 2) create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`,
