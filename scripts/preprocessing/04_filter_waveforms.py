@@ -193,7 +193,7 @@ for idx in range(len(vs30)):
 
     else:
         # No picks found at all
-        default_trace_id = f"{st_3c[0].stats.network}." f"{st_3c[0].stats.station}."
+        default_trace_id = f"{st_3c[0].stats.network}.{st_3c[0].stats.station}."
         pn_trace_id.append(default_trace_id)
 
         pn_P.append("P")

@@ -165,12 +165,12 @@ for ii in range(len(dataset_path)):
                 label="Data",
             )
             ax.set_title(
-                f"V$_{{S30}}$: {vs30 - 50}-{vs30 + 50} m/s,  M{mags-0.1}-{mags+0.1}, T = {periods[period]}s, N$_{{obs}}$: {sa_mean_obs[:,period].shape[0]}",
+                f"V$_{{S30}}$: {vs30 - 50}-{vs30 + 50} m/s,  M{mags - 0.1}-{mags + 0.1}, T = {periods[period]}s, N$_{{obs}}$: {sa_mean_obs[:, period].shape[0]}",
                 fontsize=14,
             )
         else:
             ax.set_title(
-                f"V$_{{S30}}$: {vs30 - 50}-{vs30 + 50} m/s, M{mags-0.1}-{mags+0.1}, T = {periods[period]}s, N$_{{obs}}$: 0",
+                f"V$_{{S30}}$: {vs30 - 50}-{vs30 + 50} m/s, M{mags - 0.1}-{mags + 0.1}, T = {periods[period]}s, N$_{{obs}}$: 0",
                 fontsize=14,
             )
         ax.plot(dist_filt, sa_mean, "-", color="r", markersize=7, label="GWM-med.")

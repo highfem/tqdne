@@ -93,7 +93,7 @@ metadata = data_sample.metadata
 uniq_id = np.unique(metadata["source_id"])
 iter = 0
 for num_event in range(len(uniq_id)):
-    print(f"{num_event+1}/{len(uniq_id)}: Processing {uniq_id[num_event]}")
+    print(f"{num_event + 1}/{len(uniq_id)}: Processing {uniq_id[num_event]}")
     data_filter = metadata[metadata.source_id == uniq_id[num_event]]
     id_filt = data_filter["index"].values
     sta_lat = metadata.station_latitude_deg[id_filt]
@@ -251,7 +251,7 @@ for num_event in range(len(uniq_id)):
 
         else:
             # No picks found at all
-            default_trace_id = f"{stream_3c[0].stats.network}." f"{stream_3c[0].stats.station}."
+            default_trace_id = f"{stream_3c[0].stats.network}.{stream_3c[0].stats.station}."
             pn_trace_id.append(default_trace_id)
 
             pn_P.append("P")

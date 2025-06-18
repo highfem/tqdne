@@ -506,7 +506,7 @@ def evaluate_multi_channel_waveform(
 
     for i in range(n_channels):
         channel_data = waveform_data[:, i]
-        channel_name = f"Channel {i+1}"
+        channel_name = f"Channel {i + 1}"
         channel_results = evaluate_waveform_channel(
             channel_data,
             channel_name=channel_name,
@@ -562,7 +562,9 @@ def print_largest_last_oscillating_sample(waveform_data, plot=False):
             # Update the plot if enabled
             if plot:
                 plot_waveform_analysis(
-                    waveform_data[:, i], result, title=f"Channel {i+1} - Adjusted to Trailing Zeros"
+                    waveform_data[:, i],
+                    result,
+                    title=f"Channel {i + 1} - Adjusted to Trailing Zeros",
                 )
 
     # Find the largest last oscillating sample index among all channels
@@ -640,7 +642,9 @@ def print_largest_last_oscillating_sample(waveform_data, plot=False):
             # Update the plot if enabled
             if plot:
                 plot_waveform_analysis(
-                    waveform_data[:, i], result, title=f"Channel {i+1} - Adjusted to Trailing Zeros"
+                    waveform_data[:, i],
+                    result,
+                    title=f"Channel {i + 1} - Adjusted to Trailing Zeros",
                 )
 
         # Collect fault information

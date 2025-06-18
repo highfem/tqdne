@@ -286,7 +286,7 @@ def plot_seismic_waveforms(
 
     # Create station names if not provided
     if station_names is None:
-        station_names = [f"Station {i+1}" for i in range(n_stations)]
+        station_names = [f"Station {i + 1}" for i in range(n_stations)]
 
     # Set figsize based on number of stations if not specified
     if figsize is None:
