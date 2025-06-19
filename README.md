@@ -78,12 +78,12 @@ See the corresponding README files for more information.
 Contributions in the form of pull requests are more than welcome. In order to contribute:
 
 1) Clone `tqdne` and install `uv` from [here](https://docs.astral.sh/uv/).
-2) create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`,
-3) Install all dependencies using: `uv sync --all-extras`
-4) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pre-commit install`
-5) implement your contribution,
-6) run `uv run ruff check .` to check the code for issues,
-7) push your changes and submit a PR 🙂
+2) Create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`.
+3) Install all dependencies using: `uv sync --all-extras`.
+4) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pre-commit install`.
+5) Implement your contribution.
+6) Run `uv run ruff check .` to check the code for issues.
+7) Push your changes and submit a PR 🙂.
 
 ## Acknowledgements
 
