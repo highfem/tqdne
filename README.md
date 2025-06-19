@@ -9,12 +9,12 @@
 
 ## About
 
-This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
-It can be used to generate seismic waveforms, replicate the results from the manuscript, and for training custom models from scratch.
+This reposiory implements Generative Waveform Models (GMWs), i.e., generative models that can simulate synthetic seismis waveforms.
+In particular, the repository implements *HighFEM*, the GWM introduced in [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
+It can be used to generate seismic waveforms, replicate the results from the manuscript using the experimental code in [experiments](experiments), and for training custom GWMs from scratch.
 
-## Installation
+## Quick start
 
-If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md).
 If you are only interested in generating waveforms, install `tqdne` using
 
 ```bash
@@ -22,8 +22,19 @@ pip install git+https://github.com/highfem/tqdne@<RELEASE>
 ```
 
 where `RELEASE` should be replaced with the latest release version to be found [here](https://github.com/highfem/tqdne/tags).
+You should then be able to simulate waveforms by calling
 
-You can also install `tqdne` by cloning the repository. Otherwise, you can install `tqdne` like this:
+```bash
+generate-waveforms
+```
+
+from (Unix) the command line.
+
+## Installation
+
+If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md).
+
+You can install `tqdne` by cloning the repository. Otherwise, you can install `tqdne` like this:
 
 1.
    a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.

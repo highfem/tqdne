@@ -229,13 +229,13 @@ are saved in an HDF5 file with the given name in the outputs directory.
         "--edm_checkpoint",
         type=str,
         required=False,
-        help="EDM checkpoint. If not provided, will download from Zenodo.",
+        help="EDM checkpoint. If not provided, will automatically download from Zenodo.",
     )
     parser.add_argument(
         "--autoencoder_checkpoint",
         type=str,
         required=False,
-        help="Autoencoder checkpoint. If not provided, will download from Zenodo.",
+        help="Autoencoder checkpoint. If not provided, will automatically download from Zenodo.",
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per device.")
     args = parser.parse_args()
