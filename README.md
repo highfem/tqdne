@@ -28,7 +28,7 @@ You should then be able to simulate waveforms by calling
 generate-waveforms
 ```
 
-from (Unix) the command line.
+from the (Unix) command line.
 
 ## Installation
 
@@ -70,7 +70,7 @@ You can find the weight files for the trained generative waveform model (GWM) on
 
 ## Sampling waveforms
 
-You can generate your own waveforms by installing `tqdne` and then calling `generate-waveforms` from the command line or using the scripts in [scripts](./scripts).
+You can generate your own waveforms by using the scripts in [scripts](./scripts).
 See the corresponding README files for more information.
 
 ## Contributing
