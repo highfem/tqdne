@@ -15,7 +15,7 @@ It can be used to generate seismic waveforms, replicate the results from the man
 
 ## Quick start
 
-If you are only interested in generating waveforms, install `tqdne` using
+If you are only interested in generating synthetic waveforms, install `tqdne` using
 
 ```bash
 pip install git+https://github.com/highfem/tqdne@<RELEASE>
