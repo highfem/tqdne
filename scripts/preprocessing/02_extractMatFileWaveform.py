@@ -1,94 +1,215 @@
 """
-mat_reader.py
+hdf5_seisbench_processor.py
 
-A module to read nested variables from a .mat (MATLAB) file using scipy.io.loadmat.
+A module to read processed earthquake data from a single HDF5 file and create SeisBench datasets.
+Adapted from the original mat_reader.py to work with consolidated HDF5 files.
 """
 
-import glob
-from pathlib import Path
-
-import numpy as np
-import scipy.io
+import h5py
 import seisbench.data as sbd
 import seisbench.util as sbu
-from obspy import Stream, Trace, UTCDateTime
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import glob
+import subprocess
+import math
+from pathlib import Path
 from obspy.geodetics.base import gps2dist_azimuth
+from obspy import UTCDateTime, Stream, Trace
 
 
-class NestedMatReader:
+class HDF5EarthquakeReader:
     """
-    A reader class that loads a .mat file and provides methods to traverse
-    nested dictionaries or MATLAB structures (struct arrays).
+    A reader class that loads processed earthquake data from a single HDF5 file
+    and provides methods to access individual earthquake records.
     """
 
     def __init__(self, file_path):
         """
-        Initialize the reader by loading the .mat file.
+        Initialize the reader by opening the HDF5 file.
 
         Parameters:
         -----------
         file_path : str
-            Path to the .mat file to be read.
+            Path to the HDF5 file containing processed earthquake data.
         """
-        # struct_as_record=False and squeeze_me=True help in reading MATLAB
-        # struct arrays in a more Python-friendly way.
-        self.data = scipy.io.loadmat(file_path, struct_as_record=False, squeeze_me=True)
+        self.file_path = file_path
+        self.h5f = None
+        self._open_file()
 
-    def get_nested_value(self, data_structure, keys):
+    def _open_file(self):
+        """Open the HDF5 file."""
+        try:
+            self.h5f = h5py.File(self.file_path, "r")
+        except Exception as e:
+            raise IOError(f"Cannot open HDF5 file {self.file_path}: {e}")
+
+    def close(self):
+        """Close the HDF5 file."""
+        if self.h5f:
+            self.h5f.close()
+            self.h5f = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def get_earthquake_groups(self):
         """
-        Recursively retrieve a value from a nested dictionary or MATLAB struct.
+        Get list of earthquake group names in the HDF5 file.
+
+        Returns:
+        --------
+        list: List of earthquake group names
+        """
+        if not self.h5f:
+            self._open_file()
+
+        return [key for key in self.h5f.keys() if key.startswith("earthquake_")]
+
+    def read_dataset_safe(self, dataset):
+        """
+        Safely read a dataset, handling different data types.
 
         Parameters:
         -----------
-        data_structure : dict or MATLAB struct-like object
-            The root structure from which we want to retrieve nested values.
-        keys : list of str
-            A list of keys/attribute names to traverse the structure. For
-            example, ['my_struct', 'my_field'] would look inside data_structure
-            for 'my_struct', then inside that result for 'my_field'.
+        dataset : h5py.Dataset
+            The HDF5 dataset to read
 
         Returns:
         --------
-        any
-            The value found at the nested location.
-
-        Raises:
-        -------
-        KeyError
-            If the key does not exist in the structure.
+        The dataset value with appropriate type conversion
         """
-        if not keys:
-            # If no more keys, return the current structure
-            return data_structure
+        data = dataset[()]
 
-        key = keys[0]
+        if isinstance(data, bytes):
+            return data.decode()
+        elif hasattr(data, "dtype") and data.dtype.kind in ["U", "S"]:
+            if data.size == 1:
+                return str(data.item())
+            else:
+                return [str(item) for item in data]
+        else:
+            return data
 
-        # If data_structure is a dictionary
-        if isinstance(data_structure, dict):
-            if key not in data_structure:
-                raise KeyError(
-                    f"Key '{key}' not found in dictionary: {list(data_structure.keys())}"
-                )
-            return self.get_nested_value(data_structure[key], keys[1:])
-
-        # Otherwise, assume data_structure is a MATLAB struct-like object
-        # (accessed as attributes, not dictionary keys).
-        if not hasattr(data_structure, key):
-            raise KeyError(f"Attribute '{key}' not found in struct: {dir(data_structure)}")
-        return self.get_nested_value(getattr(data_structure, key), keys[1:])
-
-    def get_root_keys(self):
+    def get_earthquake_data(self, eq_group_name):
         """
-        Return the top-level keys of the loaded .mat file.
+        Read complete earthquake data for a specific earthquake group.
+
+        Parameters:
+        -----------
+        eq_group_name : str
+            Name of the earthquake group
 
         Returns:
         --------
-        list
-            A list of top-level variable names in the MATLAB file.
+        dict: Dictionary containing all earthquake data
         """
-        # MATLAB .mat files often contain '__header__', '__version__', etc.
-        # We typically filter those out. You can customize this as needed.
-        return [key for key in self.data.keys() if not key.startswith("__")]
+        if not self.h5f:
+            self._open_file()
+
+        if eq_group_name not in self.h5f:
+            raise KeyError(f"Earthquake group '{eq_group_name}' not found in HDF5 file")
+
+        eq_group = self.h5f[eq_group_name]
+
+        # Create a structured object to mimic the original MATLAB struct access pattern
+        class EarthquakeData:
+            def __init__(self, group):
+                self.group = group
+
+                # Read basic earthquake info
+                if "name" in group:
+                    self.name = self._read_safe(group["name"])
+                else:
+                    self.name = eq_group_name
+
+                # Read GAN data
+                self.gan = self._read_gan_data(group.get("gan", {}))
+
+                # Read recs data
+                self.recs = self._read_recs_data(group.get("recs", {}))
+
+            def _read_safe(self, dataset):
+                """Safely read dataset with type conversion."""
+                data = dataset[()]
+                if isinstance(data, bytes):
+                    return data.decode()
+                elif hasattr(data, "dtype") and data.dtype.kind in ["U", "S"]:
+                    if data.size == 1:
+                        return str(data.item())
+                    else:
+                        return [str(item) for item in data]
+                else:
+                    return data
+
+            def _read_gan_data(self, gan_group):
+                """Read GAN data structure."""
+
+                class GANData:
+                    pass
+
+                gan_data = GANData()
+
+                if not gan_group:
+                    return gan_data
+
+                # Read all GAN fields
+                for key in gan_group.keys():
+                    value = self._read_safe(gan_group[key])
+                    setattr(gan_data, key, value)
+
+                return gan_data
+
+            def _read_recs_data(self, recs_group):
+                """Read recs data structure."""
+
+                class RecsData:
+                    pass
+
+                recs_data = RecsData()
+
+                if not recs_group:
+                    return recs_data
+
+                # Read all recs fields
+                for key in recs_group.keys():
+                    value = self._read_safe(recs_group[key])
+                    setattr(recs_data, key, value)
+
+                return recs_data
+
+        return EarthquakeData(eq_group)
+
+    def get_processing_parameters(self):
+        """
+        Get the processing parameters from the HDF5 file.
+
+        Returns:
+        --------
+        dict: Processing parameters used during earthquake processing
+        """
+        if not self.h5f:
+            self._open_file()
+
+        if "processing_parameters" in self.h5f:
+            params_group = self.h5f["processing_parameters"]
+
+            def read_group_recursive(group):
+                result = {}
+                for key in group.keys():
+                    if isinstance(group[key], h5py.Group):
+                        result[key] = read_group_recursive(group[key])
+                    else:
+                        result[key] = self.read_dataset_safe(group[key])
+                return result
+
+            return read_group_recursive(params_group)
+
+        return {}
 
 
 def calculate_azimuthal_gap(hypocenter, station_coords):
@@ -120,7 +241,7 @@ def calculate_azimuthal_gap(hypocenter, station_coords):
 
     if len(azimuths) < 2:
         print("Not enough stations to calculate an azimuthal gap. Using azimuth only instead")
-        return azimuth[1]
+        return azimuth[1] if azimuths else 0
 
     # Sort the azimuth angles in ascending order.
     azimuths.sort()
@@ -252,165 +373,229 @@ def spectral_gap_fill(signal, fs, num_iters=100, tol=1e-4):
 
 
 if __name__ == "__main__":
-    # Example usage (replace 'example.mat' with your file)
+    # Configuration
+    hdf5_file_path = "/scratch/kpalgunadi/data/general/japan/bosai22/dl20220725/arx20220730/proj/wfGAN_python_hdf5/out/wfGAN_python_hdf5_processed_earthquakes.h5"
 
     result = []
 
-    data = glob.glob(
-        "/scratch/kpalgunadi/data/general/japan/bosai22/dl20220725/arx20220730/proj/wfGAN_python/out/*.mat"
-    )
-    data = np.sort(data)
-    for file in data:
-        print(f"Processing {file}")
-        reader = NestedMatReader(file)
+    print(f"Processing HDF5 file: {hdf5_file_path}")
 
-        eqs = reader.data["eq"]
-        date_time_str = eqs.gan.t0
-        # date_str, time_str = date_time_str.split(' ')
-        # date_format = '%d-%b-%Y'
-        # date_obj = datetime.strptime(date_str, date_format)
-        # formatted_str = date_obj.strftime('%Y-%m-%d') + 'T' + time_str
-        t0 = UTCDateTime(date_time_str)
-        vs30 = eqs.gan.vs30
-        snr = eqs.gan.snr
-        rhyp = eqs.gan.rhyp
-        mag = eqs.gan.mag
-        source_lat = eqs.gan.lat
-        source_lon = eqs.gan.lon
-        source_dep = eqs.gan.dep
-        sta_network = eqs.gan.sta_network
-        sta_name = eqs.gan.sta_name
-        sta_lat = eqs.gan.sta_lat
-        sta_lon = eqs.gan.sta_lon
-        sta_alt = eqs.gan.sta_alt
-        is_shallow_crustal = eqs.gan.is_shallow_crustal
-        source_strike = eqs.gan.strike
-        source_dip = eqs.gan.dip
-        source_rake = eqs.gan.rake
-        wfMat = eqs.gan.wfMat
-        channel = ["N", "E", "Z"]
-        z_filenames = eqs.recs.z_filenames
-        n_filenames = eqs.recs.n_filenames
-        e_filenames = eqs.recs.e_filenames
+    with HDF5EarthquakeReader(hdf5_file_path) as reader:
+        # Get all earthquake groups
+        earthquake_groups = reader.get_earthquake_groups()
+        earthquake_groups.sort()  # Process in order
 
-        try:
-            size_sta = len(sta_lat)
-        except:
-            print("Number of station is only 1")
-            continue
+        print(f"Found {len(earthquake_groups)} earthquakes in HDF5 file")
 
-        hypo = (source_lat[0], source_lon[0])
-        stations = np.vstack((sta_lat, sta_lon)).T
-        azi_gap = calculate_azimuthal_gap(hypo, stations)
+        for eq_group_name in earthquake_groups:
+            print(f"Processing {eq_group_name}")
 
-        st = Stream()
-        for j in range(size_sta):
-            trace = wfMat[:, j, :]
-            num_valid_N = np.sum(~np.isnan(trace[:, 0]))
-            num_missing_N = np.sum(np.isnan(trace[:, 0]))
-            num_valid_E = np.sum(~np.isnan(trace[:, 1]))
-            num_missing_E = np.sum(np.isnan(trace[:, 1]))
-            num_valid_Z = np.sum(~np.isnan(trace[:, 2]))
-            num_missing_Z = np.sum(np.isnan(trace[:, 2]))
+            try:
+                eqs = reader.get_earthquake_data(eq_group_name)
 
-            if num_missing_N > 0:
-                if num_valid_N > num_missing_N:
-                    trace[:, 0] = spectral_gap_fill(trace[:, 0], 100, num_iters=100, tol=1e-5)
-                if num_valid_E > num_missing_E:
-                    trace[:, 1] = spectral_gap_fill(trace[:, 1], 100, num_iters=100, tol=1e-5)
-                if num_valid_Z > num_missing_Z:
-                    trace[:, 2] = spectral_gap_fill(trace[:, 2], 100, num_iters=100, tol=1e-5)
-                if (
-                    (num_valid_N > num_missing_N)
-                    and (num_valid_E > num_missing_E)
-                    and (num_valid_Z > num_missing_Z)
-                ):
+                # Extract earthquake data (same structure as original)
+                date_time_str = eqs.gan.t0
+                t0 = UTCDateTime(date_time_str)
+                vs30 = eqs.gan.vs30
+                snr = eqs.gan.snr
+                rhyp = eqs.gan.rhyp
+                mag = eqs.gan.mag
+                source_lat = eqs.gan.lat
+                source_lon = eqs.gan.lon
+                source_dep = eqs.gan.dep
+                sta_network = eqs.gan.sta_network
+                sta_name = eqs.gan.sta_name
+                sta_lat = eqs.gan.sta_lat
+                sta_lon = eqs.gan.sta_lon
+                sta_alt = eqs.gan.sta_alt
+                is_shallow_crustal = eqs.gan.is_shallow_crustal
+                source_strike = eqs.gan.strike
+                source_dip = eqs.gan.dip
+                source_rake = eqs.gan.rake
+                wfMat = eqs.gan.wfMat
+                channel = ["N", "E", "Z"]
+                z_filenames = eqs.recs.z_filenames
+                n_filenames = eqs.recs.n_filenames
+                e_filenames = eqs.recs.e_filenames
+
+                try:
+                    size_sta = len(sta_lat)
+                except:
+                    print("Number of station is only 1")
                     continue
 
-            trN = Trace(trace[0, :])
-            trE = Trace(trace[1, :])
-            trZ = Trace(trace[2, :])
+                # Handle scalar values that should be arrays
+                if np.isscalar(source_lat):
+                    source_lat = np.array([source_lat])
+                    source_lon = np.array([source_lon])
+                if np.isscalar(sta_lat):
+                    sta_lat = np.array([sta_lat])
+                    sta_lon = np.array([sta_lon])
+                    size_sta = 1
 
-            trN.stats.sampling_rate = 1 / 0.01
-            trN.stats.delta = 0.01
-            trN.stats.starttime = t0
-            trN.stats.network = sta_network[j]
-            trN.stats.station = sta_name[j]
-            trN.stats.channel = "HHN"
-            st += trN
+                hypo = (source_lat[0], source_lon[0])
+                stations = np.vstack((sta_lat, sta_lon)).T
+                azi_gap = calculate_azimuthal_gap(hypo, stations)
 
-            trE.stats.sampling_rate = 1 / 0.01
-            trE.stats.delta = 0.01
-            trE.stats.starttime = t0
-            trE.stats.network = sta_network[j]
-            trE.stats.station = sta_name[j]
-            trE.stats.channel = "HHE"
-            st += trE
+                st = Stream()
+                for j in range(size_sta):
+                    # Handle wfMat shape - it should be [3, n_stations, n_samples] -> [n_samples, n_stations, 3]
+                    if wfMat.ndim == 3:
+                        if wfMat.shape[0] == 3:  # [3, n_stations, n_samples]
+                            trace = wfMat[:, j, :].T  # [n_samples, 3]
+                        else:  # [n_samples, n_stations, 3]
+                            trace = wfMat[:, j, :]
+                    else:
+                        print(f"Unexpected wfMat shape: {wfMat.shape}")
+                        continue
 
-            trZ.stats.sampling_rate = 1 / 0.01
-            trZ.stats.delta = 0.01
-            trZ.stats.starttime = t0
-            trZ.stats.network = sta_network[j]
-            trZ.stats.station = sta_name[j]
-            trZ.stats.channel = "HHZ"
-            st += trZ
+                    num_valid_N = np.sum(~np.isnan(trace[:, 0]))
+                    num_missing_N = np.sum(np.isnan(trace[:, 0]))
+                    num_valid_E = np.sum(~np.isnan(trace[:, 1]))
+                    num_missing_E = np.sum(np.isnan(trace[:, 1]))
+                    num_valid_Z = np.sum(~np.isnan(trace[:, 2]))
+                    num_missing_Z = np.sum(np.isnan(trace[:, 2]))
 
-            baz = gps2dist_azimuth(source_lat[j], source_lon[j], sta_lat[j], sta_lon[j])
-            theo_azi = np.round(baz[1], 2)
-            theo_back_azi = np.round(baz[2], 2)
+                    # Gap filling for missing data
+                    if num_missing_N > 0:
+                        if num_valid_N > num_missing_N:
+                            trace[:, 0] = spectral_gap_fill(
+                                trace[:, 0], 100, num_iters=100, tol=1e-5
+                            )
+                    if num_missing_E > 0:
+                        if num_valid_E > num_missing_E:
+                            trace[:, 1] = spectral_gap_fill(
+                                trace[:, 1], 100, num_iters=100, tol=1e-5
+                            )
+                    if num_missing_Z > 0:
+                        if num_valid_Z > num_missing_Z:
+                            trace[:, 2] = spectral_gap_fill(
+                                trace[:, 2], 100, num_iters=100, tol=1e-5
+                            )
 
-            trace_params = {
-                "trace_name": f"{eqs.name}_{str(t0)}_{sta_network[j]}_{sta_name[j]}",
-                "trace_id_z": z_filenames[j],
-                "trace_id_n": n_filenames[j],
-                "trace_id_e": e_filenames[j],
-                "trace_start_time": t0,
-                "trace_sampling_rate_hz": 100,
-                "trace_npts": len(trace[:, 0]),
-                "station_longitude_deg": sta_lon[
-                    j
-                ],  # add this just for niceness of plot w/ seisbench
-                "station_latitude_deg": sta_lat[j],
-                "station_network_code": sta_network[j],
-                "station_code": sta_name[j],
-                "trace_channel": "NEZ",
-                "path_ep_distance_km": rhyp[j],
-                "azimuth": theo_azi,
-                "back_azimuth": theo_back_azi,
-                "vs30": vs30[j],
-            }
+                    # Skip if all components have too much missing data
+                    if (
+                        (num_valid_N <= num_missing_N)
+                        and (num_valid_E <= num_missing_E)
+                        and (num_valid_Z <= num_missing_Z)
+                    ):
+                        continue
 
-            event_params = {
-                "source_id": f"{eqs.name}_{str(t0)}",
-                "source_magnitude": mag[j],
-                "source_magnitude_type": "moment_magnitude",
-                "source_type": "global CMT",
-                "source_latitude_deg": source_lat[j],
-                "source_longitude_deg": source_lon[j],
-                "source_depth_m": source_dep[j] * 1000.0,
-                "source_origin_time": t0,
-                "source_strike": source_strike[j],
-                "source_dip": source_dip[j],
-                "source_rake": source_rake[j],
-                "azimuthal_gap": azi_gap,
-            }
+                    # Create ObsPy traces (note: wfMat order is N, E, Z)
+                    trN = Trace(trace[:, 0])
+                    trE = Trace(trace[:, 1])
+                    trZ = Trace(trace[:, 2])
 
-            data_obs = sbu.stream_to_array(st, component_order="NEZ")[1]
+                    # Set trace statistics
+                    for tr, comp in zip([trN, trE, trZ], ["HHN", "HHE", "HHZ"]):
+                        tr.stats.sampling_rate = 1 / 0.01
+                        tr.stats.delta = 0.01
+                        tr.stats.starttime = t0
+                        tr.stats.network = (
+                            sta_network[j]
+                            if hasattr(sta_network[j], "__len__")
+                            else str(sta_network[j])
+                        )
+                        tr.stats.station = (
+                            sta_name[j] if hasattr(sta_name[j], "__len__") else str(sta_name[j])
+                        )
+                        tr.stats.channel = comp
+                        st += tr
 
-            result.append(
-                {
-                    "event_params": event_params,
-                    "trace_params_obs": trace_params,
-                    "data_obs": data_obs,
-                }
-            )
+                    # Calculate back azimuth
+                    baz = gps2dist_azimuth(
+                        source_lat[j] if j < len(source_lat) else source_lat[0],
+                        source_lon[j] if j < len(source_lon) else source_lon[0],
+                        sta_lat[j],
+                        sta_lon[j],
+                    )
+                    theo_azi = np.round(baz[1], 2)
+                    theo_back_azi = np.round(baz[2], 2)
 
-    # create dataset
-    folder_path = "new_GM0/"
+                    trace_params = {
+                        "trace_name": f"{eqs.name}_{str(t0)}_{sta_network[j]}_{sta_name[j]}",
+                        "trace_id_z": z_filenames[j]
+                        if hasattr(z_filenames[j], "__len__")
+                        else str(z_filenames[j]),
+                        "trace_id_n": n_filenames[j]
+                        if hasattr(n_filenames[j], "__len__")
+                        else str(n_filenames[j]),
+                        "trace_id_e": e_filenames[j]
+                        if hasattr(e_filenames[j], "__len__")
+                        else str(e_filenames[j]),
+                        "trace_start_time": t0,
+                        "trace_sampling_rate_hz": 100,
+                        "trace_npts": len(trace[:, 0]),
+                        "station_longitude_deg": sta_lon[j],
+                        "station_latitude_deg": sta_lat[j],
+                        "station_network_code": sta_network[j]
+                        if hasattr(sta_network[j], "__len__")
+                        else str(sta_network[j]),
+                        "station_code": sta_name[j]
+                        if hasattr(sta_name[j], "__len__")
+                        else str(sta_name[j]),
+                        "trace_channel": "NEZ",
+                        "path_ep_distance_km": rhyp[j],
+                        "vs30": vs30[j],
+                        "azimuth": theo_azi,
+                        "back_azimuth": theo_back_azi,
+                    }
+
+                    event_params = {
+                        "source_id": f"{eqs.name}_{str(t0)}",
+                        "source_magnitude": mag[j] if j < len(mag) else mag[0],
+                        "source_magnitude_type": "moment_magnitude",
+                        "source_type": "global CMT",
+                        "source_latitude_deg": source_lat[j]
+                        if j < len(source_lat)
+                        else source_lat[0],
+                        "source_longitude_deg": source_lon[j]
+                        if j < len(source_lon)
+                        else source_lon[0],
+                        "source_depth_m": (source_dep[j] if j < len(source_dep) else source_dep[0])
+                        * 1000.0,
+                        "source_origin_time": t0,
+                        "source_strike": source_strike[j]
+                        if j < len(source_strike)
+                        else source_strike[0],
+                        "source_dip": source_dip[j] if j < len(source_dip) else source_dip[0],
+                        "source_rake": source_rake[j] if j < len(source_rake) else source_rake[0],
+                        "azimuthal_gap": azi_gap,
+                    }
+
+                    data_obs = sbu.stream_to_array(st, component_order="NEZ")[1]
+
+                    result.append(
+                        {
+                            "event_params": event_params,
+                            "trace_params_obs": trace_params,
+                            "data_obs": data_obs,
+                        }
+                    )
+
+                    # Clear stream for next station
+                    st.clear()
+
+            except Exception as e:
+                print(f"Error processing {eq_group_name}: {e}")
+                import traceback
+
+                traceback.print_exc()
+                continue
+
+    # Create dataset
+    folder_path = "new_GM0_hdf5/"
     event_dir = Path(folder_path)
     obs_dir = event_dir / "observed_01_new"
     metadata_path_obs = obs_dir / "metadata.csv"
     waveform_path_obs = obs_dir / "waveforms.hdf5"
+
+    # Create directories if they don't exist
+    obs_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Creating SeisBench dataset with {len(result)} records...")
+    print(f"Metadata path: {metadata_path_obs}")
+    print(f"Waveforms path: {waveform_path_obs}")
 
     with sbd.WaveformDataWriter(metadata_path_obs, waveform_path_obs) as writer_obs:
         writer_obs.data_format = {
@@ -429,3 +614,5 @@ if __name__ == "__main__":
                 station["data_obs"],
             )
             writer_obs.flush_hdf5()
+
+    print(f"Dataset creation completed! {len(result)} traces written to SeisBench format.")
