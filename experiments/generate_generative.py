@@ -162,11 +162,11 @@ are saved in an HDF5 file with the given name in the outputs directory.
     parser = argparse.ArgumentParser(
         description=desc, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("--hypocentral_distance", type=float, default=None)
-    parser.add_argument("--magnitude", type=float, default=None)
-    parser.add_argument("--vs30", type=float, default=None)
-    parser.add_argument("--hypocentre_depth", type=float, default=None)
-    parser.add_argument("--azimuthal_gap", type=float, default=None)
+    parser.add_argument("--hypocentral_distance (km)", type=float, default=None)
+    parser.add_argument("--magnitude (unitless)", type=float, default=None)
+    parser.add_argument("--vs30 (m/s)", type=float, default=None)
+    parser.add_argument("--hypocentre_depth (km)", type=float, default=None)
+    parser.add_argument("--azimuthal_gap (deg)", type=float, default=None)
     parser.add_argument("--num_samples", type=int, default=None)
     parser.add_argument("--csv", type=str, default=None, help="csv file with args")
     parser.add_argument(

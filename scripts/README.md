@@ -1,12 +1,12 @@
 # Generate seismic waveforms
 
 In order to generate synthetic seismic waveforms, first download the weight files from
-[Zenodo](https://zenodo.org/records/14017182) and put them in the `weights` folder.
+[Zenodo](https://zenodo.org/records/15687691) and put them in the `weights` folder.
 
 Then call
 
 ```shell
-python generate_waveforms.py
+generate-waveforms
 ```
 
 on the command line and follow the instructions.
@@ -16,7 +16,7 @@ on the command line and follow the instructions.
 Create 32 samples using command line arguments:
 
 ```shell
-python generate_waveforms.py \
+generate_waveforms \
   --hypocentral_distance 531 \
   --magnitude 6 \
   --vs30 154 \
@@ -31,7 +31,7 @@ python generate_waveforms.py \
 Create samples using a CSV file:
 
 ```shell
-python generate_waveforms.py \
+generate-waveforms \
   --csv [japan.csv | little_japan.csv] \
   --output waveforms.h5 \
   --edm_checkpoint ../weights/edm.ckpt \
@@ -50,7 +50,6 @@ Then, run the `write_to_seisbench.py` script by:
 
   ```shell
   python write_to_seisbench.py -h
-
   ```
 
 2. Running the command:

@@ -9,9 +9,10 @@
 
 ## About
 
-This reposiory implements Generative Waveform Models (GMWs), i.e., generative models that can simulate synthetic seismis waveforms.
+This repository implements Generative Waveform Models (GMWs), i.e., generative models that can generate synthetic seismic waveforms.
 In particular, the repository implements *HighFEM*, the GWM introduced in [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
-It can be used to generate seismic waveforms, replicate the results from the manuscript using the experimental code in [experiments](experiments), and for training custom GWMs from scratch.
+
+The repository can be also be used to replicate the results from the manuscript using the experimental code in [experiments](experiments), and for training custom GWMs from scratch.
 
 ## Quick start
 
@@ -54,7 +55,7 @@ You can install `tqdne` by cloning the repository. Otherwise, you can install `t
       uv sync
       ```
 
-   b) Install using the `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
+   b) Install using `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
 
       ```bash
       pip install -e .
@@ -63,10 +64,6 @@ You can install `tqdne` by cloning the repository. Otherwise, you can install `t
 ## Experiments
 
 To reproduce the experiments from the manuscript, including data preprocessing, training, and evaluation, navigate to the [experiments](./experiments) folder. Refer to the corresponding README files for step-by-step guidance.
-
-## Weight files
-
-You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/15687691), under the `weights` folder.
 
 ## Sampling waveforms
 
