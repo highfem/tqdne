@@ -22,7 +22,7 @@ jobs:
       - run: |
           pip install ruff
       - name: Run ruff
-        run: ruff format . --exclude '*.ipynb'
+        run: ruff format . --exclude '*.ipynb' --config pyproject.toml
       - name: Commit formatted code
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
