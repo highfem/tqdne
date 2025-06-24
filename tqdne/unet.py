@@ -375,9 +375,9 @@ class UNetModel(nn.Module):
         torch.Tensor
             An [N x C x ...] Tensor of outputs.
         """
-        assert (cond is not None) == (
-            self.cond_features is not None
-        ), "must specify cond if and only if the model is conditioned"
+        assert (cond is not None) == (self.cond_features is not None), (
+            "must specify cond if and only if the model is conditioned"
+        )
 
         hs = []
         emb = self.time_mlp(self.time_embed(timesteps))
