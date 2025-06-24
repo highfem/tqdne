@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -26,7 +26,6 @@ jobs:
       - name: Commit formatted code
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "style: autoformat code with ruff [skip ci]"
-          branch: ${{ github.ref_name }}
+          commit_message: "style: autoformat code with ruff"
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.0
