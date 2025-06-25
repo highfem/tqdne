@@ -16,16 +16,14 @@ on the command line and follow the instructions.
 Create 32 samples using command line arguments:
 
 ```shell
-generate_waveforms \
+generate-waveforms \
   --hypocentral_distance 531 \
   --magnitude 6 \
   --vs30 154 \
   --hypocentre_depth 10.0 \
   --azimuthal_gap 130 \
   --num_samples 32 \
-  --output waveforms.h5 \
-  --edm_checkpoint ../weights/edm.ckpt \
-  --autoencoder_checkpoint ../weights/autoencoder.ckpt
+  --outfile waveforms.h5 
 ```
 
 Create samples using a CSV file:
@@ -33,9 +31,7 @@ Create samples using a CSV file:
 ```shell
 generate-waveforms \
   --csv [japan.csv | little_japan.csv] \
-  --output waveforms.h5 \
-  --edm_checkpoint ../weights/edm.ckpt \
-  --autoencoder_checkpoint ../weights/autoencoder.ckpt
+  --output waveforms.h5 
 ```
 
 ## Convert to SeisBench framework
