@@ -23,7 +23,7 @@ generate-waveforms \
   --hypocentre_depth 10.0 \
   --azimuthal_gap 130 \
   --num_samples 32 \
-  --outfile waveforms.h5 
+  --outfile waveforms.h5
 ```
 
 Create samples using a CSV file:
@@ -31,7 +31,7 @@ Create samples using a CSV file:
 ```shell
 generate-waveforms \
   --csv [japan.csv | little_japan.csv] \
-  --output waveforms.h5 
+  --output waveforms.h5
 ```
 
 ## Convert to SeisBench framework
