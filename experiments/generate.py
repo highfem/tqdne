@@ -47,7 +47,7 @@ def generate(
         print("using csv data")
         df = pd.read_csv(csv)
         df = df.loc[df.index.repeat(df.num_samples)]
-        hypocentral_distances = df.hypocentral_distance.to_list()
+        hypocentral_distances = (df.hypocentral_distance / 1e3).to_list()
         magnitudes = df.magnitude.to_list()
         vs30s = df.vs30.to_list()
         hypocentre_depths = df.hypocentre_depth.to_list()
@@ -66,7 +66,7 @@ def generate(
         ]
     ):
         print("using command line input data")
-        hypocentral_distances = [hypocentral_distance] * num_samples
+        hypocentral_distances = [hypocentral_distance / 1e3] * num_samples
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
         hypocentre_depths = [hypocentre_depth] * num_samples
