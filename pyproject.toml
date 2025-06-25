@@ -4,21 +4,38 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tqdne"
-authors= [{name = "HighFEM team", email = "example@mail.com"}]
+authors= [{name = "HighFEM team", email = "kadek.palgunadi93@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
+    "einops>=0.8.1",
+    "h5py>=3.14.0",
+    "librosa>=0.11.0",
+    "obspy>=1.4.2",
     "pathos>=0.3.4",
-    "pytorch-lightning==2.5.1",
+    "pytorch-lightning>=2.5.1",
+    "scikit-image>=0.25.2",
+    "scikit-learn>=1.7.0",
+    "seaborn>=0.13.2",
+    "seisbench>=0.9.0",
+    "torch>=2.7.0",
+    "torchaudio>=2.7.0",
+    "torchmetrics>=1.7.1",
+    "torchvision>=0.22.0",
+    "wandb>=0.20.1",
 ]
+
+[project.scripts]
+generate-waveforms = "tqdne.generate_waveforms:main"
 
 [tool.setuptools]
 packages = ["tqdne"]
 
 [tool.setuptools.dynamic]
 version = {attr = "tqdne.__init__.__version__"}
+
 
 [tool.bandit]
 skips = ["B101"]

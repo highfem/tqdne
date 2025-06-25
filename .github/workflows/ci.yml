@@ -7,30 +7,10 @@ on:
     branches: [ main ]
 
 jobs:
-  format:
-    name: Format code
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install ruff
-      - name: Run Ruff to auto-fix code
-        run: ruff format . --exclude '*.ipynb'
-      - name: Commit formatted code
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "style: autoformat code with ruff"
-
   precommit:
     name: Pre-commit checks
-    needs: format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0

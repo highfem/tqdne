@@ -9,12 +9,33 @@
 
 ## About
 
-This repository contains the experimental code of the manuscript [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
-It can be used to generate seismic waveforms, replicate the results from the manuscript, and for training custom models from scratch.
+This repository implements Generative Waveform Models (GMWs), i.e., generative models that can generate synthetic seismic waveforms.
+In particular, the repository implements *HighFEM*, the GWM introduced in [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
+
+The repository can be also be used to replicate the results from the manuscript using the experimental code in [experiments](experiments), and for training custom GWMs from scratch.
+
+## Quick start
+
+If you are only interested in generating synthetic waveforms, install `tqdne` using
+
+```bash
+pip install git+https://github.com/highfem/tqdne@<RELEASE>
+```
+
+where `RELEASE` should be replaced with the latest release version to be found [here](https://github.com/highfem/tqdne/tags).
+You should then be able to simulate waveforms by calling
+
+```bash
+generate-waveforms
+```
+
+from the (Unix) command line.
 
 ## Installation
 
-If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md). Otherwise, you can install `tqdne` like this:
+If you are interested in reproducing the results from the paper, please refer to [`experiments/README.md`](experiments/README.md).
+
+You can install `tqdne` by following the steps below.
 
 1.
    a) **Recommended**: Download the latest [release](https://github.com/highfem/tqdne/tags) if you do not require commit history. Releases have been tested and reproduced by us and partners.
@@ -26,7 +47,7 @@ If you are interested in reproducing the results from the paper, please refer to
       ```
 
 2.
-   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will us the versions of all dependencies that we are using for development, or you install using the `pip` installer which will install the latest versions of all dependencies.
+   There are two ways to install the package: you can either install the package with [`uv`](https://github.com/astral-sh/uv) which will use the versions of all dependencies that we are using for development, or you install the package using the `pip` installer which will install the latest versions of all dependencies.
 
    a) **Recommended**: Install all dependencies and the package with [`uv`](https://github.com/astral-sh/uv), via
 
@@ -34,7 +55,7 @@ If you are interested in reproducing the results from the paper, please refer to
       uv sync
       ```
 
-   b) Install using the `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
+   b) Install using `pip` install, for instance, within a `conda` or `virtualenv` environment, via:
 
       ```bash
       pip install -e .
@@ -46,11 +67,20 @@ To reproduce the experiments from the manuscript, including data preprocessing, 
 
 ## Sampling waveforms
 
-You can generate your own waveforms using the scripts in [scripts](./scripts). See the corresponding README files for more information.
+You can generate your own waveforms by using the scripts in [scripts](./scripts).
+See the corresponding README files for more information.
 
-## Weight files
+## Contributing
 
-You can find the weight files for the trained generative waveform model (GWM) on [Zenodo](https://zenodo.org/records/15687691), under the `weights` folder.
+Contributions in the form of pull requests are more than welcome. In order to contribute:
+
+1) Clone `tqdne` and install `uv` from [here](https://docs.astral.sh/uv/).
+2) Create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`.
+3) Install all dependencies using: `uv sync --all-extras`.
+4) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pre-commit install`.
+5) Implement your contribution.
+6) Run `uv run ruff check .` to check the code for issues.
+7) Push your changes and submit a PR 🙂.
 
 ## Acknowledgements
 
