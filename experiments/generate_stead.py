@@ -161,12 +161,25 @@ are saved in an HDF5 file with the given name in the outputs directory.
     parser = argparse.ArgumentParser(
         description=desc, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("--hypocentral_distance", type=float, default=None)
-    parser.add_argument("--magnitude", type=float, default=None)
-    parser.add_argument("--vs30", type=float, default=None)
-    parser.add_argument("--hypocentre_depth", type=float, default=None)
-    parser.add_argument("--azimuthal_gap", type=float, default=None)
-    parser.add_argument("--num_samples", type=int, default=None)
+    parser.add_argument(
+        "--hypocentral_distance", type=float, default=None, help="hypocentral distance in km"
+    )
+    parser.add_argument("--magnitude", type=float, default=None, help="magnitude of the earthquake")
+    parser.add_argument(
+        "--vs30",
+        type=float,
+        default=None,
+        help="average shear-wave velocity in the top 30 m of the site in m/s",
+    )
+    parser.add_argument(
+        "--hypocentre_depth", type=float, default=None, help="hypocentre depth in km"
+    )
+    parser.add_argument(
+        "--azimuthal_gap", type=float, default=None, help="azimuthal gap in degrees"
+    )
+    parser.add_argument(
+        "--num_samples", type=int, default=None, help="number of samples to generate"
+    )
     parser.add_argument("--csv", type=str, default=None, help="csv file with args")
     parser.add_argument(
         "--workdir",
