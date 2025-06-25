@@ -31,7 +31,7 @@ Create samples using a CSV file:
 ```shell
 generate-waveforms \
   --csv [japan.csv | little_japan.csv] \
-  --output waveforms.h5
+  --outfile waveforms.h5
 ```
 
 ## Convert to SeisBench framework
