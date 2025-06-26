@@ -77,10 +77,11 @@ Contributions in the form of pull requests are more than welcome. In order to co
 1) Clone `tqdne` and install `uv` from [here](https://docs.astral.sh/uv/).
 2) Create a new branch locally `git checkout -b feature/my-new-feature` or `git checkout -b issue/fixes-bug`.
 3) Install all dependencies using: `uv sync --all-extras`.
-4) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pip install pre-commit`.
-5) Implement your contribution.
-6) Run `uv run ruff check .` to check the code for issues.
-7) Push your changes and submit a PR 🙂.
+4) Activate the virtual environment: `source .venv/bin/activate`
+5) Install `pre-commit` (which we use for auto-formatting and checking code) using: `pre-commit install`.
+6) Implement your contribution.
+7) Run `uv run ruff check .` to check the code for issues.
+8) Push your changes and submit a PR 🙂.
 
 ## Acknowledgements
 

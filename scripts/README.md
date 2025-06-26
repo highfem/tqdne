@@ -23,7 +23,9 @@ generate-waveforms \
   --hypocentre_depth 10.0 \
   --azimuthal_gap 130 \
   --num_samples 32 \
-  --outfile waveforms.h5
+  --outfile waveforms.h5 \
+  --edm_checkpoint ../weights/edm.ckpt \
+  --autoencoder_checkpoint ../weights/autoencoder.ckpt
 ```
 
 Create samples using a CSV file:
@@ -31,7 +33,9 @@ Create samples using a CSV file:
 ```shell
 generate-waveforms \
   --csv [japan.csv | little_japan.csv] \
-  --outfile waveforms.h5
+  --outfile waveforms.h5 \
+  --edm_checkpoint ../weights/edm.ckpt \
+  --autoencoder_checkpoint ../weights/autoencoder.ckpt
 ```
 
 ## Convert to SeisBench framework
