@@ -87,8 +87,6 @@ def create_trace(data, stats_dict, channel):
     nan_idx = np.isnan(tr.data)
     tr.data[nan_idx] = 0
 
-    # integrate to velocity
-    tr.integrate()
     return tr
 
 
@@ -108,9 +106,9 @@ for idx in range(len(vs30)):
 
     # Channels for NEZ and their respective slices in data_array
     channel_map = {
-        "HHN": waveforms[idx, :5500, 0],
-        "HHE": waveforms[idx, :5500, 1],
-        "HHZ": waveforms[idx, :5500, 2],
+        "HNN": waveforms[idx, :5500, 0],
+        "HNE": waveforms[idx, :5500, 1],
+        "HNZ": waveforms[idx, :5500, 2],
     }
 
     for channel, waveform in channel_map.items():
@@ -248,7 +246,7 @@ z_filename = np.delete(z_filename, failed_waveform_index)
 file_path = "raw_waveforms_filtered.h5"
 with h5py.File(file_path, "w") as h5f:
     h5f.create_dataset("event_ID", data=event_ID)
-    h5f.create_dataset("hypocentral_distance", data=hypocentral_distance * 1e-3)
+    h5f.create_dataset("hypocentral_distance", data=hypocentral_distance)
     h5f.create_dataset("hypocentre_depth", data=hypocentre_depth)
     h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude)
     h5f.create_dataset("hypocentre_longitude", data=hypocentre_longitude)
