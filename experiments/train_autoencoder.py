@@ -21,7 +21,7 @@ def fake_represent(representation, leng_signal):
 def run(args):
     config = LatentSpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    spectr = fake_represent(config.representation)
+    spectr = fake_represent(config.representation, config.t)
     name = f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(config, args.num_workers, args.batchsize)

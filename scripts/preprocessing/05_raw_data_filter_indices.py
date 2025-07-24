@@ -802,7 +802,7 @@ indices = np.asarray(indices)
 file_path = "raw_waveforms_filtered_indices.h5"
 with h5py.File(file_path, "w") as h5f:
     h5f.create_dataset("event_ID", data=event_ID)
-    h5f.create_dataset("hypocentral_distance", data=hypocentral_distance * 1e-3)
+    h5f.create_dataset("hypocentral_distance", data=hypocentral_distance)
     h5f.create_dataset("hypocentre_depth", data=hypocentre_depth)
     h5f.create_dataset("hypocentre_latitude", data=hypocentre_latitude)
     h5f.create_dataset("hypocentre_longitude", data=hypocentre_longitude)

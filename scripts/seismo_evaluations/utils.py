@@ -1,16 +1,14 @@
-import multiprocessing as mp
-
-import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
-from example_GMM import calculate_gmfs_distance
+import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from scipy import signal
 from scipy.interpolate import interp1d
 from scipy.signal import resample
+from scipy import signal
 from tqdm import tqdm
-
+from example_GMM import calculate_gmfs_distance
+import multiprocessing as mp
+import h5py
 
 class MatFileHandler:
     def __init__(self, file_path):
@@ -32,20 +30,14 @@ class MatFileHandler:
         Recursively converts a MATLAB structure to a nested dictionary.
         """
         if isinstance(mat_obj, dict):
-            return {
-                key: self.mat_to_dict(value)
-                for key, value in mat_obj.items()
-                if not (key.startswith("__") and key.endswith("__"))
-            }
+            return {key: self.mat_to_dict(value) for key, value in mat_obj.items() if not (key.startswith('__') and key.endswith('__'))}
         elif isinstance(mat_obj, np.ndarray):
             if mat_obj.size == 1:
                 return self.mat_to_dict(mat_obj.item())
             else:
                 return [self.mat_to_dict(element) for element in mat_obj]
-        elif hasattr(mat_obj, "_fieldnames"):
-            return {
-                field: self.mat_to_dict(getattr(mat_obj, field)) for field in mat_obj._fieldnames
-            }
+        elif hasattr(mat_obj, '_fieldnames'):
+            return {field: self.mat_to_dict(getattr(mat_obj, field)) for field in mat_obj._fieldnames}
         else:
             return mat_obj
 
@@ -58,17 +50,17 @@ class MatFileHandler:
 
         if isinstance(mat_obj, dict):
             for key, value in mat_obj.items():
-                print(" " * indent + f"{key}:")
+                print(' ' * indent + f"{key}:")
                 self.print_mat_structure(value, indent + 4)
         elif isinstance(mat_obj, np.ndarray):
-            print(" " * indent + f"Array, Shape: {mat_obj.shape}, Dtype: {mat_obj.dtype}")
-        elif hasattr(mat_obj, "_fieldnames"):
-            print(" " * indent + "MATLAB Object")
+            print(' ' * indent + f"Array, Shape: {mat_obj.shape}, Dtype: {mat_obj.dtype}")
+        elif hasattr(mat_obj, '_fieldnames'):
+            print(' ' * indent + "MATLAB Object")
             for field in mat_obj._fieldnames:
-                print(" " * (indent + 4) + f"{field}:")
+                print(' ' * (indent + 4) + f"{field}:")
                 self.print_mat_structure(getattr(mat_obj, field), indent + 8)
         else:
-            print(" " * indent + f"Type: {type(mat_obj)}")
+            print(' ' * indent + f"Type: {type(mat_obj)}")
 
     def process_data(self):
         """
@@ -79,14 +71,14 @@ class MatFileHandler:
             return None, None
 
         try:
-            rhyp = np.array(self.mat_dict["eq"]["gan"]["rhyp"])
-            vs30 = np.array(self.mat_dict["eq"]["gan"]["vs30"])
+            rhyp = np.array(self.mat_dict['eq']['gan']['rhyp'])
+            vs30 = np.array(self.mat_dict['eq']['gan']['vs30'])
             idx = np.where((vs30 > 0) & (~np.isnan(vs30)))
 
             rhyp = rhyp[idx]
             vs30 = vs30[idx]
 
-            wf = np.array(self.mat_dict["eq"]["gan"]["wfMat"])
+            wf = np.array(self.mat_dict['eq']['gan']['wfMat'])
 
             return rhyp, vs30, wf
         except KeyError as e:
@@ -129,39 +121,34 @@ def shakeMap_cscale(mmi=None):
 
     # The colors in the original color map are the colors of the 11 edges of
     # the 10 bins, evenly spaced from 0.5 to 10.5.
-    color_map = (
-        np.array(
-            [
-                [255, 255, 255],
-                [191, 204, 255],
-                [160, 230, 255],
-                [128, 255, 255],
-                [122, 255, 147],
-                [255, 255, 0],
-                [255, 200, 0],
-                [255, 145, 0],
-                [255, 0, 0],
-                [200, 0, 0],
-                [128, 0, 0],
-            ]
-        )
-        / 255.0
-    )
+    color_map = np.array([
+        [255, 255, 255],
+        [191, 204, 255],
+        [160, 230, 255],
+        [128, 255, 255],
+        [122, 255, 147],
+        [255, 255, 0],
+        [255, 200, 0],
+        [255, 145, 0],
+        [255, 0, 0],
+        [200, 0, 0],
+        [128, 0, 0]
+    ]) / 255.0
 
     mmi_values = np.arange(1, 12)
 
     colormap_data = np.zeros((num_colors, 3))
     for i in range(3):
-        interpolator = interp1d(mmi_values, color_map[:, i], kind="linear")
+        interpolator = interp1d(mmi_values, color_map[:, i], kind='linear')
         colormap_data[:, i] = interpolator(mmi)
 
     # Create a colormap
-    colormap = LinearSegmentedColormap.from_list("ShakeMapMMI", colormap_data, N=num_colors)
+    colormap = LinearSegmentedColormap.from_list('ShakeMapMMI', colormap_data, N=num_colors)
 
     return colormap
 
 
-def pga_to_mmi(pga, unit="g"):
+def pga_to_mmi(pga, unit='g'):
     """
     Convert Peak Ground Acceleration (PGA) to Modified Mercalli Intensity (MMI).
 
@@ -176,16 +163,15 @@ def pga_to_mmi(pga, unit="g"):
     pga = np.asarray(pga)
 
     # Conversion factor from m/s^2 to g
-    if unit == "m/s^2":
+    if unit == 'm/s^2':
         pga = pga / 9.80665  # 1 g = 9.80665 m/s^2
-    elif unit == "cm/s^2":
-        pga = pga / 9.80665 * 1e-2  # 1 g = 9.80665 m/s^2
+    elif unit == 'cm/s^2':
+        pga = pga / 9.80665 *1e-2 # 1 g = 9.80665 m/s^2
 
     # Apply the empirical formula
     mmi = 3.66 * np.log10(pga) + 1.66
 
     return mmi
-
 
 def calculate_gmrotd50(component1, component2):
     """
@@ -226,19 +212,10 @@ def calculate_gmrotd50(component1, component2):
     return np.max(gmrotd50)
 
 
-def plot_seismic_waveforms(
-    waveforms,
-    azimuthal_gap=None,
-    hypocentral_distance=None,
-    hypocentre_depth=None,
-    magnitude=None,
-    vs30s=None,
-    time_vector=None,
-    station_names=None,
-    figsize=None,
-    save_path=None,
-    normalize=True,
-):
+def plot_seismic_waveforms(waveforms, azimuthal_gap=None, hypocentral_distance=None,
+                          hypocentre_depth=None, magnitude=None, vs30s=None,
+                          time_vector=None, station_names=None, figsize=None,
+                          save_path=None, normalize=True):
     """
     Plot seismic waveforms in radial, tangential, and vertical components.
 
@@ -286,7 +263,7 @@ def plot_seismic_waveforms(
 
     # Create station names if not provided
     if station_names is None:
-        station_names = [f"Station {i + 1}" for i in range(n_stations)]
+        station_names = [f"Station {i+1}" for i in range(n_stations)]
 
     # Set figsize based on number of stations if not specified
     if figsize is None:
@@ -304,16 +281,12 @@ def plot_seismic_waveforms(
 
     # Function to check if a parameter is an array of correct length
     def is_station_array(param):
-        return (
-            param is not None and isinstance(param, (list, np.ndarray)) and len(param) == n_stations
-        )
+        return param is not None and isinstance(param, (list, np.ndarray)) and len(param) == n_stations
 
     # Check if parameters are per-station arrays
-    params_per_station = any(
-        is_station_array(p)
-        for p in [azimuthal_gap, hypocentral_distance, hypocentre_depth, magnitude, vs30s]
-        if p is not None
-    )
+    params_per_station = any(is_station_array(p) for p in
+                            [azimuthal_gap, hypocentral_distance, hypocentre_depth,
+                             magnitude, vs30s] if p is not None)
 
     # Helper function to safely format values
     def safe_format(value, format_str=".1f"):
@@ -326,7 +299,7 @@ def plot_seismic_waveforms(
             return str(value)
 
     # Component names
-    components = ["Radial", "Tangential", "Vertical"]
+    components = ['Radial', 'Tangential', 'Vertical']
 
     # Create figure and axes
     fig, axes = plt.subplots(n_stations, 3, figsize=figsize, sharex=True)
@@ -338,7 +311,7 @@ def plot_seismic_waveforms(
     # Plot waveforms
     for i in range(n_stations):
         for j in range(3):
-            axes[i, j].plot(time_vector, waveforms_plot[i, j, :], "k-")
+            axes[i, j].plot(time_vector, waveforms_plot[i, j, :], 'k-')
 
             # Set y-limits to make waveforms visible
             if normalize:
@@ -393,27 +366,21 @@ def plot_seismic_waveforms(
 
                 # Add the parameter text if we have any
                 if param_text:
-                    axes[i, j].text(
-                        1.05,
-                        0.5,
-                        param_text,
-                        transform=axes[i, j].transAxes,
-                        verticalalignment="center",
-                        bbox=dict(boxstyle="round", facecolor="white", alpha=0.7),
-                    )
+                    axes[i, j].text(1.05, 0.5, param_text, transform=axes[i, j].transAxes,
+                                  verticalalignment='center', bbox=dict(boxstyle='round',
+                                  facecolor='white', alpha=0.7))
 
     # Add x-label to bottom row
     for j in range(3):
-        axes[-1, j].set_xlabel("Time")
+        axes[-1, j].set_xlabel('Time')
 
     plt.tight_layout()
 
     # Save figure if a path is provided
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
 
     return fig, axes
-
 
 class SeismicParameters:
     """
@@ -454,14 +421,14 @@ class SeismicParameters:
         self._file_path = file_path
 
         # Open the H5 file with locking=False
-        with h5py.File(file_path, "r", locking=False) as file:
+        with h5py.File(file_path, 'r', locking=False) as file:
             # Map specific parameter names to more intuitive attributes
             parameter_mapping = {
-                "hypocentral_distance": "hypocentral_distance",
-                "magnitude": "magnitude",
-                "vs30": "vs30s",
-                "hypocentre_depth": "hypocentre_depth",
-                "azimuthal_gap": "azimuthal_gap",
+                'hypocentral_distance': 'hypocentral_distance',
+                'magnitude': 'magnitude',
+                'vs30': 'vs30s',
+                'hypocentre_depth': 'hypocentre_depth',
+                'azimuthal_gap': 'azimuthal_gap'
             }
 
             # Add mapped parameters as attributes
@@ -485,18 +452,21 @@ class SeismicParameters:
         dict
             Dictionary with information about available parameters and their shapes
         """
-        info = {"file_path": self._file_path, "parameters": {}}
+        info = {
+            'file_path': self._file_path,
+            'parameters': {}
+        }
 
         # Get attributes that are numpy arrays (parameters)
         for attr in dir(self):
-            if not attr.startswith("_") and not callable(getattr(self, attr)):
+            if not attr.startswith('_') and not callable(getattr(self, attr)):
                 value = getattr(self, attr)
                 if isinstance(value, np.ndarray):
-                    info["parameters"][attr] = {
-                        "shape": value.shape,
-                        "dtype": str(value.dtype),
-                        "min": float(np.min(value)) if value.size > 0 else None,
-                        "max": float(np.max(value)) if value.size > 0 else None,
+                    info['parameters'][attr] = {
+                        'shape': value.shape,
+                        'dtype': str(value.dtype),
+                        'min': float(np.min(value)) if value.size > 0 else None,
+                        'max': float(np.max(value)) if value.size > 0 else None
                     }
 
         return info
@@ -508,35 +478,32 @@ class SeismicParameters:
         else:
             return "SeismicParameters(file=None)"
 
-
 def process_waveform(index, EW, NS):
     gmrot50 = calculate_gmrotd50(EW, NS)
     return index, gmrot50
 
+def process_kanno(index, EW, NS):
+    amp_EW = np.max(np.abs(EW))
+    amp_NS = np.max(np.abs(NS))
+    amp = np.sqrt(amp_EW**2 + amp_NS**2)
+    return index, amp
 
 def parallel_process_waveforms(waveforms_EW, waveforms_NS, n_workers=4):
     with mp.Pool(n_workers) as pool:
-        results = list(
-            tqdm(
-                pool.starmap(
-                    process_waveform,
-                    [
-                        (i, waveforms_EW[i, :], waveforms_NS[i, :])
-                        for i in range(len(waveforms_EW[:, 0]))
-                    ],
-                ),
-                total=len(waveforms_EW[:, 0]),
-            )
-        )
+        results = list(tqdm(pool.starmap(process_waveform, [(i, waveforms_EW[i, :], waveforms_NS[i, :]) for i in range(len(waveforms_EW[:, 0]))]), total=len(waveforms_EW[:, 0])))
     return sorted(results, key=lambda x: x[0])
 
+def parallel_process_kanno(waveforms_EW, waveforms_NS, n_workers=4):
+    with mp.Pool(n_workers) as pool:
+        results = list(tqdm(pool.starmap(process_kanno, [(i, waveforms_EW[i, :], waveforms_NS[i, :]) for i in range(len(waveforms_EW[:, 0]))]), total=len(waveforms_EW[:, 0])))
+    return sorted(results, key=lambda x: x[0])
 
 def integrate_frequency_domain(signal, dt):
     N = len(signal)
     fft_signal = np.fft.fft(signal)
     freqs = np.fft.fftfreq(N, dt)
 
-    # Create highpass filter mask (frequencies above 0.1 Hz)
+     # Create highpass filter mask (frequencies above 0.1 Hz)
     highpass_mask = np.abs(freqs) >= 0.1
 
     # Apply highpass filter
@@ -549,13 +516,12 @@ def integrate_frequency_domain(signal, dt):
     integrated_signal = np.fft.ifft(fft_signal).real
     return integrated_signal
 
-
 def filter_frequency_domain(signal, dt):
     N = len(signal)
     fft_signal = np.fft.fft(signal)
     freqs = np.fft.fftfreq(N, dt)
 
-    # Create highpass filter mask (frequencies above 0.1 Hz)
+     # Create highpass filter mask (frequencies above 0.1 Hz)
     highpass_mask = np.abs(freqs) >= 0.1
 
     # Apply highpass filter
@@ -564,8 +530,7 @@ def filter_frequency_domain(signal, dt):
     filtered_signal = np.fft.ifft(fft_signal).real
     return filtered_signal
 
-
-def evaluate_ratio(target, predicted, dt=0.01, n_worker=4, evaluate_obs=True, PGV=True):
+def evaluate_ratio(target, predicted, dt=0.01, n_worker=4, evaluate_obs=True, PGV=True, kanno=False):
     """
     Evaluate the ratio between target and predicted waveforms.
 
@@ -609,28 +574,29 @@ def evaluate_ratio(target, predicted, dt=0.01, n_worker=4, evaluate_obs=True, PG
             st_tqdne_NS = tqdne_chunk[:, 0, :]
 
             print("Integrate waveforms in the frequency domain")
-            integrated_st_tqdne_EW = np.array(
-                [integrate_frequency_domain(wf, dt) for wf in st_tqdne_EW]
-            )
-            integrated_st_tqdne_NS = np.array(
-                [integrate_frequency_domain(wf, dt) for wf in st_tqdne_NS]
-            )
+            integrated_st_tqdne_EW = np.array([integrate_frequency_domain(wf, dt) for wf in st_tqdne_EW])
+            integrated_st_tqdne_NS = np.array([integrate_frequency_domain(wf, dt) for wf in st_tqdne_NS])
 
             if evaluate_obs:
                 integrated_wf_EW = np.array([integrate_frequency_domain(wf, dt) for wf in wf_EW])
                 integrated_wf_NS = np.array([integrate_frequency_domain(wf, dt) for wf in wf_NS])
 
                 print("Processing observation...")
-                chunk_results_obs = parallel_process_waveforms(
-                    integrated_wf_EW, integrated_wf_NS, n_workers=n_worker
-                )
-                results_obs.extend(chunk_results_obs)
+                if kanno:
+                    chunk_results_obs = parallel_process_kanno(integrated_wf_EW, integrated_wf_NS, n_workers=n_worker)
+                    results_obs.extend(chunk_results_obs)
+                else:
+                    chunk_results_obs = parallel_process_waveforms(integrated_wf_EW, integrated_wf_NS, n_workers=n_worker)
+                    results_obs.extend(chunk_results_obs)
 
-            print("Processing GM0...")
-            chunk_results_gm0 = parallel_process_waveforms(
-                integrated_st_tqdne_EW, integrated_st_tqdne_NS, n_workers=n_worker
-            )
-            results_gm0.extend(chunk_results_gm0)
+            print("Processing GM0...Kanno?")
+            if kanno:
+                print("Kanno")
+                chunk_results_gm0 = parallel_process_kanno(integrated_st_tqdne_EW, integrated_st_tqdne_NS, n_workers=n_worker)
+                results_gm0.extend(chunk_results_gm0)
+            else:
+                chunk_results_gm0 = parallel_process_waveforms(integrated_st_tqdne_EW, integrated_st_tqdne_NS, n_workers=n_worker)
+                results_gm0.extend(chunk_results_gm0)
 
         # Extract PGV geometric mean values
         PGV_geom_mean_gm0 = np.array([result[1] for result in results_gm0])
@@ -639,7 +605,7 @@ def evaluate_ratio(target, predicted, dt=0.01, n_worker=4, evaluate_obs=True, PG
             PGV_geom_mean_obs = np.array([result[1] for result in results_obs])
             results = {
                 "PGV_geom_mean_obs": PGV_geom_mean_obs,
-                "PGV_geom_mean_gwm": PGV_geom_mean_gm0,
+                "PGV_geom_mean_gwm": PGV_geom_mean_gm0
             }
         else:
             results = PGV_geom_mean_gm0
@@ -667,29 +633,24 @@ def evaluate_ratio(target, predicted, dt=0.01, n_worker=4, evaluate_obs=True, PG
                 results_obs.extend(chunk_results_obs)
 
             print("Processing GM0...")
-            chunk_results_gm0 = parallel_process_waveforms(
-                st_tqdne_EW, st_tqdne_NS, n_workers=n_worker
-            )
+            chunk_results_gm0 = parallel_process_waveforms(st_tqdne_EW, st_tqdne_NS, n_workers=n_worker)
             results_gm0.extend(chunk_results_gm0)
 
-        # Extract PGV geometric mean values
+        # Extract PGA geometric mean values
         PGA_geom_mean_gm0 = np.array([result[1] for result in results_gm0])
 
         if evaluate_obs:
             PGA_geom_mean_obs = np.array([result[1] for result in results_obs])
             results = {
                 "PGA_geom_mean_obs": PGA_geom_mean_obs,
-                "PGA_geom_mean_gwm": PGA_geom_mean_gm0,
+                "PGA_geom_mean_gwm": PGA_geom_mean_gm0
             }
         else:
             results = PGA_geom_mean_gm0
 
     return results
 
-
-def calculate_distance_binned_ratios(
-    PGX_geom_mean_obs, PGX_geom_mean_gm0, hypocentral_distance, n_bins=50
-):
+def calculate_distance_binned_ratios(PGX_geom_mean_obs, PGX_geom_mean_gm0, hypocentral_distance, n_bins=50):
     """
     Calculate distance-binned statistics of the logarithmic ratio between observed and
     predicted peak ground motion (PGX) values.
@@ -736,12 +697,11 @@ def calculate_distance_binned_ratios(
     # Process each distance bin
     for i in range(len(r_bin) - 1):
         # Find indices of samples in current distance bin
-        bin_indices = np.where(
-            (hypocentral_distance > r_bin[i]) & (hypocentral_distance <= r_bin[i + 1])
-        )[0]
+        bin_indices = np.where((hypocentral_distance > r_bin[i]) &
+                              (hypocentral_distance <= r_bin[i+1]))[0]
 
         # Calculate bin center
-        bin_center = 0.5 * (r_bin[i + 1] + r_bin[i])
+        bin_center = 0.5 * (r_bin[i+1] + r_bin[i])
         r_b.append(bin_center)
 
         # Calculate statistics if samples exist in this bin
@@ -763,14 +723,13 @@ def calculate_distance_binned_ratios(
 
     # Return results as a dictionary
     return {
-        "bin_centers": r_b,
-        "median_ratios": median,
-        "std_ratios": std,
-        "bin_counts": counts,
-        "bin_edges": r_bin,
-        "ratio_values": ratio,
+        'bin_centers': r_b,
+        'median_ratios': median,
+        'std_ratios': std,
+        'bin_counts': counts,
+        'bin_edges': r_bin,
+        'ratio_values': ratio
     }
-
 
 def ratio_gmm_pgv(ave_magnitude, ave_vs30, depth):
     mag = ave_magnitude
@@ -790,15 +749,12 @@ def ratio_gmm_pgv(ave_magnitude, ave_vs30, depth):
     depth = depth
     Vs30 = ave_vs30
     hypocenter = [lon, lat, depth]
-    imts = ["PGV"]
-    gmpes = ["BooreEtAl2014", "Kanno2006Shallow"]
+    imts = ['PGV']
+    gmpes = ['BooreEtAl2014', 'Kanno2006Shallow']
 
-    gms, jb_distance = calculate_gmfs_distance(
-        mag, rupture_aratio, strike, dip, rake, hypocenter, imts, Vs30, gmpes
-    )
+    gms, jb_distance = calculate_gmfs_distance(mag, rupture_aratio, strike, dip, rake, hypocenter, imts, Vs30, gmpes)
 
     return gms, jb_distance
-
 
 def ratio_gmm_pga(ave_magnitude, ave_vs30, depth):
     mag = ave_magnitude
@@ -818,15 +774,12 @@ def ratio_gmm_pga(ave_magnitude, ave_vs30, depth):
     depth = depth
     Vs30 = ave_vs30
     hypocenter = [lon, lat, depth]
-    imts = ["PGA"]
-    gmpes = ["BooreEtAl2014", "Kanno2006Shallow"]
+    imts = ['PGA']
+    gmpes = ['BooreEtAl2014', 'Kanno2006Shallow']
 
-    gms, jb_distance = calculate_gmfs_distance(
-        mag, rupture_aratio, strike, dip, rake, hypocenter, imts, Vs30, gmpes
-    )
+    gms, jb_distance = calculate_gmfs_distance(mag, rupture_aratio, strike, dip, rake, hypocenter, imts, Vs30, gmpes)
 
     return gms, jb_distance
-
 
 def highpass_filter(data, cutoff_freq=0.1, sampling_rate=100):
     """
@@ -852,7 +805,7 @@ def highpass_filter(data, cutoff_freq=0.1, sampling_rate=100):
     # Design a high-pass filter
     nyquist = 0.5 * sampling_rate
     normalized_cutoff = cutoff_freq / nyquist
-    b, a = signal.butter(4, normalized_cutoff, btype="high")
+    b, a = signal.butter(4, normalized_cutoff, btype='high')
 
     # Initialize the output array with the same shape as input
     filtered_data = np.zeros_like(data)
@@ -863,7 +816,6 @@ def highpass_filter(data, cutoff_freq=0.1, sampling_rate=100):
             filtered_data[i, j, :] = signal.lfilter(b, a, data[i, j, :])
 
     return filtered_data
-
 
 def print_dataset_summary(dataset_raw):
     """
@@ -878,23 +830,12 @@ def print_dataset_summary(dataset_raw):
     print(f"{'Number of Data':<25} = {len(dataset_raw.hypocentral_distance)}")
     print(f"{'Variable':<25} {'Min':<15} {'Max':<15} {'Unit':<10}")
     print("-" * 60)
-    print(
-        f"{'Hypocentral Distance':<25} {min(dataset_raw.hypocentral_distance):<15.2f} {max(dataset_raw.hypocentral_distance):<15.2f} {'km':<10}"
-    )
-    print(
-        f"{'Magnitude':<25} {min(dataset_raw.magnitude):<15.2f} {max(dataset_raw.magnitude):<15.2f} {'':<10}"
-    )
-    print(
-        f"{'Azimuthal Gap':<25} {min(dataset_raw.azimuthal_gap):<15.2f} {max(dataset_raw.azimuthal_gap):<15.2f} {'degrees':<10}"
-    )
-    print(
-        f"{'Vs30':<25} {min(dataset_raw.vs30s):<15.2f} {max(dataset_raw.vs30s):<15.2f} {'m/s':<10}"
-    )
-    print(
-        f"{'Hypocenter depth':<25} {min(dataset_raw.hypocentre_depth):<15.2f} {max(dataset_raw.hypocentre_depth):<15.2f} {'km':<10}"
-    )
+    print(f"{'Hypocentral Distance':<25} {min(dataset_raw.hypocentral_distance):<15.2f} {max(dataset_raw.hypocentral_distance):<15.2f} {'km':<10}")
+    print(f"{'Magnitude':<25} {min(dataset_raw.magnitude):<15.2f} {max(dataset_raw.magnitude):<15.2f} {'':<10}")
+    print(f"{'Azimuthal Gap':<25} {min(dataset_raw.azimuthal_gap):<15.2f} {max(dataset_raw.azimuthal_gap):<15.2f} {'degrees':<10}")
+    print(f"{'Vs30':<25} {min(dataset_raw.vs30s):<15.2f} {max(dataset_raw.vs30s):<15.2f} {'m/s':<10}")
+    print(f"{'Hypocenter depth':<25} {min(dataset_raw.hypocentre_depth):<15.2f} {max(dataset_raw.hypocentre_depth):<15.2f} {'km':<10}")
     print("=" * 60)
-
 
 def compare_waveforms(data1, data2, sample_rate, labels=None):
     """
@@ -912,7 +853,7 @@ def compare_waveforms(data1, data2, sample_rate, labels=None):
         List of two strings for the legend labels
     """
     if labels is None:
-        labels = ["Waveform 1", "Waveform 2"]
+        labels = ['Waveform 1', 'Waveform 2']
 
     # Ensure both datasets have the same length for time axis
     min_samples = min(data1.shape[1], data2.shape[1])
@@ -920,7 +861,7 @@ def compare_waveforms(data1, data2, sample_rate, labels=None):
     data2 = data2[:, :min_samples]
 
     # Generate time axis
-    time = np.linspace(0, min_samples / sample_rate, min_samples)
+    time = np.linspace(0, min_samples/sample_rate, min_samples)
 
     # Apply window for FFT (reshape for broadcasting with [3, n_samples])
     window = np.hanning(min_samples).reshape(1, -1)
@@ -930,32 +871,32 @@ def compare_waveforms(data1, data2, sample_rate, labels=None):
     # Compute FFT along the time axis (axis=1)
     fft_result1 = np.fft.rfft(windowed_data1, axis=1)
     fft_result2 = np.fft.rfft(windowed_data2, axis=1)
-    fft_freqs = np.fft.rfftfreq(min_samples, 1 / sample_rate)
+    fft_freqs = np.fft.rfftfreq(min_samples, 1/sample_rate)
     fft_magnitude1 = np.abs(fft_result1)
     fft_magnitude2 = np.abs(fft_result2)
 
     # Create plots
     fig = plt.figure(figsize=(15, 12))
-    components = ["Radial", "Tranverse", "UD"]
+    components = ['Radial', 'Tranverse', 'UD']
 
     for i in range(3):
         # Time domain comparison
-        plt.subplot(3, 2, 2 * i + 1)
-        plt.plot(time, data1[i, :], "k-", linewidth=1.5, label=labels[0])
-        plt.plot(time, data2[i, :], "r-", linewidth=1.0, label=labels[1])
-        plt.title(f"{components[i]} Component")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude (m/$s^2$)")
+        plt.subplot(3, 2, 2*i+1)
+        plt.plot(time, data1[i, :], 'k-', linewidth=1.5, label=labels[0])
+        plt.plot(time, data2[i, :], 'r-', linewidth=1.0, label=labels[1])
+        plt.title(f'{components[i]} Component')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude (m/$s^2$)')
         plt.grid(True)
         plt.legend()
 
         # Frequency domain comparison
-        plt.subplot(3, 2, 2 * i + 2)
-        plt.loglog(fft_freqs, fft_magnitude1[i, :], "k-", linewidth=1.5, label=labels[0])
-        plt.loglog(fft_freqs, fft_magnitude2[i, :], "r-", linewidth=1.0, label=labels[1])
-        plt.title(f"{components[i]} Component")
-        plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Magnitude (m/s$^2$ Hz$^{-1}$)")
+        plt.subplot(3, 2, 2*i+2)
+        plt.loglog(fft_freqs, fft_magnitude1[i, :], 'k-', linewidth=1.5, label=labels[0])
+        plt.loglog(fft_freqs, fft_magnitude2[i, :], 'r-', linewidth=1.0, label=labels[1])
+        plt.title(f'{components[i]} Component')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Magnitude (m/s$^2$ Hz$^{-1}$)')
         plt.grid(True, which="both", ls="-")
         plt.grid(True, which="minor", ls="--", alpha=0.4)
         plt.legend()
@@ -971,8 +912,7 @@ def fft(signal, dt=0.01):
     fft_signal = np.fft.fft(signal)
     freqs = np.fft.fftfreq(N, dt)
 
-    return freqs[: int(N / 2)], abs(fft_signal)[: int(N / 2)]
-
+    return freqs[:int(N/2)], abs(fft_signal)[:int(N/2)]
 
 def moving_average_envelope_adaptive(
     waveform,
