@@ -23,7 +23,7 @@ def run(args):
     config = LatentSpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, config.t)
-    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+    name = f"Latent-EDM-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{config.latent_channels}-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True

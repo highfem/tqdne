@@ -15,7 +15,7 @@ from tqdne.utils import get_device, get_last_checkpoint
 def run(args):
     config = SpectrogramConfig(args.workdir)
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
-    name = "EDM-128x128x4-LogSpectrogram"
+    name = f"EDM-128x128-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -43,9 +43,8 @@ def run(args):
 
     logging.info("Build lightning module...")
     model = LightningEDM(
-        get_2d_unet_config(config, config.channels, config.channels, args.modelchannels),
-        optimizer_params,
-        mask=None,
+        get_2d_unet_config(config, config.channels, config.channels),
+        optimizer_params,        
     )
 
     logging.info("Build Pytorch Lightning Trainer...")
