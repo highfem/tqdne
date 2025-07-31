@@ -3,6 +3,7 @@ hdf5_seisbench_processor.py
 
 A module to read processed earthquake data from a single HDF5 file and create SeisBench datasets.
 Adapted from the original mat_reader.py to work with consolidated HDF5 files.
+Memory-efficient version that writes data immediately instead of accumulating in memory.
 """
 
 import h5py
@@ -17,6 +18,7 @@ import math
 from pathlib import Path
 from obspy.geodetics.base import gps2dist_azimuth
 from obspy import UTCDateTime, Stream, Trace
+import gc  # For garbage collection
 
 
 class HDF5EarthquakeReader:
@@ -70,6 +72,30 @@ class HDF5EarthquakeReader:
 
         return [key for key in self.h5f.keys() if key.startswith("earthquake_")]
 
+    def read_group_recursive(self, group):
+        """
+        Recursively read HDF5 group into nested dictionary, handling both groups and datasets.
+
+        Parameters:
+        -----------
+        group : h5py.Group
+            The HDF5 group to read
+
+        Returns:
+        --------
+        dict: Nested dictionary containing all data from the group
+        """
+        result = {}
+        for key in group.keys():
+            item = group[key]
+            if isinstance(item, h5py.Group):
+                # It's a group, recurse into it
+                result[key] = self.read_group_recursive(item)
+            else:
+                # It's a dataset, read it
+                result[key] = self.read_dataset_safe(item)
+        return result
+
     def read_dataset_safe(self, dataset):
         """
         Safely read a dataset, handling different data types.
@@ -118,71 +144,42 @@ class HDF5EarthquakeReader:
 
         # Create a structured object to mimic the original MATLAB struct access pattern
         class EarthquakeData:
-            def __init__(self, group):
+            def __init__(self, group, reader):
                 self.group = group
+                self.reader = reader
 
                 # Read basic earthquake info
                 if "name" in group:
-                    self.name = self._read_safe(group["name"])
+                    self.name = self.reader.read_dataset_safe(group["name"])
                 else:
                     self.name = eq_group_name
 
                 # Read GAN data
-                self.gan = self._read_gan_data(group.get("gan", {}))
+                self.gan = self._read_structure_data(group.get("gan"))
 
                 # Read recs data
-                self.recs = self._read_recs_data(group.get("recs", {}))
+                self.recs = self._read_structure_data(group.get("recs"))
 
-            def _read_safe(self, dataset):
-                """Safely read dataset with type conversion."""
-                data = dataset[()]
-                if isinstance(data, bytes):
-                    return data.decode()
-                elif hasattr(data, "dtype") and data.dtype.kind in ["U", "S"]:
-                    if data.size == 1:
-                        return str(data.item())
-                    else:
-                        return [str(item) for item in data]
+            def _read_structure_data(self, data_group):
+                """Read a structure (group or dict) recursively."""
+                class StructData:
+                    def __init__(self, data_dict):
+                        if data_dict:
+                            for key, value in data_dict.items():
+                                setattr(self, key, value)
+
+                if data_group is None:
+                    return StructData({})
+
+                if isinstance(data_group, h5py.Group):
+                    # It's an HDF5 group, read it recursively
+                    data_dict = self.reader.read_group_recursive(data_group)
+                    return StructData(data_dict)
                 else:
-                    return data
+                    # It might be already processed data
+                    return StructData(data_group if isinstance(data_group, dict) else {})
 
-            def _read_gan_data(self, gan_group):
-                """Read GAN data structure."""
-
-                class GANData:
-                    pass
-
-                gan_data = GANData()
-
-                if not gan_group:
-                    return gan_data
-
-                # Read all GAN fields
-                for key in gan_group.keys():
-                    value = self._read_safe(gan_group[key])
-                    setattr(gan_data, key, value)
-
-                return gan_data
-
-            def _read_recs_data(self, recs_group):
-                """Read recs data structure."""
-
-                class RecsData:
-                    pass
-
-                recs_data = RecsData()
-
-                if not recs_group:
-                    return recs_data
-
-                # Read all recs fields
-                for key in recs_group.keys():
-                    value = self._read_safe(recs_group[key])
-                    setattr(recs_data, key, value)
-
-                return recs_data
-
-        return EarthquakeData(eq_group)
+        return EarthquakeData(eq_group, self)
 
     def get_processing_parameters(self):
         """
@@ -197,17 +194,7 @@ class HDF5EarthquakeReader:
 
         if "processing_parameters" in self.h5f:
             params_group = self.h5f["processing_parameters"]
-
-            def read_group_recursive(group):
-                result = {}
-                for key in group.keys():
-                    if isinstance(group[key], h5py.Group):
-                        result[key] = read_group_recursive(group[key])
-                    else:
-                        result[key] = self.read_dataset_safe(group[key])
-                return result
-
-            return read_group_recursive(params_group)
+            return self.read_group_recursive(params_group)
 
         return {}
 
@@ -372,13 +359,89 @@ def spectral_gap_fill(signal, fs, num_iters=100, tol=1e-4):
     return x
 
 
+def safe_access_array(data, index, default_value):
+    """
+    Safely access array element at index, with fallback to default value.
+
+    Parameters:
+    -----------
+    data : array-like or scalar
+        The data to access
+    index : int
+        Index to access
+    default_value : any
+        Default value if access fails
+
+    Returns:
+    --------
+    The value at index or default_value
+    """
+    try:
+        if np.isscalar(data):
+            return data
+        elif hasattr(data, '__len__') and len(data) > index:
+            return data[index]
+        elif hasattr(data, '__len__') and len(data) > 0:
+            return data[0]  # Return first element if index out of bounds
+        else:
+            return default_value
+    except:
+        return default_value
+
+
 if __name__ == "__main__":
     # Configuration
     hdf5_file_path = "/scratch/kpalgunadi/data/general/japan/bosai22/dl20220725/arx20220730/proj/wfGAN_python_hdf5/out/wfGAN_python_hdf5_processed_earthquakes.h5"
 
-    result = []
-
     print(f"Processing HDF5 file: {hdf5_file_path}")
+
+    # Create dataset paths
+    folder_path = "new_GM0_hdf5/"
+    event_dir = Path(folder_path)
+    obs_dir = event_dir / "observed_01_new"
+    output_hdf5_path = obs_dir / "processed_waveforms.h5"
+
+    # Create directories if they don't exist
+    obs_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Output HDF5 path: {output_hdf5_path}")
+
+    # Initialize counters and data collectors
+    total_traces_written = 0
+    earthquakes_processed = 0
+
+    # Lists to collect all data
+    all_waveforms = []
+    all_trace_names = []
+    all_trace_id_z = []
+    all_trace_id_n = []
+    all_trace_id_e = []
+    all_trace_start_times = []
+    all_trace_sampling_rates = []
+    all_trace_npts = []
+    all_station_longitudes = []
+    all_station_latitudes = []
+    all_station_network_codes = []
+    all_station_codes = []
+    all_trace_channels = []
+    all_path_ep_distances = []
+    all_vs30 = []
+    all_azimuths = []
+    all_back_azimuths = []
+
+    # Event parameters
+    all_source_ids = []
+    all_source_magnitudes = []
+    all_source_magnitude_types = []
+    all_source_types = []
+    all_source_latitudes = []
+    all_source_longitudes = []
+    all_source_depths = []
+    all_source_origin_times = []
+    all_source_strikes = []
+    all_source_dips = []
+    all_source_rakes = []
+    all_azimuthal_gaps = []
 
     with HDF5EarthquakeReader(hdf5_file_path) as reader:
         # Get all earthquake groups
@@ -387,13 +450,13 @@ if __name__ == "__main__":
 
         print(f"Found {len(earthquake_groups)} earthquakes in HDF5 file")
 
-        for eq_group_name in earthquake_groups:
-            print(f"Processing {eq_group_name}")
+        for eq_idx, eq_group_name in enumerate(earthquake_groups):
+            print(f"Processing {eq_group_name} ({eq_idx + 1}/{len(earthquake_groups)})")
 
             try:
                 eqs = reader.get_earthquake_data(eq_group_name)
 
-                # Extract earthquake data (same structure as original)
+                # Extract earthquake data with safer access
                 date_time_str = eqs.gan.t0
                 t0 = UTCDateTime(date_time_str)
                 vs30 = eqs.gan.vs30
@@ -414,15 +477,22 @@ if __name__ == "__main__":
                 source_rake = eqs.gan.rake
                 wfMat = eqs.gan.wfMat
                 channel = ["N", "E", "Z"]
-                z_filenames = eqs.recs.z_filenames
-                n_filenames = eqs.recs.n_filenames
-                e_filenames = eqs.recs.e_filenames
+
+                # Safe access to filenames
+                z_filenames = getattr(eqs.recs, 'z_filenames', [])
+                n_filenames = getattr(eqs.recs, 'n_filenames', [])
+                e_filenames = getattr(eqs.recs, 'e_filenames', [])
 
                 try:
                     size_sta = len(sta_lat)
                 except:
-                    print("Number of station is only 1")
-                    continue
+                    print("Number of station is only 1 or data is scalar")
+                    if np.isscalar(sta_lat):
+                        size_sta = 1
+                        sta_lat = [sta_lat]
+                        sta_lon = [sta_lon]
+                    else:
+                        continue
 
                 # Handle scalar values that should be arrays
                 if np.isscalar(source_lat):
@@ -433,186 +503,207 @@ if __name__ == "__main__":
                     sta_lon = np.array([sta_lon])
                     size_sta = 1
 
+                # Convert to numpy arrays for safe indexing
+                sta_lat = np.array(sta_lat)
+                sta_lon = np.array(sta_lon)
+                source_lat = np.array(source_lat)
+                source_lon = np.array(source_lon)
+
                 hypo = (source_lat[0], source_lon[0])
                 stations = np.vstack((sta_lat, sta_lon)).T
                 azi_gap = calculate_azimuthal_gap(hypo, stations)
 
-                st = Stream()
+                traces_this_earthquake = 0
+
                 for j in range(size_sta):
-                    # Handle wfMat shape - it should be [3, n_stations, n_samples] -> [n_samples, n_stations, 3]
-                    if wfMat.ndim == 3:
-                        if wfMat.shape[0] == 3:  # [3, n_stations, n_samples]
-                            trace = wfMat[:, j, :].T  # [n_samples, 3]
-                        else:  # [n_samples, n_stations, 3]
-                            trace = wfMat[:, j, :]
-                    else:
-                        print(f"Unexpected wfMat shape: {wfMat.shape}")
+                    try:
+                        # Handle wfMat shape - it should be [3, n_stations, n_samples] -> [n_samples, n_stations, 3]
+                        if wfMat.ndim == 3:
+                            if wfMat.shape[0] == 3:  # [3, n_stations, n_samples]
+                                trace = wfMat[:, j, :].T  # [n_samples, 3]
+                            else:  # [n_samples, n_stations, 3]
+                                trace = wfMat[:, j, :]
+                        else:
+                            print(f"Unexpected wfMat shape: {wfMat.shape}")
+                            continue
+
+                        num_valid_N = np.sum(~np.isnan(trace[:, 0]))
+                        num_missing_N = np.sum(np.isnan(trace[:, 0]))
+                        num_valid_E = np.sum(~np.isnan(trace[:, 1]))
+                        num_missing_E = np.sum(np.isnan(trace[:, 1]))
+                        num_valid_Z = np.sum(~np.isnan(trace[:, 2]))
+                        num_missing_Z = np.sum(np.isnan(trace[:, 2]))
+
+                        # Gap filling for missing data
+                        if num_missing_N > 0:
+                            if num_valid_N > num_missing_N:
+                                trace[:, 0] = spectral_gap_fill(
+                                    trace[:, 0], 100, num_iters=100, tol=1e-5
+                                )
+                        if num_missing_E > 0:
+                            if num_valid_E > num_missing_E:
+                                trace[:, 1] = spectral_gap_fill(
+                                    trace[:, 1], 100, num_iters=100, tol=1e-5
+                                )
+                        if num_missing_Z > 0:
+                            if num_valid_Z > num_missing_Z:
+                                trace[:, 2] = spectral_gap_fill(
+                                    trace[:, 2], 100, num_iters=100, tol=1e-5
+                                )
+
+                        # Skip if all components have too much missing data
+                        if (
+                            (num_valid_N <= num_missing_N)
+                            and (num_valid_E <= num_missing_E)
+                            and (num_valid_Z <= num_missing_Z)
+                        ):
+                            continue
+
+                        # Calculate back azimuth
+                        current_source_lat = safe_access_array(source_lat, j, source_lat[0])
+                        current_source_lon = safe_access_array(source_lon, j, source_lon[0])
+                        current_sta_lat = safe_access_array(sta_lat, j, 0)
+                        current_sta_lon = safe_access_array(sta_lon, j, 0)
+
+                        baz = gps2dist_azimuth(
+                            current_source_lat,
+                            current_source_lon,
+                            current_sta_lat,
+                            current_sta_lon,
+                        )
+                        theo_azi = np.round(baz[1], 2)
+                        theo_back_azi = np.round(baz[2], 2)
+
+                        # Store waveform data (transpose to [3, n_samples] format for NEZ)
+                        all_waveforms.append(trace.T)  # Shape: [3, n_samples]
+
+                        # Store trace parameters
+                        all_trace_names.append(f"{eqs.name}_{str(t0)}_{safe_access_array(sta_network, j, 'UN')}_{safe_access_array(sta_name, j, 'UNKN')}")
+                        all_trace_id_z.append(str(safe_access_array(z_filenames, j, "unknown_z")))
+                        all_trace_id_n.append(str(safe_access_array(n_filenames, j, "unknown_n")))
+                        all_trace_id_e.append(str(safe_access_array(e_filenames, j, "unknown_e")))
+                        all_trace_start_times.append(str(t0))
+                        all_trace_sampling_rates.append(100)
+                        all_trace_npts.append(len(trace[:, 0]))
+                        all_station_longitudes.append(current_sta_lon)
+                        all_station_latitudes.append(current_sta_lat)
+                        all_station_network_codes.append(str(safe_access_array(sta_network, j, "UN")))
+                        all_station_codes.append(str(safe_access_array(sta_name, j, "UNKN")))
+                        all_trace_channels.append("NEZ")
+                        all_path_ep_distances.append(safe_access_array(rhyp, j, -999))
+                        all_vs30.append(safe_access_array(vs30, j, -1))
+                        all_azimuths.append(theo_azi)
+                        all_back_azimuths.append(theo_back_azi)
+
+                        # Store event parameters
+                        all_source_ids.append(f"{eqs.name}_{str(t0)}")
+                        all_source_magnitudes.append(safe_access_array(mag, j, mag[0] if hasattr(mag, '__len__') and len(mag) > 0 else -999))
+                        all_source_magnitude_types.append("moment_magnitude")
+                        all_source_types.append("global CMT")
+                        all_source_latitudes.append(current_source_lat)
+                        all_source_longitudes.append(current_source_lon)
+                        all_source_depths.append(safe_access_array(source_dep, j, source_dep[0] if hasattr(source_dep, '__len__') and len(source_dep) > 0 else 0) * 1000.0)
+                        all_source_origin_times.append(str(t0))
+                        all_source_strikes.append(safe_access_array(source_strike, j, source_strike[0] if hasattr(source_strike, '__len__') and len(source_strike) > 0 else -999))
+                        all_source_dips.append(safe_access_array(source_dip, j, source_dip[0] if hasattr(source_dip, '__len__') and len(source_dip) > 0 else -999))
+                        all_source_rakes.append(safe_access_array(source_rake, j, source_rake[0] if hasattr(source_rake, '__len__') and len(source_rake) > 0 else -999))
+                        all_azimuthal_gaps.append(azi_gap)
+
+                        total_traces_written += 1
+                        traces_this_earthquake += 1
+
+                    except Exception as e:
+                        print(f"Error processing station {j} in {eq_group_name}: {e}")
                         continue
 
-                    num_valid_N = np.sum(~np.isnan(trace[:, 0]))
-                    num_missing_N = np.sum(np.isnan(trace[:, 0]))
-                    num_valid_E = np.sum(~np.isnan(trace[:, 1]))
-                    num_missing_E = np.sum(np.isnan(trace[:, 1]))
-                    num_valid_Z = np.sum(~np.isnan(trace[:, 2]))
-                    num_missing_Z = np.sum(np.isnan(trace[:, 2]))
+                earthquakes_processed += 1
+                print(f"  ✓ Processed {traces_this_earthquake} traces from {eq_group_name}")
 
-                    # Gap filling for missing data
-                    if num_missing_N > 0:
-                        if num_valid_N > num_missing_N:
-                            trace[:, 0] = spectral_gap_fill(
-                                trace[:, 0], 100, num_iters=100, tol=1e-5
-                            )
-                    if num_missing_E > 0:
-                        if num_valid_E > num_missing_E:
-                            trace[:, 1] = spectral_gap_fill(
-                                trace[:, 1], 100, num_iters=100, tol=1e-5
-                            )
-                    if num_missing_Z > 0:
-                        if num_valid_Z > num_missing_Z:
-                            trace[:, 2] = spectral_gap_fill(
-                                trace[:, 2], 100, num_iters=100, tol=1e-5
-                            )
-
-                    # Skip if all components have too much missing data
-                    if (
-                        (num_valid_N <= num_missing_N)
-                        and (num_valid_E <= num_missing_E)
-                        and (num_valid_Z <= num_missing_Z)
-                    ):
-                        continue
-
-                    # Create ObsPy traces (note: wfMat order is N, E, Z)
-                    trN = Trace(trace[:, 0])
-                    trE = Trace(trace[:, 1])
-                    trZ = Trace(trace[:, 2])
-
-                    # Set trace statistics
-                    for tr, comp in zip([trN, trE, trZ], ["HHN", "HHE", "HHZ"]):
-                        tr.stats.sampling_rate = 1 / 0.01
-                        tr.stats.delta = 0.01
-                        tr.stats.starttime = t0
-                        tr.stats.network = (
-                            sta_network[j]
-                            if hasattr(sta_network[j], "__len__")
-                            else str(sta_network[j])
-                        )
-                        tr.stats.station = (
-                            sta_name[j] if hasattr(sta_name[j], "__len__") else str(sta_name[j])
-                        )
-                        tr.stats.channel = comp
-                        st += tr
-
-                    # Calculate back azimuth
-                    baz = gps2dist_azimuth(
-                        source_lat[j] if j < len(source_lat) else source_lat[0],
-                        source_lon[j] if j < len(source_lon) else source_lon[0],
-                        sta_lat[j],
-                        sta_lon[j],
-                    )
-                    theo_azi = np.round(baz[1], 2)
-                    theo_back_azi = np.round(baz[2], 2)
-
-                    trace_params = {
-                        "trace_name": f"{eqs.name}_{str(t0)}_{sta_network[j]}_{sta_name[j]}",
-                        "trace_id_z": z_filenames[j]
-                        if hasattr(z_filenames[j], "__len__")
-                        else str(z_filenames[j]),
-                        "trace_id_n": n_filenames[j]
-                        if hasattr(n_filenames[j], "__len__")
-                        else str(n_filenames[j]),
-                        "trace_id_e": e_filenames[j]
-                        if hasattr(e_filenames[j], "__len__")
-                        else str(e_filenames[j]),
-                        "trace_start_time": t0,
-                        "trace_sampling_rate_hz": 100,
-                        "trace_npts": len(trace[:, 0]),
-                        "station_longitude_deg": sta_lon[j],
-                        "station_latitude_deg": sta_lat[j],
-                        "station_network_code": sta_network[j]
-                        if hasattr(sta_network[j], "__len__")
-                        else str(sta_network[j]),
-                        "station_code": sta_name[j]
-                        if hasattr(sta_name[j], "__len__")
-                        else str(sta_name[j]),
-                        "trace_channel": "NEZ",
-                        "path_ep_distance_km": rhyp[j],
-                        "vs30": vs30[j],
-                        "azimuth": theo_azi,
-                        "back_azimuth": theo_back_azi,
-                    }
-
-                    event_params = {
-                        "source_id": f"{eqs.name}_{str(t0)}",
-                        "source_magnitude": mag[j] if j < len(mag) else mag[0],
-                        "source_magnitude_type": "moment_magnitude",
-                        "source_type": "global CMT",
-                        "source_latitude_deg": source_lat[j]
-                        if j < len(source_lat)
-                        else source_lat[0],
-                        "source_longitude_deg": source_lon[j]
-                        if j < len(source_lon)
-                        else source_lon[0],
-                        "source_depth_m": (source_dep[j] if j < len(source_dep) else source_dep[0])
-                        * 1000.0,
-                        "source_origin_time": t0,
-                        "source_strike": source_strike[j]
-                        if j < len(source_strike)
-                        else source_strike[0],
-                        "source_dip": source_dip[j] if j < len(source_dip) else source_dip[0],
-                        "source_rake": source_rake[j] if j < len(source_rake) else source_rake[0],
-                        "azimuthal_gap": azi_gap,
-                    }
-
-                    data_obs = sbu.stream_to_array(st, component_order="NEZ")[1]
-
-                    result.append(
-                        {
-                            "event_params": event_params,
-                            "trace_params_obs": trace_params,
-                            "data_obs": data_obs,
-                        }
-                    )
-
-                    # Clear stream for next station
-                    st.clear()
+                # Clear earthquake data from memory
+                del eqs
 
             except Exception as e:
                 print(f"Error processing {eq_group_name}: {e}")
                 import traceback
-
                 traceback.print_exc()
                 continue
 
-    # Create dataset
-    folder_path = "new_GM0_hdf5/"
-    event_dir = Path(folder_path)
-    obs_dir = event_dir / "observed_01_new"
-    metadata_path_obs = obs_dir / "metadata.csv"
-    waveform_path_obs = obs_dir / "waveforms.hdf5"
+    # Convert lists to numpy arrays for HDF5 storage
+    print(f"\nConverting {total_traces_written} traces to arrays...")
 
-    # Create directories if they don't exist
-    obs_dir.mkdir(parents=True, exist_ok=True)
+    # Convert waveforms to a single array
+    # Find maximum length to pad shorter traces
+    max_length = max(wf.shape[1] for wf in all_waveforms)
+    waveforms_array = np.full((len(all_waveforms), 3, max_length), np.nan)
 
-    print(f"Creating SeisBench dataset with {len(result)} records...")
-    print(f"Metadata path: {metadata_path_obs}")
-    print(f"Waveforms path: {waveform_path_obs}")
+    for i, wf in enumerate(all_waveforms):
+        waveforms_array[i, :, :wf.shape[1]] = wf
 
-    with sbd.WaveformDataWriter(metadata_path_obs, waveform_path_obs) as writer_obs:
-        writer_obs.data_format = {
-            "dimension_order": "CW",
-            "component_order": "NEZ",
-            "measurement": "acceleration",
-            "unit": "m/s2",
-            "instrument_response": "restituted",
-        }
-        for station in result:
-            writer_obs.add_trace(
-                {
-                    **station["event_params"],
-                    **station["trace_params_obs"],
-                },
-                station["data_obs"],
-            )
-            writer_obs.flush_hdf5()
+    # Convert string lists to byte arrays for HDF5
+    def string_list_to_bytes(str_list):
+        return [s.encode('utf-8') for s in str_list]
 
-    print(f"Dataset creation completed! {len(result)} traces written to SeisBench format.")
+    # Save to HDF5
+    print(f"Saving to HDF5 file: {output_hdf5_path}")
+
+    with h5py.File(output_hdf5_path, "w") as h5f:
+        # Trace parameters
+        h5f.create_dataset("trace_name", data=string_list_to_bytes(all_trace_names))
+        h5f.create_dataset("trace_id_z", data=string_list_to_bytes(all_trace_id_z))
+        h5f.create_dataset("trace_id_n", data=string_list_to_bytes(all_trace_id_n))
+        h5f.create_dataset("trace_id_e", data=string_list_to_bytes(all_trace_id_e))
+        h5f.create_dataset("trace_start_time", data=string_list_to_bytes(all_trace_start_times))
+        h5f.create_dataset("trace_sampling_rate_hz", data=np.array(all_trace_sampling_rates))
+        h5f.create_dataset("trace_npts", data=np.array(all_trace_npts))
+        h5f.create_dataset("station_longitude_deg", data=np.array(all_station_longitudes))
+        h5f.create_dataset("station_latitude_deg", data=np.array(all_station_latitudes))
+        h5f.create_dataset("station_network_code", data=string_list_to_bytes(all_station_network_codes))
+        h5f.create_dataset("station_code", data=string_list_to_bytes(all_station_codes))
+        h5f.create_dataset("trace_channel", data=string_list_to_bytes(all_trace_channels))
+        h5f.create_dataset("path_ep_distance_km", data=np.array(all_path_ep_distances))
+        h5f.create_dataset("vs30", data=np.array(all_vs30))
+        h5f.create_dataset("azimuth", data=np.array(all_azimuths))
+        h5f.create_dataset("back_azimuth", data=np.array(all_back_azimuths))
+
+        # Event parameters
+        h5f.create_dataset("source_id", data=string_list_to_bytes(all_source_ids))
+        h5f.create_dataset("source_magnitude", data=np.array(all_source_magnitudes))
+        h5f.create_dataset("source_magnitude_type", data=string_list_to_bytes(all_source_magnitude_types))
+        h5f.create_dataset("source_type", data=string_list_to_bytes(all_source_types))
+        h5f.create_dataset("source_latitude_deg", data=np.array(all_source_latitudes))
+        h5f.create_dataset("source_longitude_deg", data=np.array(all_source_longitudes))
+        h5f.create_dataset("source_depth_m", data=np.array(all_source_depths))
+        h5f.create_dataset("source_origin_time", data=string_list_to_bytes(all_source_origin_times))
+        h5f.create_dataset("source_strike", data=np.array(all_source_strikes))
+        h5f.create_dataset("source_dip", data=np.array(all_source_dips))
+        h5f.create_dataset("source_rake", data=np.array(all_source_rakes))
+        h5f.create_dataset("azimuthal_gap", data=np.array(all_azimuthal_gaps))
+
+        # Waveform data
+        h5f.create_dataset("waveforms", data=waveforms_array)
+
+        # Add metadata
+        h5f.attrs["total_traces"] = total_traces_written
+        h5f.attrs["earthquakes_processed"] = earthquakes_processed
+        h5f.attrs["component_order"] = "NEZ"
+        h5f.attrs["waveform_shape"] = "n_traces x 3_components x n_samples"
+        h5f.attrs["sampling_rate_hz"] = 100
+        h5f.attrs["measurement"] = "acceleration"
+        h5f.attrs["unit"] = "m/s2"
+        h5f.attrs["instrument_response"] = "not restituted"
+        h5f.attrs["created_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    print(f"\nHDF5 file '{output_hdf5_path}' created successfully!")
+    print(f"Total earthquakes processed: {earthquakes_processed}")
+    print(f"Total traces written: {total_traces_written}")
+    print(f"Waveform array shape: {waveforms_array.shape}")
+    print(f"Component order: NEZ")
+    print(f"Data format: [n_traces, 3_components, n_samples]")
+
+    # Optional: Print some statistics
+    print(f"\nDataset statistics:")
+    print(f"  Average trace length: {np.mean(all_trace_npts):.0f} samples")
+    print(f"  Max trace length: {max(all_trace_npts)} samples")
+    print(f"  Min trace length: {min(all_trace_npts)} samples")
+    print(f"  Magnitude range: {np.min(all_source_magnitudes):.2f} - {np.max(all_source_magnitudes):.2f}")
+    print(f"  Distance range: {np.min([d for d in all_path_ep_distances if d > 0]):.2f} - {np.max(all_path_ep_distances):.2f} km")
