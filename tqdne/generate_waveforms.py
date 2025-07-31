@@ -37,12 +37,12 @@ class LatentSpectrogramConfig:
     hop_size: int = 32
     representation = LogSpectrogram(stft_channels=stft_channels, hop_size=hop_size)
     t: int = 4096 - hop_size
-    latent_channels: int = 4
+    latent_channels: int = 8
     kl_weight: float = 1e-6
 
 
 def download_checkpoints():
-    response = requests.get("https://zenodo.org/records/15687691/files/tqdne-0.2.0.zip", timeout=60)
+    response = requests.get("https://zenodo.org/records/15687691/files/tqdne-0.2.2.zip", timeout=60)
     with open("downloaded_file.zip", "wb") as f:
         f.write(response.content)
     with zipfile.ZipFile("downloaded_file.zip", "r") as zip_ref:
@@ -55,8 +55,8 @@ def get_checkpoints(edm_checkpoint, autoencoder_checkpoint):
         print("downloading checkpoints from zenodo...")
         if not os.path.exists(".data"):
             download_checkpoints()
-        edm_checkpoint = ".data/tqdne-0.2.0/weights/edm.ckpt"
-        autoencoder_checkpoint = ".data/tqdne-0.2.0/weights/autoencoder.ckpt"
+        edm_checkpoint = ".data/tqdne-0.2.2/weights/edm.ckpt"
+        autoencoder_checkpoint = ".data/tqdne-0.2.2/weights/autoencoder.ckpt"
     elif edm_checkpoint is None or autoencoder_checkpoint is None:
         raise ValueError("Either both or none of the checkpoints must be provided.")
     else:
@@ -84,7 +84,7 @@ def generate(
         df = pd.read_csv(csv)
         df = df.loc[df.index.repeat(df.num_samples)]
         hypocentral_distances = df.hypocentral_distance.to_list()
-        hypocentral_distances = np.array(hypocentral_distances) * 1e-3
+        hypocentral_distances = np.array(hypocentral_distances)
         magnitudes = df.magnitude.to_list()
         vs30s = df.vs30.to_list()
         hypocentre_depths = df.hypocentre_depth.to_list()
@@ -103,7 +103,7 @@ def generate(
         ]
     ):
         print("using command line input data")
-        hypocentral_distances = [hypocentral_distance] * num_samples * 1e-3
+        hypocentral_distances = [hypocentral_distance] * num_samples
         magnitudes = [magnitude] * num_samples
         vs30s = [vs30] * num_samples
         hypocentre_depths = [hypocentre_depth] * num_samples
@@ -127,11 +127,11 @@ def generate(
     # we need them to normalize the inputs
     summary_statistics = np.array(
         [
-            [0.10196523161124325, 0.040784282611932066],
-            [4.730266447282116, 0.6278049031313433],
-            [371.9033679970052, 214.68149233229866],
-            [39.06279937237003, 22.487259252475628],
-            [129.88750553380498, 89.67082312013503],
+            [101.29891904350877, 40.78415968551517],
+            [4.801697862929673, 0.7146698731358634],
+            [384.7045105848187, 220.11269086015872],
+            [38.359214998072, 22.472499592355014],
+            [129.92139043457396, 89.69479051949207],
         ]
     )
 
@@ -175,7 +175,7 @@ def generate(
 
     print(f"generating waveforms using {device}...")
     with h5py.File(outfile, "w") as f:
-        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances) * 1e3)
+        f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
         f.create_dataset("vs30s", data=np.array(vs30s))
         f.create_dataset("hypocentre_depth", data=np.array(hypocentre_depths))

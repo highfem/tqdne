@@ -1,7 +1,7 @@
 # Generate seismic waveforms
 
 In order to generate synthetic seismic waveforms, first download the weight files from
-[Zenodo](https://zenodo.org/records/15687691) and put them in the `weights` folder.
+[Zenodo](https://zenodo.org/records/16405538) and put them in the `weights` folder.
 
 Then call
 
