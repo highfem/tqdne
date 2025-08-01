@@ -89,7 +89,7 @@ class ClassificationDataset(Dataset):
 
         # compute labels
         # labels = dist_bin * len(mag_bins) + mag_bin
-        dist = self.file["hypocentral_distance"][:] * 1000
+        dist = self.file["hypocentral_distance"][:]
         mag = self.file["magnitude"][:]
 
         self.labels = (
