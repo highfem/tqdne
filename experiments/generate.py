@@ -13,6 +13,7 @@ from tqdm import tqdm
 import tqdne
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataset import Dataset
+from tqdne.dit import LightningDiT
 from tqdne.edm import LightningEDM
 from tqdne.utils import get_device
 
@@ -31,6 +32,7 @@ def generate(
     batch_size,
     edm_checkpoint,
     autoencoder_checkpoint,
+    model_type="edm",
 ):
     print("Prepare conditional features...")
     dataset = Dataset(config.datapath, config.representation, cut=config.t, split="test")
@@ -116,9 +118,22 @@ def generate(
 
     th.serialization.add_safe_globals([tqdne.edm.EDM])
     edm_checkpoint = Path(edm_checkpoint)
-    edm = (
-        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
-    )
+
+    # Load the appropriate model based on model_type
+    if model_type.lower() == "dit":
+        print("Loading DiT model...")
+        model = (
+            LightningDiT.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
+    else:
+        print("Loading EDM model...")
+        model = (
+            LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
 
     print(f"Generating waveforms using {device}...")
     with h5py.File(outfile, "w") as f:
@@ -134,7 +149,7 @@ def generate(
             cond_batch = cond[i : i + batch_size]
             shape = [len(cond_batch), *signal_shape]
             with th.no_grad():
-                sample = edm.sample(
+                sample = model.sample(
                     shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                 )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
@@ -205,6 +220,13 @@ are saved in an HDF5 file with the given name in the outputs directory.
         "--config", type=str, default="LatentSpectrogramConfig", help="Config class"
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        default="edm",
+        choices=["edm", "dit"],
+        help="Type of diffusion model to use (edm or dit)",
+    )
     args = parser.parse_args()
 
     config = getattr(conf, args.config)(args.workdir)
@@ -228,4 +250,5 @@ are saved in an HDF5 file with the given name in the outputs directory.
         args.batch_size,
         args.edm_checkpoint,
         args.autoencoder_checkpoint,
+        args.model_type,
     )
