@@ -1,4 +1,4 @@
-"""Generate waveforms using the trained EDM model."""
+"""Generate waveforms using trained generative models (EDM, DiT, or Flow Matching)."""
 
 import argparse
 from pathlib import Path
@@ -15,6 +15,7 @@ from tqdne.autoencoder import LightningAutoencoder
 from tqdne.dataset import Dataset
 from tqdne.dit import LightningDiT
 from tqdne.edm import LightningEDM
+from tqdne.flow_matching import LightningFlowMatching
 from tqdne.utils import get_device
 
 
@@ -116,7 +117,7 @@ def generate(
             LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
         )
 
-    th.serialization.add_safe_globals([tqdne.edm.EDM])
+    th.serialization.add_safe_globals([tqdne.edm.EDM, tqdne.flow_matching.FlowMatching])
     edm_checkpoint = Path(edm_checkpoint)
 
     # Load the appropriate model based on model_type
@@ -124,6 +125,13 @@ def generate(
         print("Loading DiT model...")
         model = (
             LightningDiT.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
+    elif model_type.lower() == "flow_matching":
+        print("Loading Flow Matching model...")
+        model = (
+            LightningFlowMatching.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
             .to(device)
             .eval()
         )
@@ -157,7 +165,7 @@ def generate(
 
 
 if __name__ == "__main__":
-    desc = """Generate waveforms using the trained EDM model.
+    desc = """Generate waveforms using trained generative models (EDM, DiT, or Flow Matching).
 
 By default, the script generates a waveform for every sample in the test set of
 `preprocessed_waveforms.h5` dataset using the corresponding conditional features.
@@ -224,8 +232,8 @@ are saved in an HDF5 file with the given name in the outputs directory.
         "--model_type",
         type=str,
         default="edm",
-        choices=["edm", "dit"],
-        help="Type of diffusion model to use (edm or dit)",
+        choices=["edm", "dit", "flow_matching"],
+        help="Type of generative model to use (edm, dit, or flow_matching)",
     )
     args = parser.parse_args()
 
