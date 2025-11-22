@@ -18,13 +18,13 @@ def fake_represent(representation, leng_signal):
     return spectr
 
 
-def get_dit_config(config, latent_channels):
+def get_dit_config(config, latent_channels, model_channels=384):
     """Get DiT-S/2 configuration for latent diffusion."""
     dit_config = {
         "input_size": 32,  # latent spatial size
         "patch_size": 2,
         "in_channels": latent_channels,
-        "hidden_size": 384,  # DiT-S
+        "hidden_size": model_channels,  # DiT-S default: 384
         "depth": 12,  # DiT-S
         "num_heads": 6,  # DiT-S
         "mlp_ratio": 4.0,
@@ -35,9 +35,21 @@ def get_dit_config(config, latent_channels):
 
 def run(args):
     config = LatentSpectrogramConfig(args.workdir)
+
+    # Override config with command-line arguments
+    if args.maxlen is not None:
+        config.t = args.maxlen
+    if args.nlatent is not None:
+        config.latent_channels = args.nlatent
+
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, config.t)
-    name = f"Latent-DiT-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{config.latent_channels}-LogSpectrogram"
+
+    # Use provided name or generate default
+    if args.name is not None:
+        name = args.name
+    else:
+        name = f"Latent-DiT-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{config.latent_channels}-LogSpectrogram"
 
     train_loader, val_loader = get_train_and_val_loader(
         config, args.num_workers, args.batchsize, cond=True
@@ -63,16 +75,20 @@ def run(args):
         "max_steps": 200 * len(train_loader),
     }
 
-    checkpoint = (
-        config.outputdir
-        / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
-        / "last.ckpt"
-    )
-    logging.info(f"Loading autoencoder: {checkpoint}")
-    autoencoder = LightningAutoencoder.load_from_checkpoint(checkpoint)
+    # Load autoencoder checkpoint
+    if args.autoencodername is not None:
+        autoencoder_checkpoint = config.outputdir / args.autoencodername / "last.ckpt"
+    else:
+        autoencoder_checkpoint = (
+            config.outputdir
+            / f"Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+            / "last.ckpt"
+        )
+    logging.info(f"Loading autoencoder: {autoencoder_checkpoint}")
+    autoencoder = LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint)
 
     model = LightningDiT(
-        get_dit_config(config, config.latent_channels),
+        get_dit_config(config, config.latent_channels, args.modelchannels),
         optimizer_params,
         autoencoder=autoencoder,
     )
@@ -128,6 +144,24 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-d", "--num-devices", type=int, help="number of CPUs/GPUs to train on", default=4
+    )
+    parser.add_argument(
+        "--mask", action="store_true", help="enable masking during training"
+    )
+    parser.add_argument(
+        "--maxlen", type=int, help="maximum signal length (overrides config.t)", default=None
+    )
+    parser.add_argument(
+        "--nlatent", type=int, help="number of latent channels (overrides config.latent_channels)", default=None
+    )
+    parser.add_argument(
+        "--modelchannels", type=int, help="number of model hidden channels for DiT", default=384
+    )
+    parser.add_argument(
+        "--autoencodername", type=str, help="name of autoencoder checkpoint directory", default=None
+    )
+    parser.add_argument(
+        "--name", type=str, help="name for the experiment (overrides default naming)", default=None
     )
     args = parser.parse_args()
     if args.workdir is None:
