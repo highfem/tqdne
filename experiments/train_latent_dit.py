@@ -18,15 +18,15 @@ def fake_represent(representation, leng_signal):
     return spectr
 
 
-def get_dit_config(config, latent_channels, model_channels=384):
-    """Get DiT-S/2 configuration for latent diffusion."""
+def get_dit_config(config, latent_channels, model_channels=768):
+    """Get DiT-B/2 configuration for latent diffusion."""
     dit_config = {
         "input_size": 32,  # latent spatial size
         "patch_size": 2,
         "in_channels": latent_channels,
-        "hidden_size": model_channels,  # DiT-S default: 384
-        "depth": 12,  # DiT-S
-        "num_heads": 6,  # DiT-S
+        "hidden_size": model_channels,  # DiT-B default: 768
+        "depth": 12,  # DiT-B
+        "num_heads": 12,  # DiT-B
         "mlp_ratio": 4.0,
         "cond_features": len(config.features_keys),
     }
@@ -62,9 +62,15 @@ def run(args):
     ]
 
     optimizer_params = {
-        "learning_rate": 0.0001,
-        "max_steps": 200 * len(train_loader),
-        "eta_min": 0.0,
+        "learning_rate": 1e-4,
+        "max_steps": 300_000,
+        "warmup_steps": 1000,
+        "decay_steps": 300_000,
+        "end_learning_rate": 1e-6,
+        "gradient_clipping": 1.0,
+        "b1": 0.9,
+        "b2": 0.999,
+        "weight_decay": 0.00001,
     }
     trainer_params = {
         "precision": 32,
@@ -72,7 +78,7 @@ def run(args):
         "devices": args.num_devices,
         "num_nodes": 1,
         "num_sanity_val_steps": 0,
-        "max_steps": 200 * len(train_loader),
+        "max_steps": 300_000,
     }
 
     # Load autoencoder checkpoint
@@ -90,6 +96,7 @@ def run(args):
     model = LightningDiT(
         get_dit_config(config, config.latent_channels, args.modelchannels),
         optimizer_params,
+        num_sampling_steps=25,
         autoencoder=autoencoder,
     )
 
@@ -100,9 +107,15 @@ def run(args):
         config=config,
         metrics=metrics,
         plots=plots,
-        ema_decay=0.999,
-        eval_every=10,
-        limit_eval_batches=2,
+        ema_decay=0.9999,
+        eval_every=5000,
+        limit_eval_batches=25,
+        checkpoint_every_n_steps=10_000,
+        max_checkpoints_to_keep=10,
+        early_stopping_patience=100,
+        early_stopping_min_delta=0.001,
+        sampling_every_n_steps=10_000,
+        sampling_batches=5,
         log_to_wandb=True,
         **trainer_params,
     )
@@ -155,7 +168,7 @@ if __name__ == "__main__":
         "--nlatent", type=int, help="number of latent channels (overrides config.latent_channels)", default=None
     )
     parser.add_argument(
-        "--modelchannels", type=int, help="number of model hidden channels for DiT", default=384
+        "--modelchannels", type=int, help="number of model hidden channels for DiT", default=768
     )
     parser.add_argument(
         "--autoencodername", type=str, help="name of autoencoder checkpoint directory", default=None

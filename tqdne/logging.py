@@ -29,7 +29,7 @@ class LogCallback(Callback):
         Log metrics and visualizations every `every` validation epochs.
     """
 
-    def __init__(self, val_loader, representation, metrics, plots, limit_batches=1, every=1):
+    def __init__(self, val_loader, representation, metrics, plots, limit_batches=1, every=1, use_steps=False):
         super().__init__()
         self.val_loader = val_loader
         self.representation = representation
@@ -38,10 +38,26 @@ class LogCallback(Callback):
         self.limit_batches = limit_batches
         self.total_time = 0
         self.every = every
+        self.use_steps = use_steps
 
     def on_validation_epoch_end(self, trainer, pl_module):
+        # Skip if using step-based evaluation
+        if self.use_steps:
+            return
         if pl_module.current_epoch % self.every != 0:
             return
+        self._evaluate_and_log(trainer, pl_module)
+
+    def on_train_batch_end(self, trainer, pl_module, *args, **kwargs):
+        batch_time = time.time() - self.start_time
+        self.total_time += batch_time
+        pl_module.log("traintime", self.total_time, on_step=True, on_epoch=False)
+
+        # Step-based evaluation
+        if self.use_steps and pl_module.global_step % self.every == 0 and pl_module.global_step > 0:
+            self._evaluate_and_log(trainer, pl_module)
+
+    def _evaluate_and_log(self, trainer, pl_module):
 
         # Make predictions
         batches = []
@@ -91,8 +107,3 @@ class LogCallback(Callback):
 
     def on_train_batch_start(self, *args, **kwargs):
         self.start_time = time.time()
-
-    def on_train_batch_end(self, trainer, pl_module, *args, **kwargs):
-        batch_time = time.time() - self.start_time
-        self.total_time += batch_time
-        pl_module.log("traintime", self.total_time, on_step=True, on_epoch=False)

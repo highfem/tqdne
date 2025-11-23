@@ -29,7 +29,8 @@ class FlowMatching:
     The model learns the velocity field v_θ(x_t, t) to predict (x_1 - x_0).
     """
 
-    sigma_min: float = 1e-4  # Minimum noise level for numerical stability
+    time_eps: float = 1e-3  # Minimum time value for numerical stability
+    time_max: float = 1.0   # Maximum time value
 
     def time_embedding(self, t):
         """Convert time t ∈ [0, 1] to model input.
@@ -44,10 +45,8 @@ class FlowMatching:
         torch.Tensor
             Time embeddings for the model
         """
-        # Scale to similar range as EDM noise conditioning
-        # EDM uses 0.25 * log(sigma), so we map [0,1] to a similar range
-        # t=0 (noise) -> large negative, t=1 (data) -> ~0
-        return th.log(t + self.sigma_min)
+        # Linear scaling: maps time [0, 1] to [0, 999] for DiT timestep embedding
+        return t * 999.0
 
     def sample_time(self, batch_size, device):
         """Sample random time steps for training.
@@ -62,9 +61,10 @@ class FlowMatching:
         Returns
         -------
         torch.Tensor
-            Time steps uniformly sampled from [0, 1]
+            Time steps uniformly sampled from [time_eps, time_max]
         """
-        return th.rand(batch_size, device=device)
+        t = th.rand(batch_size, device=device)
+        return t * (self.time_max - self.time_eps) + self.time_eps
 
     def interpolate(self, x0, x1, t):
         """Linear interpolation between noise and data.
@@ -118,9 +118,11 @@ class FlowMatching:
         Returns
         -------
         torch.Tensor
-            Time values from 0 to 1
+            Time values from time_eps to time_max
         """
-        return th.linspace(0, 1, num_steps + 1, device=device)
+        # Generate uniform time steps, then scale to [time_eps, time_max]
+        t = th.linspace(0, 1, num_steps + 1, device=device)
+        return t * (self.time_max - self.time_eps) + self.time_eps
 
 
 class LightningFlowMatching(pl.LightningModule):
@@ -147,7 +149,7 @@ class LightningFlowMatching(pl.LightningModule):
         self,
         dit_config: dict,
         optimizer_params: dict,
-        num_sampling_steps: int = 50,
+        num_sampling_steps: int = 25,
         flow_matching: FlowMatching = FlowMatching(),
         autoencoder: None | LightningAutoencoder = None,
     ):
@@ -267,8 +269,8 @@ class LightningFlowMatching(pl.LightningModule):
         # Get time schedule
         times = self.flow_matching.sampling_schedule(self.num_sampling_steps, device=self.device)
 
-        # Integrate ODE using Heun's method
-        x = self.sample_heun(x, times, cond)
+        # Integrate ODE using Euler method
+        x = self.sample_euler(x, times, cond)
 
         # Decode from latent space if using autoencoder
         x = x.to(th.float32)
@@ -276,18 +278,17 @@ class LightningFlowMatching(pl.LightningModule):
             return self.autoencoder.decode(x)
         return x
 
-    def sample_heun(self, x, times, cond=None):
-        """Heun's method (2nd order Runge-Kutta) for ODE integration.
+    def sample_euler(self, x, times, cond=None):
+        """Euler method (1st order) for ODE integration.
 
-        This is a 2nd order ODE solver that provides good accuracy with
-        reasonable computational cost.
+        Implements simple Euler integration for the flow ODE.
 
         Parameters
         ----------
         x : torch.Tensor
             Initial state (noise)
         times : torch.Tensor
-            Time schedule from 0 to 1
+            Time schedule from time_eps to time_max
         cond : torch.Tensor, optional
             Conditional features
 
@@ -297,34 +298,21 @@ class LightningFlowMatching(pl.LightningModule):
             Final state (data)
         """
         dtype = x.dtype
+        dt = 1.0 / self.num_sampling_steps
 
-        for i, (t_curr, t_next) in enumerate(zip(times[:-1], times[1:])):
-            dt = t_next - t_curr
+        for i in range(self.num_sampling_steps):
+            # Get time for this step
+            t = times[i].repeat(len(x))
 
-            # First evaluation (Euler step)
-            t_curr_batch = t_curr.repeat(len(x))
-            v_curr = self(
+            # Predict velocity
+            v = self(
                 x.to(self.dtype),
-                t_curr_batch.to(self.dtype),
+                t.to(self.dtype),
                 cond
             ).to(dtype)
 
-            # Euler predictor
-            x_next = x + dt * v_curr
-
-            # Second evaluation (correction)
-            if i < len(times) - 2:  # Skip correction on last step
-                t_next_batch = t_next.repeat(len(x))
-                v_next = self(
-                    x_next.to(self.dtype),
-                    t_next_batch.to(self.dtype),
-                    cond
-                ).to(dtype)
-
-                # Heun's method: average of two slopes
-                x = x + dt * (0.5 * v_curr + 0.5 * v_next)
-            else:
-                x = x_next
+            # Euler step: x = x + v * dt
+            x = x + v * dt
 
         return x
 
@@ -336,14 +324,38 @@ class LightningFlowMatching(pl.LightningModule):
         return self.sample(sample.shape, cond=cond)
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
-        lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.optimizer_params["max_steps"],
-            eta_min=self.optimizer_params["eta_min"],
+        optimizer = th.optim.AdamW(
+            self.parameters(),
+            lr=self.optimizer_params["learning_rate"],
+            betas=(self.optimizer_params.get("b1", 0.9), self.optimizer_params.get("b2", 0.999)),
+            weight_decay=self.optimizer_params.get("weight_decay", 0.0),
         )
 
-        return {
+        # Custom LR scheduler with warmup and linear decay
+        def lr_lambda(step):
+            warmup_steps = self.optimizer_params.get("warmup_steps", 0)
+            decay_steps = self.optimizer_params.get("decay_steps", self.optimizer_params["max_steps"])
+            end_lr = self.optimizer_params.get("end_learning_rate", 0.0)
+            start_lr = self.optimizer_params["learning_rate"]
+
+            if step < warmup_steps:
+                # Linear warmup
+                return step / warmup_steps
+            else:
+                # Linear decay
+                progress = (step - warmup_steps) / (decay_steps - warmup_steps)
+                progress = min(progress, 1.0)
+                return (1.0 - progress) + progress * (end_lr / start_lr)
+
+        lr_scheduler = th.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+        config = {
             "optimizer": optimizer,
             "lr_scheduler": {"scheduler": lr_scheduler, "interval": "step"},
         }
+
+        # Add gradient clipping if specified
+        if "gradient_clipping" in self.optimizer_params:
+            config["gradient_clip_val"] = self.optimizer_params["gradient_clipping"]
+
+        return config

@@ -632,14 +632,38 @@ class LightningDiT(pl.LightningModule):
         return self.sample(sample.shape, cond_sample, cond)
 
     def configure_optimizers(self):
-        optimizer = th.optim.Adam(self.parameters(), lr=self.optimizer_params["learning_rate"])
-        lr_scheduler = th.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.optimizer_params["max_steps"],
-            eta_min=self.optimizer_params["eta_min"],
+        optimizer = th.optim.AdamW(
+            self.parameters(),
+            lr=self.optimizer_params["learning_rate"],
+            betas=(self.optimizer_params.get("b1", 0.9), self.optimizer_params.get("b2", 0.999)),
+            weight_decay=self.optimizer_params.get("weight_decay", 0.0),
         )
 
-        return {
+        # Custom LR scheduler with warmup and linear decay
+        def lr_lambda(step):
+            warmup_steps = self.optimizer_params.get("warmup_steps", 0)
+            decay_steps = self.optimizer_params.get("decay_steps", self.optimizer_params["max_steps"])
+            end_lr = self.optimizer_params.get("end_learning_rate", 0.0)
+            start_lr = self.optimizer_params["learning_rate"]
+
+            if step < warmup_steps:
+                # Linear warmup
+                return step / warmup_steps
+            else:
+                # Linear decay
+                progress = (step - warmup_steps) / (decay_steps - warmup_steps)
+                progress = min(progress, 1.0)
+                return (1.0 - progress) + progress * (end_lr / start_lr)
+
+        lr_scheduler = th.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+        config = {
             "optimizer": optimizer,
             "lr_scheduler": {"scheduler": lr_scheduler, "interval": "step"},
         }
+
+        # Add gradient clipping if specified
+        if "gradient_clipping" in self.optimizer_params:
+            config["gradient_clip_val"] = self.optimizer_params["gradient_clipping"]
+
+        return config

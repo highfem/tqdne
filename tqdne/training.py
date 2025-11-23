@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytorch_lightning as pl
 import wandb
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from tqdne.ema import EMA
@@ -19,6 +19,12 @@ def get_pl_trainer(
     eval_every=1,
     limit_eval_batches=1,
     log_to_wandb=True,
+    checkpoint_every_n_steps=None,
+    max_checkpoints_to_keep=None,
+    early_stopping_patience=None,
+    early_stopping_min_delta=None,
+    sampling_every_n_steps=None,
+    sampling_batches=None,
     **trainer_params,
 ):
     # wandb logger
@@ -37,7 +43,19 @@ def get_pl_trainer(
     if ema_decay > 0:
         callbacks.append(EMA(decay=ema_decay))
 
-    # log callback
+    # early stopping
+    if early_stopping_patience is not None:
+        callbacks.append(
+            EarlyStopping(
+                monitor="validation/loss",
+                patience=early_stopping_patience,
+                min_delta=early_stopping_min_delta if early_stopping_min_delta else 0.0,
+                mode="min",
+                verbose=True,
+            )
+        )
+
+    # log callback for evaluation
     if metrics or plots:
         callbacks.append(
             LogCallback(
@@ -47,11 +65,27 @@ def get_pl_trainer(
                 plots,
                 limit_batches=limit_eval_batches,
                 every=eval_every,
+                use_steps=True,
+            )
+        )
+
+    # sampling callback (separate from evaluation)
+    if sampling_every_n_steps is not None and plots:
+        callbacks.append(
+            LogCallback(
+                val_loader,
+                config.representation,
+                metrics=None,  # No metrics for sampling callback
+                plots=plots,
+                limit_batches=sampling_batches if sampling_batches else limit_eval_batches,
+                every=sampling_every_n_steps,
+                use_steps=True,
             )
         )
 
     # save checkpoints to 'model_path' whenever 'val_loss' has a new min
     if "enable_checkpointing" not in trainer_params or trainer_params["enable_checkpointing"]:
+        # Validation loss based checkpoint
         callbacks.append(
             ModelCheckpoint(
                 dirpath=config.outputdir / Path(name),
@@ -63,6 +97,17 @@ def get_pl_trainer(
                 save_last=True,
             )
         )
+        # Step-based checkpoint (if configured)
+        if checkpoint_every_n_steps is not None:
+            callbacks.append(
+                ModelCheckpoint(
+                    dirpath=config.outputdir / Path(name),
+                    filename="{name}_step={step:07d}",
+                    every_n_train_steps=checkpoint_every_n_steps,
+                    save_top_k=max_checkpoints_to_keep if max_checkpoints_to_keep else -1,
+                    save_last=False,
+                )
+            )
 
     output_dir = config.outputdir / Path(name)
     output_dir.mkdir(parents=True, exist_ok=True)
