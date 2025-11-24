@@ -83,27 +83,29 @@ class LogCallback(Callback):
         }
 
         # Log metrics
-        for metric in self.metrics:
-            result = metric(pred=pred, target=batch["waveform"])
-            pl_module.log(metric.name, result, sync_dist=True)
+        if self.metrics:
+            for metric in self.metrics:
+                result = metric(pred=pred, target=batch["waveform"])
+                pl_module.log(metric.name, result, sync_dist=True)
 
         # Log plots
-        for plot in self.plots:
-            fig = plot(
-                pred=pred,
-                target=batch["waveform"],
-                cond_signal=batch["cond_waveform"] if "cond_waveform" in batch else None,
-                cond=batch["cond"] if "cond" in batch else None,
-            )
-            try:
-                trainer.logger.experiment.log(
-                    {f"{plot.name} (Image)": wandb.Image(fig)}, step=pl_module.global_step
+        if self.plots:
+            for plot in self.plots:
+                fig = plot(
+                    pred=pred,
+                    target=batch["waveform"],
+                    cond_signal=batch["cond_waveform"] if "cond_waveform" in batch else None,
+                    cond=batch["cond"] if "cond" in batch else None,
                 )
-                # trainer.logger.experiment.log(
-                #     {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
-                # )
-            except Exception as e:
-                warnings.warn(f"Failed to log plot: {e}")
+                try:
+                    trainer.logger.experiment.log(
+                        {f"{plot.name} (Image)": wandb.Image(fig)}, step=pl_module.global_step
+                    )
+                    # trainer.logger.experiment.log(
+                    #     {f"{plot.name} (Plot)": fig}, step=pl_module.global_step
+                    # )
+                except Exception as e:
+                    warnings.warn(f"Failed to log plot: {e}")
 
     def on_train_batch_start(self, *args, **kwargs):
         self.start_time = time.time()
