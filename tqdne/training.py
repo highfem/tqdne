@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 import wandb
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.profilers import PyTorchProfiler
 
 from tqdne.ema import EMA
 from tqdne.logging import LogCallback
@@ -25,6 +26,7 @@ def get_pl_trainer(
     early_stopping_min_delta=None,
     sampling_every_n_steps=None,
     sampling_batches=None,
+    enable_profiler=False,
     **trainer_params,
 ):
     # wandb logger
@@ -104,7 +106,7 @@ def get_pl_trainer(
                     dirpath=config.outputdir / Path(name),
                     filename="{name}_step={step:07d}",
                     every_n_train_steps=checkpoint_every_n_steps,
-                    save_top_k=max_checkpoints_to_keep if max_checkpoints_to_keep else -1,
+                    save_top_k=-1,  # Save all step-based checkpoints (no metric to monitor)
                     save_last=False,
                 )
             )
@@ -112,12 +114,26 @@ def get_pl_trainer(
     output_dir = config.outputdir / Path(name)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Setup profiler if enabled
+    profiler = None
+    if enable_profiler:
+        profiler = PyTorchProfiler(
+            dirpath=output_dir / "profiler",
+            filename="profile",
+            row_limit=20,
+            export_to_chrome=True,
+            profile_memory=True,
+            with_flops=True,  # Enable FLOPs counting
+            with_stack=False,
+        )
+
     # Define Trainer
     trainer = pl.Trainer(
         **trainer_params,
         logger=wandb_logger,
         callbacks=callbacks,
         default_root_dir=output_dir,
+        profiler=profiler,
     )
 
     return trainer

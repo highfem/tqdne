@@ -18,6 +18,7 @@ from tqdm import tqdm
 import tqdne
 from tqdne.autoencoder import LightningAutoencoder
 from tqdne.edm import LightningEDM
+from tqdne.profiling import FLOPsCounter
 from tqdne.representation import LogSpectrogram
 from tqdne.utils import get_device
 
@@ -77,6 +78,7 @@ def generate(
     batch_size,
     edm_checkpoint,
     autoencoder_checkpoint,
+    enable_profiling=False,
 ):
     edm_checkpoint, autoencoder_checkpoint = get_checkpoints(edm_checkpoint, autoencoder_checkpoint)
     if csv:
@@ -174,6 +176,10 @@ def generate(
     )
 
     print(f"generating waveforms using {device}...")
+
+    # Setup profiler if enabled
+    flops_counter = FLOPsCounter() if enable_profiling else None
+
     with h5py.File(outfile, "w") as f:
         f.create_dataset("hypocentral_distance", data=np.array(hypocentral_distances))
         f.create_dataset("magnitude", data=np.array(magnitudes))
@@ -187,10 +193,20 @@ def generate(
             cond_batch = cond[i : i + batch_size]
             shape = [len(cond_batch), 3, 128, 128]
             with th.no_grad():
-                sample = edm.sample(
-                    shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
-                )
+                if enable_profiling:
+                    with flops_counter.profile():
+                        sample = edm.sample(
+                            shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
+                        )
+                else:
+                    sample = edm.sample(
+                        shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
+                    )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
+
+    if enable_profiling:
+        flops_counter.print_summary("Waveform Generation Profiling")
+
     print("done!")
 
 
@@ -251,6 +267,11 @@ are saved in an HDF5 file with the given name in the outputs directory.
         help="Autoencoder checkpoint. If not provided, will automatically download from Zenodo.",
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per device.")
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable FLOPs profiling during generation",
+    )
     args = parser.parse_args()
 
     generate(
@@ -265,4 +286,5 @@ are saved in an HDF5 file with the given name in the outputs directory.
         args.batch_size,
         args.edm_checkpoint,
         args.autoencoder_checkpoint,
+        args.profile,
     )
