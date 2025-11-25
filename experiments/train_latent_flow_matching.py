@@ -168,7 +168,7 @@ if __name__ == "__main__":
         "--nlatent", type=int, help="number of latent channels (overrides config.latent_channels)", default=None
     )
     parser.add_argument(
-        "--modelchannels", type=int, help="number of model hidden channels for DiT", default=768
+        "--modelchannels", type=int, help="number of model hidden channels for DiT (must be divisible by num_heads=12, e.g., 768, 1152, 1536)", default=768
     )
     parser.add_argument(
         "--autoencodername", type=str, help="name of autoencoder checkpoint directory", default=None

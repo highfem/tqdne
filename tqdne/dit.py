@@ -245,6 +245,16 @@ class DiT(nn.Module):
         cond_features=5,
     ):
         super().__init__()
+
+        # Validate that hidden_size is divisible by num_heads
+        if hidden_size % num_heads != 0:
+            raise ValueError(
+                f"hidden_size ({hidden_size}) must be divisible by num_heads ({num_heads}). "
+                f"Current configuration gives {hidden_size}/{num_heads} = {hidden_size/num_heads:.2f}. "
+                f"Valid hidden_size values for {num_heads} heads: "
+                f"{[num_heads * i for i in range(hidden_size // num_heads, (hidden_size // num_heads) + 3)]}"
+            )
+
         self.in_channels = in_channels
         self.out_channels = in_channels
         self.patch_size = patch_size
