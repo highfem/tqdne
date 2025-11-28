@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Generate waveforms using the trained EDM model."""
+"""Generate waveforms using trained generative models (EDM, DiT, or Flow Matching)."""
 
 import argparse
 import os
@@ -17,7 +17,9 @@ from tqdm import tqdm
 
 import tqdne
 from tqdne.autoencoder import LightningAutoencoder
+from tqdne.dit import LightningDiT
 from tqdne.edm import LightningEDM
+from tqdne.flow_matching import LightningFlowMatching
 from tqdne.profiling import FLOPsCounter
 from tqdne.representation import LogSpectrogram
 from tqdne.utils import get_device
@@ -78,6 +80,7 @@ def generate(
     batch_size,
     edm_checkpoint,
     autoencoder_checkpoint,
+    model_type="edm",
     enable_profiling=False,
 ):
     edm_checkpoint, autoencoder_checkpoint = get_checkpoints(edm_checkpoint, autoencoder_checkpoint)
@@ -113,17 +116,7 @@ def generate(
     else:
         raise ValueError("provide either a CSV or a full parameter set")
 
-    print("loading model...")
     config = LatentSpectrogramConfig()
-    device = get_device()
-    autoencoder = None
-    if autoencoder_checkpoint is not None:
-        autoencoder = (
-            LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
-        )
-    edm = (
-        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
-    )
 
     # these are the summary statistics of the conditional features of the entire data set
     # we need them to normalize the inputs
@@ -169,11 +162,31 @@ def generate(
             LightningAutoencoder.load_from_checkpoint(autoencoder_checkpoint).to(device).eval()
         )
 
-    th.serialization.add_safe_globals([tqdne.edm.EDM])
+    th.serialization.add_safe_globals([tqdne.edm.EDM, tqdne.flow_matching.FlowMatching])
     edm_checkpoint = Path(edm_checkpoint)
-    edm = (
-        LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder).to(device).eval()
-    )
+
+    # Load the appropriate model based on model_type
+    if model_type.lower() == "dit":
+        print("Loading DiT model...")
+        model = (
+            LightningDiT.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
+    elif model_type.lower() == "flow_matching":
+        print("Loading Flow Matching model...")
+        model = (
+            LightningFlowMatching.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
+    else:
+        print("Loading EDM model...")
+        model = (
+            LightningEDM.load_from_checkpoint(edm_checkpoint, autoencoder=autoencoder)
+            .to(device)
+            .eval()
+        )
 
     print(f"generating waveforms using {device}...")
 
@@ -195,11 +208,11 @@ def generate(
             with th.no_grad():
                 if enable_profiling:
                     with flops_counter.profile():
-                        sample = edm.sample(
+                        sample = model.sample(
                             shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                         )
                 else:
-                    sample = edm.sample(
+                    sample = model.sample(
                         shape, cond=th.tensor(cond_batch, device=device, dtype=th.float32)
                     )
             waveforms[i : i + batch_size] = config.representation.invert_representation(sample)
@@ -211,7 +224,7 @@ def generate(
 
 
 def main():
-    desc = """Generate waveforms using the trained EDM model.
+    desc = """Generate waveforms using trained generative models (EDM, DiT, or Flow Matching).
 
 By default, the script generates a waveform for every sample in the test set of
 `preprocessed_waveforms.h5` dataset using the corresponding conditional features.
@@ -268,6 +281,13 @@ are saved in an HDF5 file with the given name in the outputs directory.
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per device.")
     parser.add_argument(
+        "--model_type",
+        type=str,
+        default="edm",
+        choices=["edm", "dit", "flow_matching"],
+        help="Type of generative model to use (edm, dit, or flow_matching)",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Enable FLOPs profiling during generation",
@@ -286,5 +306,6 @@ are saved in an HDF5 file with the given name in the outputs directory.
         args.batch_size,
         args.edm_checkpoint,
         args.autoencoder_checkpoint,
+        args.model_type,
         args.profile,
     )
