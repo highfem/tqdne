@@ -56,7 +56,7 @@ def run(args):
 
     config.representation.disable_multiprocessing()  # needed for Pytorch Lightning
     spectr = fake_represent(config.representation, config.t)
-    name = f"Transfer-Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x4-LogSpectrogram"
+    name = f"Transfer-Autoencoder-{spectr.shape[1] // 4}x{spectr.shape[2] // 4}x{config.latent_channels}-LogSpectrogram"
 
     if args.name is not None:
         name = args.name

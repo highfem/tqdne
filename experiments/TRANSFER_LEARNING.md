@@ -318,6 +318,129 @@ with h5py.File("target_workdir/data/preprocessed_waveforms.h5", "r") as f:
 
 8. **Sufficient target data** - Aim for at least 1000-2000 target domain samples for good results
 
+## Flow Matching Transfer Learning
+
+### Overview
+
+In addition to transferring DiT and EDM diffusion models, TQDNE supports transfer learning for Flow Matching models. This includes both standard transfer (FlowMatching → FlowMatching) and cross-transfer (DiT diffusion → FlowMatching).
+
+### Usage
+
+#### Standard Transfer (FlowMatching → FlowMatching)
+
+```bash
+python experiments/transfer_flow_matching.py \
+  --workdir /path/to/source_domain_workdir \
+  --target-workdir /path/to/target_domain_workdir \
+  --source-autoencoder-checkpoint /path/to/source/outputs/Autoencoder-.../last.ckpt \
+  --source-flow-matching-checkpoint /path/to/source/outputs/Latent-FlowMatching-.../last.ckpt \
+  --strategy conservative \
+  --freeze-autoencoder \
+  -b 256 -w 32 -d 4
+```
+
+#### Cross-Transfer (DiT Diffusion → FlowMatching)
+
+```bash
+python experiments/transfer_flow_matching.py \
+  --workdir /path/to/source_domain_workdir \
+  --target-workdir /path/to/target_domain_workdir \
+  --source-autoencoder-checkpoint /path/to/source/outputs/Autoencoder-.../last.ckpt \
+  --source-diffusion-checkpoint /path/to/source/outputs/Latent-DiT-.../last.ckpt \
+  --strategy conservative \
+  --freeze-autoencoder \
+  --model-channels 768 \
+  -b 256 -w 32 -d 4
+```
+
+### Why Cross-Transfer from DiT to FlowMatching Works
+
+#### Mathematical Formulations
+
+**DiT Diffusion Model:**
+- Forward process: x_noisy = x_clean + σ·ε, where σ ~ lognormal, ε ~ N(0,I)
+- Conditioning: 0.25 * log(σ)
+- Prediction: Denoised output with EDM skip connections
+- Loss: Sigma-weighted MSE
+
+**FlowMatching Model:**
+- Forward process: x_t = t·x_1 + (1-t)·x_0, where t ~ U[0,1], x_0 ~ N(0,I)
+- Conditioning: t * 999.0
+- Prediction: Velocity field v = x_1 - x_0
+- Loss: Unweighted MSE
+
+#### Theoretical Connection
+
+Both diffusion and flow matching are **continuous-time generative models** based on ODEs:
+
+1. **Diffusion models** have a deterministic formulation called the "probability flow ODE"
+2. **Flow matching** uses continuous normalizing flows with learned velocity fields
+3. Both frameworks generate samples by integrating an ODE from noise to data
+
+While the objectives differ, they solve fundamentally related problems: learning to transform noise into data through continuous-time dynamics.
+
+#### Why Transfer Learning Works
+
+**Shared Knowledge:**
+- **Latent space structure:** DiT learned to understand seismic waveform spectrogram features
+- **Conditional dependencies:** Both models condition on the same earthquake parameters (magnitude, distance, depth, etc.)
+- **Semantic representations:** Lower DiT transformer layers learn general features that are transferable across related tasks
+
+**Architecture Flexibility:**
+- DiT uses sinusoidal timestep embeddings that can handle any scalar conditioning input
+- The transformer architecture is task-agnostic—it processes embeddings generically
+- Fine-tuning adapts the model from denoising (diffusion) to velocity prediction (flow matching)
+
+**Analogy to Computer Vision:**
+Similar to how ImageNet-pretrained vision transformers transfer to segmentation tasks:
+- Different objectives (classification vs. segmentation)
+- But pretrained visual features provide strong initialization
+- Fine-tuning adapts features to the new task
+
+#### Important Clarifications
+
+**This is NOT mathematical equivalence** — We are not performing an exact transformation of diffusion weights into flow matching weights. The two models have different training objectives and prediction targets.
+
+**This IS principled transfer learning** — We leverage learned latent space representations as initialization for a related but different generative modeling task.
+
+**This IS theoretically justified** — Both frameworks solve continuous-time generative modeling via ordinary differential equations. Recent research (e.g., "Flow Matching for Generative Modeling", Lipman et al. 2023) shows that diffusion and flow matching are related approaches to the same fundamental problem.
+
+#### What Gets Adapted During Fine-Tuning
+
+When cross-transferring from DiT to FlowMatching, the model adapts:
+
+1. **Conditioning distribution:** Learns to use t ~ Uniform[0,1] instead of σ ~ lognormal
+2. **Prediction target:** Adapts from predicting denoised samples to predicting velocity fields
+3. **Loss weighting:** Learns with unweighted MSE instead of sigma-weighted loss
+4. **Output processing:** Removes dependency on EDM skip connections
+
+The DiT transformer backbone provides a strong initialization with learned features, which fine-tuning then adapts to the flow matching objective.
+
+#### Expected Performance
+
+Cross-transfer from DiT to FlowMatching typically provides:
+
+- **Faster convergence** than training flow matching from scratch (pretrained features provide good initialization)
+- **Better sample quality** with limited target data (transfer learning benefit)
+- **Requires adequate fine-tuning** (recommended: longer warmup and more steps than standard transfer)
+
+#### Recommended Hyperparameters
+
+**For Cross-Transfer (DiT → FlowMatching):**
+
+Conservative strategy:
+- Learning rate: 1e-5
+- Warmup steps: 1000 (longer than standard 500)
+- Max steps: 150,000 (more than standard 100,000)
+- Freeze autoencoder: Recommended
+
+Aggressive strategy:
+- Learning rate: 1e-6
+- Warmup steps: 1000
+- Max steps: 150,000
+
+**Rationale:** Cross-transfer requires longer warmup to stabilize the new conditioning scheme and more training steps for full adaptation to the velocity prediction objective.
+
 ## Citation
 
 If you use this transfer learning implementation, please cite the original TQDNE paper:

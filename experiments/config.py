@@ -82,6 +82,7 @@ class TransferConfig(LatentSpectrogramConfig):
     # Source model checkpoints
     source_autoencoder_checkpoint: str | Path | None = None
     source_diffusion_checkpoint: str | Path | None = None
+    source_flow_matching_checkpoint: str | Path | None = None
 
     # Transfer learning strategy
     transfer_strategy: str = "conservative"  # "conservative" or "aggressive"
@@ -97,6 +98,12 @@ class TransferConfig(LatentSpectrogramConfig):
     diffusion_warmup_steps: int = 500  # Shorter warmup
     diffusion_max_steps: int = 100_000  # Fewer steps than original
     diffusion_end_learning_rate: float = 1e-6
+
+    # Flow matching transfer settings
+    flow_matching_learning_rate: float = 1e-5  # Lower than original (1e-4)
+    flow_matching_warmup_steps: int = 500  # Shorter warmup
+    flow_matching_max_steps: int = 100_000  # Fewer steps than original
+    flow_matching_end_learning_rate: float = 1e-6
 
     # Training parameters
     gradient_clipping: float = 1.0
@@ -127,6 +134,7 @@ class TransferConfig(LatentSpectrogramConfig):
             self.freeze_decoder = False
             self.autoencoder_learning_rate = 1e-6  # Even lower for aggressive
             self.diffusion_learning_rate = 1e-6
+            self.flow_matching_learning_rate = 1e-6
         elif self.transfer_strategy != "conservative":
             raise ValueError(
                 f"Invalid transfer_strategy: {self.transfer_strategy}. "
