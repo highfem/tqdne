@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: If you use this work, please cite it as below.
+title: High Resolution Seismic Waveform Generation Using Denoising Diffusion
+authors:
+  - family-names: Palgunadi
+    given-names: Kadek Hendrawan
+  - family-names: Bergmeister
+    given-names: Andreas
+  - family-names: Bosisio
+    given-names: Andrea
+  - family-names: Ermert
+    given-names: Laura A.
+  - family-names: Koroni
+    given-names: Maria
+  - family-names: Perraudin
+    given-names: Nathanaël
+  - family-names: Dirmeier
+    given-names: Simon
+  - family-names: Meier
+    given-names: Men-Andrin
+preferred-citation:
+  type: article
+  title: High Resolution Seismic Waveform Generation Using Denoising Diffusion
+  authors:
+    - family-names: Palgunadi
+      given-names: Kadek Hendrawan
+    - family-names: Bergmeister
+      given-names: Andreas
+    - family-names: Bosisio
+      given-names: Andrea
+    - family-names: Ermert
+      given-names: Laura A.
+    - family-names: Koroni
+      given-names: Maria
+    - family-names: Perraudin
+      given-names: Nathanaël
+    - family-names: Dirmeier
+      given-names: Simon
+    - family-names: Meier
+      given-names: Men-Andrin
+  journal: 'Journal of Geophysical Research: Machine Learning and Computation'
+  volume: 2
+  issue: 4
+  start: e2025JH000862
+  year: 2025
+  doi: 10.1029/2025JH000862
+  url: https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/2025JH000862
