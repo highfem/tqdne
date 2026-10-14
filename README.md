@@ -1,7 +1,6 @@
 # This quake does not exist
 
 [![ci](https://github.com/highfem/tqdne/actions/workflows/ci.yml/badge.svg)](https://github.com/highfem/tqdne/actions/workflows/ci.yml)
-[![arXiv](https://img.shields.io/badge/arXiv-2410.19343-b31b1b.svg)](https://arxiv.org/abs/2410.19343)
 
 > Generative modelling of seismic waveforms using denoising diffusion.
 >
@@ -10,7 +9,7 @@
 ## About
 
 This repository implements Generative Waveform Models (GMWs), i.e., generative models that can generate synthetic seismic waveforms.
-In particular, the repository implements *HighFEM*, the GWM introduced in [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://arxiv.org/abs/2410.19343).
+In particular, the repository implements *HighFEM*, the GWM introduced in [High Resolution Seismic Waveform Generation using Denoising Diffusion](https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/2025JH000862).
 
 The repository can be also be used to replicate the results from the manuscript using the experimental code in [experiments](experiments), and for training custom GWMs from scratch.
 
